@@ -1,25 +1,33 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
-module Graphics.Rasterific where
+{-# LANGUAGE FlexibleContexts #-}
+module Graphics.Rasterific
+    ( Bezier( .. )
+    , Texture
+    , Compositor
+    , DrawContext
+    , Modulable
+    , uniformTexture
+    , renderContext
+    , fillBezierShape
+    ) where
 
 import Control.Applicative( Applicative, liftA2, liftA3, (<$>) )
 import Control.Monad.ST( ST, runST )
 import Control.Monad.State( StateT, execStateT, get, lift )
-import Codec.Picture( Image( .. )
-                    , PixelRGBA8( .. )
-                    , Pixel( .. )
-                    , generateImage )
-
-import Codec.Picture.Types( MutableImage( .. )
+import Codec.Picture.Types( Image( .. )
+                          , Pixel( .. )
+                          , MutableImage( .. )
+                          , createMutableImage
                           , unsafeFreezeImage )
+import Data.Bits( unsafeShiftR )
 import Data.List( mapAccumL, sortBy )
 import Data.Monoid( mappend )
-import Data.Word( Word8 )
-import Data.Vector.Storable( unsafeThaw )
+import Data.Word( Word8, Word32 )
 
 import Linear( V2( .. )
              , V1( .. )
-             , V4( .. )
+             {-, V4( .. )-}
              , Additive( .. )
              , (^+^)
              , (^-^)
@@ -40,20 +48,36 @@ infix  4  ^<, ^<=^, ^<^, ^==^
 infixr 3 ^&&^
 infixr 2 ^||^
 
+class Modulable a where
+  clampModulator :: Float -> a
+  modulate :: a -> a -> a
+
+instance Modulable Word8 where
+  clampModulator = floor . (255 *) . min 1 . max 0
+  modulate a b = fromIntegral $ (fi a * fi b) `unsafeShiftR` 8
+    where fi :: Word8 -> Word32
+          fi = fromIntegral
+
+coverageApply :: (Pixel px, Modulable (PixelBaseComponent px))
+              => Float -> px -> px
+coverageApply coverage = colorMap (modulate moduler)
+  where moduler = clampModulator coverage
+{-
+mixWith :: (Pixel a)
+        => (Int -> PixelBaseComponent a -> PixelBaseComponent a
+        -> PixelBaseComponent a) -> a -> a -> a
+-}
+
 uniformTexture :: (Pixel px) => px -> Texture px
 uniformTexture px _ _ = px
 
-over :: (Pixel px) => px -> px -> px
-over _ a = a
+compositeDestination :: ( Pixel px
+       {-, Modulable (PixelBaseComponent px)-}
+       )
+     => Compositor px
+compositeDestination _ a = a
 
 type DrawContext s a px = StateT (MutableImage s px) (ST s) a
-
-createMutableImage :: (Pixel px)
-                   => Int -> Int -> px -> ST s (MutableImage s px)
-createMutableImage width height background =
-    MutableImage width height <$> unsafeThaw pixels
-  where Image _ _ pixels =
-            generateImage (\_ _ -> background) width height
 
 renderContext :: (Pixel px)
               => Int -> Int -> px -> (forall s. DrawContext s a px) -> Image px
@@ -63,7 +87,7 @@ renderContext width height background drawing = runST $
         >>= unsafeFreezeImage
 
 
-fillBezierShape :: (Pixel px) 
+fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px -> [Bezier] -> DrawContext s () px
 fillBezierShape texture beziers = do
     img@(MutableImage width height _) <- get
@@ -72,7 +96,7 @@ fillBezierShape texture beziers = do
         spans =
           beziers >>= clipBezier mini maxi >>= rasterizeBezier
 
-    lift $ mapM_ (composeCoverageSpan texture over img) spans
+    lift $ mapM_ (composeCoverageSpan texture compositeDestination img) spans
 
 (^&&^) :: (Applicative a) => a Bool -> a Bool -> a Bool
 (^&&^) = liftA2 (&&)
@@ -199,17 +223,18 @@ combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
                      ix = floor x
                      iy = floor y
 
-vecOfRgba8 :: PixelRGBA8 -> V4 Word8
-vecOfRgba8 (PixelRGBA8 r g b a) = V4 r g b a
+{-vecOfRgba8 :: PixelRGBA8 -> V4 Word8-}
+{-vecOfRgba8 (PixelRGBA8 r g b a) = V4 r g b a-}
 
-rgba8OfVec :: V4 Word8 -> PixelRGBA8
-rgba8OfVec (V4 r g b a) = PixelRGBA8 r g b a
+{-rgba8OfVec :: V4 Word8 -> PixelRGBA8-}
+{-rgba8OfVec (V4 r g b a) = PixelRGBA8 r g b a-}
 
 rasterizeBezier :: Bezier -> [CoverageSpan]
 rasterizeBezier = combineEdgeSamples . sortBy xy . decomposeBeziers
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
 
-composeCoverageSpan :: forall s px . (Pixel px)
+composeCoverageSpan :: forall s px .
+                      (Pixel px, Modulable (PixelBaseComponent px))
                     => Texture px
                     -> Compositor px
                     -> MutableImage s px
@@ -224,10 +249,14 @@ composeCoverageSpan texture compositor img coverage = trace (show coverage) $ go
         initialX = _coverageX coverage
         imgWidth = mutableImageWidth img
         initIndex = (initialX + y * imgWidth) * compCount
+        covVal = _coverageVal coverage
 
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
-          unsafeWritePixel imgData idx . compositor oldPixel $ texture x y
+          unsafeWritePixel imgData idx
+            . compositor oldPixel
+            . coverageApply covVal
+            $ texture x y
           go (count + 1) (x + 1) $ idx + compCount
 

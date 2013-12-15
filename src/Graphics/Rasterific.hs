@@ -44,7 +44,7 @@ type Compositor px = px -> px -> px
 data Bezier = Bezier !Point !Point !Point
   deriving Show
 
-infix  4  ^<, ^<=^, ^<^, ^==^
+infix  4 ^<, ^<=^, ^<^, ^==^
 infixr 3 ^&&^
 infixr 2 ^||^
 
@@ -94,7 +94,7 @@ fillBezierShape texture beziers = do
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
         spans =
-          beziers >>= clipBezier mini maxi >>= rasterizeBezier
+            rasterizeBezier $ beziers >>= clipBezier mini maxi
 
     lift $ mapM_ (composeCoverageSpan texture compositeDestination img) spans
 
@@ -229,8 +229,8 @@ combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
 {-rgba8OfVec :: V4 Word8 -> PixelRGBA8-}
 {-rgba8OfVec (V4 r g b a) = PixelRGBA8 r g b a-}
 
-rasterizeBezier :: Bezier -> [CoverageSpan]
-rasterizeBezier = combineEdgeSamples . sortBy xy . decomposeBeziers
+rasterizeBezier :: [Bezier]-> [CoverageSpan]
+rasterizeBezier = combineEdgeSamples . sortBy xy . concatMap decomposeBeziers
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
 
 composeCoverageSpan :: forall s px .

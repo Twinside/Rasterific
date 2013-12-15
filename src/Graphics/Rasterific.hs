@@ -1,13 +1,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 module Graphics.Rasterific where
 
-import Control.Applicative( Applicative, liftA3, (<$>) )
-import Control.Monad.ST( ST )
-import Codec.Picture( PixelRGBA8( .. ), Pixel( .. ) )
-import Codec.Picture.Types( MutableImage( .. ) )
-import Data.List( mapAccumL )
+import Control.Applicative( Applicative, liftA2, liftA3, (<$>) )
+import Control.Monad.ST( ST, runST )
+import Control.Monad.State( StateT, execStateT, get, lift )
+import Codec.Picture( Image( .. )
+                    , PixelRGBA8( .. )
+                    , Pixel( .. )
+                    , generateImage )
+
+import Codec.Picture.Types( MutableImage( .. )
+                          , unsafeFreezeImage )
+import Data.List( mapAccumL, sortBy )
 import Data.Monoid( mappend )
 import Data.Word( Word8 )
+import Data.Vector.Storable( unsafeThaw )
 
 import Linear( V2( .. )
              , V1( .. )
@@ -16,8 +24,9 @@ import Linear( V2( .. )
              , (^+^)
              , (^-^)
              , (^/)
-             , liftI2
              )
+
+import Debug.Trace
 
 type Point = V2 Float
 
@@ -25,34 +34,69 @@ type Texture px = Int -> Int -> px
 type Compositor px = px -> px -> px
 
 data Bezier = Bezier !Point !Point !Point
+  deriving Show
 
-infix 4  ^<, ^<=^, ^<^, ^==^
+infix  4  ^<, ^<=^, ^<^, ^==^
 infixr 3 ^&&^
 infixr 2 ^||^
 
-(^&&^) :: (Additive a) => a Bool -> a Bool -> a Bool
-(^&&^) = liftI2 (&&)
+uniformTexture :: (Pixel px) => px -> Texture px
+uniformTexture px _ _ = px
 
-(^||^) :: (Additive a) => a Bool -> a Bool -> a Bool
-(^||^) = liftI2 (||)
+over :: (Pixel px) => px -> px -> px
+over _ a = a
 
-(^==^) :: (Eq v, Additive a) => a v -> a v -> a Bool
-(^==^) = liftI2 (==)
+type DrawContext s a px = StateT (MutableImage s px) (ST s) a
 
-(^<=^) :: (Ord v, Additive a) => a v -> a v -> a Bool
-(^<=^) = liftI2 (<=)
+createMutableImage :: (Pixel px)
+                   => Int -> Int -> px -> ST s (MutableImage s px)
+createMutableImage width height background =
+    MutableImage width height <$> unsafeThaw pixels
+  where Image _ _ pixels =
+            generateImage (\_ _ -> background) width height
 
-(^<^) :: (Ord v, Additive a) => a v -> a v -> a Bool
-(^<^) = liftI2 (<)
+renderContext :: (Pixel px)
+              => Int -> Int -> px -> (forall s. DrawContext s a px) -> Image px
+renderContext width height background drawing = runST $
+  createMutableImage width height background
+        >>= execStateT drawing
+        >>= unsafeFreezeImage
 
-(^<) :: (Additive a, Ord v) => a v -> v -> a Bool
+
+fillBezierShape :: (Pixel px) 
+                => Texture px -> [Bezier] -> DrawContext s () px
+fillBezierShape texture beziers = do
+    img@(MutableImage width height _) <- get
+    let mini = V2 0 0
+        maxi = V2 (fromIntegral width) (fromIntegral height)
+        spans =
+          beziers >>= clipBezier mini maxi >>= rasterizeBezier
+
+    lift $ mapM_ (composeCoverageSpan texture over img) spans
+
+(^&&^) :: (Applicative a) => a Bool -> a Bool -> a Bool
+(^&&^) = liftA2 (&&)
+
+(^||^) :: (Applicative a) => a Bool -> a Bool -> a Bool
+(^||^) = liftA2 (||)
+
+(^==^) :: (Eq v, Applicative a) => a v -> a v -> a Bool
+(^==^) = liftA2 (==)
+
+(^<=^) :: (Ord v, Applicative a) => a v -> a v -> a Bool
+(^<=^) = liftA2 (<=)
+
+(^<^) :: (Ord v, Applicative a) => a v -> a v -> a Bool
+(^<^) = liftA2 (<)
+
+(^<) :: (Applicative a, Ord v) => a v -> v -> a Bool
 (^<) vec v = (< v) <$> vec
 
-vmin :: (Ord n, Additive a) => a n -> a n -> a n
-vmin = liftI2 min
+vmin :: (Ord n, Applicative a) => a n -> a n -> a n
+vmin = liftA2 min
 
-vmax :: (Ord n, Additive a) => a n -> a n -> a n
-vmax = liftI2 max
+vmax :: (Ord n, Applicative a) => a n -> a n -> a n
+vmax = liftA2 max
 
 vabs :: (Num n, Functor a) => a n -> a n
 vabs = fmap abs
@@ -105,10 +149,13 @@ data EdgeSample = EdgeSample
   , _sampleAlpha :: !Float
   , _sampleH     :: !Float
   }
+  deriving Show
 
 decomposeBeziers :: Bezier -> [EdgeSample]
 decomposeBeziers (Bezier a@(V2 _ ay) b c@(V2 cx cy))
-    | insideX && insideY = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h]
+    | insideX && insideY = 
+            let v = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h] in
+            trace (show v) v
     | otherwise =
         decomposeBeziers (Bezier m (b `midPoint` c) c) ++
             decomposeBeziers (Bezier a (a `midPoint` b) m)
@@ -135,6 +182,7 @@ data CoverageSpan = CoverageSpan
     , _coverageVal    :: !Float
     , _coverageLength :: !Float
     }
+    deriving Show
 
 combineEdgeSamples :: [EdgeSample] -> [CoverageSpan]
 combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
@@ -142,10 +190,10 @@ combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
             concat lst ++ [CoverageSpan (floor x) (floor y) (min 1 $ abs a) 1]
 
         go (x, y, a, h) (EdgeSample x' y' a' h')
-          | y == y' && x == x' = ((x, y, a + a', h + h'), [])
-          | y == y' = ((x, y, a + a', h + h'), [p1, p2])
+          | y == y' && x == x' = ((x', y', a + a', h + h'), [])
+          | y == y' = ((x', y', h + a', h + h'), [p1, p2])
           | otherwise =
-             ((x, y, a', h'), [CoverageSpan ix iy (min 1 $ abs a) 1])
+             ((x', y', a', h'), [CoverageSpan ix iy (min 1 $ abs a) 1])
                where p1 = CoverageSpan ix iy (min 1 $ abs a) 1
                      p2 = CoverageSpan (ix + 1) iy (min 1 $ abs h) (x' - x - 1)
                      ix = floor x
@@ -157,6 +205,10 @@ vecOfRgba8 (PixelRGBA8 r g b a) = V4 r g b a
 rgba8OfVec :: V4 Word8 -> PixelRGBA8
 rgba8OfVec (V4 r g b a) = PixelRGBA8 r g b a
 
+rasterizeBezier :: Bezier -> [CoverageSpan]
+rasterizeBezier = combineEdgeSamples . sortBy xy . decomposeBeziers
+  where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
+
 composeCoverageSpan :: forall s px . (Pixel px)
                     => Texture px
                     -> Compositor px
@@ -164,7 +216,7 @@ composeCoverageSpan :: forall s px . (Pixel px)
                     -> CoverageSpan
                     -> ST s ()
 {-# INLINE composeCoverageSpan #-}
-composeCoverageSpan texture img coverage = go 0 initialX initIndex
+composeCoverageSpan texture compositor img coverage = trace (show coverage) $ go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
         maxi = _coverageLength coverage
         imgData = mutableImageData img
@@ -176,6 +228,6 @@ composeCoverageSpan texture img coverage = go 0 initialX initIndex
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
-          unsafeWritePixel imgData idx $ texture x y
+          unsafeWritePixel imgData idx . compositor oldPixel $ texture x y
           go (count + 1) (x + 1) $ idx + compCount
 

@@ -10,9 +10,11 @@ module Graphics.Rasterific
     , uniformTexture
     , renderContext
     , fillBezierShape
+    , compositionDestination
+    , compositionAlpha
     ) where
 
-import Control.Applicative( Applicative, liftA2, liftA3, (<$>) )
+import Control.Applicative( Applicative, liftA2, liftA3, (<$>), (<*>) )
 import Control.Monad.ST( ST, runST )
 import Control.Monad.State( StateT, execStateT, get, lift )
 import Codec.Picture.Types( Image( .. )
@@ -27,19 +29,18 @@ import Data.Word( Word8, Word32 )
 
 import Linear( V2( .. )
              , V1( .. )
-             {-, V4( .. )-}
              , Additive( .. )
              , (^+^)
              , (^-^)
              , (^/)
              )
 
-import Debug.Trace
-
 type Point = V2 Float
 
 type Texture px = Int -> Int -> px
-type Compositor px = px -> px -> px
+type Compositor px =
+    (PixelBaseComponent px) ->
+        (PixelBaseComponent px) -> px -> px -> px
 
 data Bezier = Bezier !Point !Point !Point
   deriving Show
@@ -48,34 +49,33 @@ infix  4 ^<, ^<=^, ^<^, ^==^
 infixr 3 ^&&^
 infixr 2 ^||^
 
-class Modulable a where
-  clampModulator :: Float -> a
+class Ord a => Modulable a where
+  clampCoverage :: Float -> (a, a)
   modulate :: a -> a -> a
+  alphaOver :: a -> a -> a -> a -> a
 
 instance Modulable Word8 where
-  clampModulator = floor . (255 *) . min 1 . max 0
-  modulate a b = fromIntegral $ (fi a * fi b) `unsafeShiftR` 8
+  clampCoverage f = (fromIntegral c, fromIntegral $ 255 - c)
+     where c = toWord8 f
+
+  modulate c a = fromIntegral $ v `unsafeShiftR` 8
     where fi :: Word8 -> Word32
           fi = fromIntegral
+          v = fi c * fi a
 
-coverageApply :: (Pixel px, Modulable (PixelBaseComponent px))
-              => Float -> px -> px
-coverageApply coverage = colorMap (modulate moduler)
-  where moduler = clampModulator coverage
-{-
-mixWith :: (Pixel a)
-        => (Int -> PixelBaseComponent a -> PixelBaseComponent a
-        -> PixelBaseComponent a) -> a -> a -> a
--}
+  alphaOver c ic b a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+    where fi :: Word8 -> Word32
+          fi = fromIntegral
+          v = fi c * fi a + fi b * fi ic + 128
 
 uniformTexture :: (Pixel px) => px -> Texture px
 uniformTexture px _ _ = px
 
-compositeDestination :: ( Pixel px
-       {-, Modulable (PixelBaseComponent px)-}
-       )
-     => Compositor px
-compositeDestination _ a = a
+compositionDestination :: (Pixel px, Modulable (PixelBaseComponent px)) => Compositor px
+compositionDestination c _ _ a = colorMap (modulate c) $ a
+
+compositionAlpha :: ( Pixel px, Modulable (PixelBaseComponent px)) => Compositor px
+compositionAlpha c ic = mixWith (\_ -> alphaOver c ic)
 
 type DrawContext s a px = StateT (MutableImage s px) (ST s) a
 
@@ -86,7 +86,6 @@ renderContext width height background drawing = runST $
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
-
 fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px -> [Bezier] -> DrawContext s () px
 fillBezierShape texture beziers = do
@@ -96,7 +95,8 @@ fillBezierShape texture beziers = do
         spans =
             rasterizeBezier $ beziers >>= clipBezier mini maxi
 
-    lift $ mapM_ (composeCoverageSpan texture compositeDestination img) spans
+    lift $ mapM_ (composeCoverageSpan texture compositionAlpha img) spans
+    {-lift $ mapM_ (composeCoverageSpan texture compositionDestination img) spans-}
 
 (^&&^) :: (Applicative a) => a Bool -> a Bool -> a Bool
 (^&&^) = liftA2 (&&)
@@ -176,17 +176,15 @@ data EdgeSample = EdgeSample
   deriving Show
 
 decomposeBeziers :: Bezier -> [EdgeSample]
-decomposeBeziers (Bezier a@(V2 _ ay) b c@(V2 cx cy))
-    | insideX && insideY = 
-            let v = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h] in
-            trace (show v) v
+decomposeBeziers (Bezier a@(V2 ax ay) b c@(V2 cx cy))
+    | insideX && insideY = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h]
     | otherwise =
         decomposeBeziers (Bezier m (b `midPoint` c) c) ++
             decomposeBeziers (Bezier a (a `midPoint` b) m)
   where floorA = vfloor a
         floorC = vfloor c
         V2 px py  = fromIntegral <$> vmin floorA floorC
-        V1 w = (px + 1 -) <$>  (V1 cx `midPoint` V1 cy)
+        V1 w = (px + 1 -) <$>  (V1 cx `midPoint` V1 ax)
         h = cy - ay
 
         V2 insideX insideY =
@@ -197,12 +195,17 @@ decomposeBeziers (Bezier a@(V2 _ ay) b c@(V2 cx cy))
         maxi = fromIntegral <$> vceil abbc
         nearmin = vabs (abbc ^-^ mini) ^< 0.1
         nearmax = vabs (abbc ^-^ maxi) ^< 0.1
-        m = vpartition nearmin mini $ vpartition nearmax maxi abbc
 
+        minMaxing mi nearmi ma nearma p
+          | nearmi = mi
+          | nearma = ma
+          | otherwise = p
+
+        m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax <*> abbc
 
 data CoverageSpan = CoverageSpan
-    { _coverageX      :: !Int
-    , _coverageY      :: !Int
+    { _coverageX      :: !Float
+    , _coverageY      :: !Float
     , _coverageVal    :: !Float
     , _coverageLength :: !Float
     }
@@ -211,17 +214,15 @@ data CoverageSpan = CoverageSpan
 combineEdgeSamples :: [EdgeSample] -> [CoverageSpan]
 combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
   where append ((x, y, a, _), lst) =
-            concat lst ++ [CoverageSpan (floor x) (floor y) (min 1 $ abs a) 1]
+            concat lst ++ [CoverageSpan x y (min 1 $ abs a) 1]
 
         go (x, y, a, h) (EdgeSample x' y' a' h')
           | y == y' && x == x' = ((x', y', a + a', h + h'), [])
           | y == y' = ((x', y', h + a', h + h'), [p1, p2])
           | otherwise =
-             ((x', y', a', h'), [CoverageSpan ix iy (min 1 $ abs a) 1])
-               where p1 = CoverageSpan ix iy (min 1 $ abs a) 1
-                     p2 = CoverageSpan (ix + 1) iy (min 1 $ abs h) (x' - x - 1)
-                     ix = floor x
-                     iy = floor y
+             ((x', y', a', h'), [CoverageSpan x y (min 1 $ abs a) 1])
+               where p1 = CoverageSpan x y (min 1 $ abs a) 1
+                     p2 = CoverageSpan (x + 1) y (min 1 $ abs h) (x' - x - 1)
 
 {-vecOfRgba8 :: PixelRGBA8 -> V4 Word8-}
 {-vecOfRgba8 (PixelRGBA8 r g b a) = V4 r g b a-}
@@ -233,30 +234,36 @@ rasterizeBezier :: [Bezier]-> [CoverageSpan]
 rasterizeBezier = combineEdgeSamples . sortBy xy . concatMap decomposeBeziers
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
 
+toWord8 :: Float -> Int
+toWord8 r = floor $ r * 255 + 0.5
+
+-- let's use inference to debug =)
 composeCoverageSpan :: forall s px .
-                      (Pixel px, Modulable (PixelBaseComponent px))
+                      ( Pixel px, Modulable (PixelBaseComponent px) )
                     => Texture px
                     -> Compositor px
                     -> MutableImage s px
                     -> CoverageSpan
                     -> ST s ()
 {-# INLINE composeCoverageSpan #-}
-composeCoverageSpan texture compositor img coverage = trace (show coverage) $ go 0 initialX initIndex
+composeCoverageSpan texture compositor img coverage 
+  | cov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
+  | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
         maxi = _coverageLength coverage
         imgData = mutableImageData img
-        y = _coverageY coverage
-        initialX = _coverageX coverage
+        y = floor $ _coverageY coverage
+        initialX = floor $ _coverageX coverage
         imgWidth = mutableImageWidth img
+        imgHeight = mutableImageHeight img
         initIndex = (initialX + y * imgWidth) * compCount
-        covVal = _coverageVal coverage
+        (cov, icov) = clampCoverage $ _coverageVal coverage
 
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
           unsafeWritePixel imgData idx
-            . compositor oldPixel
-            . coverageApply covVal
+            . compositor cov icov oldPixel
             $ texture x y
           go (count + 1) (x + 1) $ idx + compCount
 

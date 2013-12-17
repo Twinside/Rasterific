@@ -23,6 +23,13 @@ cabal-version:       >= 1.10
 library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
+                 , Graphics.Rasterific.Bezier
+                 , Graphics.Rasterific.Compositor
+                 , Graphics.Rasterific.Texture
+
+  other-modules: Graphics.Rasterific.Operators
+               , Graphics.Rasterific.Rasterize
+
   ghc-options: -Wall
   
   -- Modules included in this library but not exported.

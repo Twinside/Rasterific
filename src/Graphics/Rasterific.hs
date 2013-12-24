@@ -10,6 +10,7 @@ module Graphics.Rasterific
     , uniformTexture
     , renderContext
     , fillBezierShape
+    , strokeBezierShape
     , compositionDestination
     , compositionAlpha
     ) where
@@ -39,6 +40,12 @@ renderContext width height background drawing = runST $
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
+strokeBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
+                  => Texture px -> Float -> Float -> Float
+                  -> [Bezier] -> DrawContext s () px
+strokeBezierShape texture width l c =
+    fillBezierShape texture . strokizeBezierPath width l c
+
 fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px -> [Bezier] -> DrawContext s () px
 fillBezierShape texture beziers = do
@@ -47,20 +54,17 @@ fillBezierShape texture beziers = do
         maxi = V2 (fromIntegral width) (fromIntegral height)
         spans =
             rasterizeBezier $ beziers >>= clipBezier mini maxi
-
-    lift $ mapM_ (composeCoverageSpan texture compositionAlpha img) spans
-    {-lift $ mapM_ (composeCoverageSpan texture compositionDestination img) spans-}
+    lift $ mapM_ (composeCoverageSpan texture img) spans
 
 -- let's use inference to debug =)
 composeCoverageSpan :: forall s px .
                       ( Pixel px, Modulable (PixelBaseComponent px) )
                     => Texture px
-                    -> Compositor px
                     -> MutableImage s px
                     -> CoverageSpan
                     -> ST s ()
 {-# INLINE composeCoverageSpan #-}
-composeCoverageSpan texture compositor img coverage 
+composeCoverageSpan texture img coverage 
   | cov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
@@ -77,7 +81,7 @@ composeCoverageSpan texture compositor img coverage
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
           unsafeWritePixel imgData idx
-            . compositor cov icov oldPixel
+            . compositionAlpha cov icov oldPixel
             $ texture x y
           go (count + 1) (x + 1) $ idx + compCount
 

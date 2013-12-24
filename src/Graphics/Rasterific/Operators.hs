@@ -1,8 +1,10 @@
 module Graphics.Rasterific.Operators
     ( Point
+    , Vector
     , (^&&^)
     , (^||^)
     , (^==^)
+    , (^/=^)
     , (^<=^)
     , (^<^)
     , (^<)
@@ -14,6 +16,8 @@ module Graphics.Rasterific.Operators
     , clampPoint
     , midPoint
     , vpartition 
+    , normal
+    , ifZero
     ) where
 
 import Control.Applicative( Applicative
@@ -24,13 +28,17 @@ import Control.Applicative( Applicative
 
 import Linear( V2( .. )
              , Additive( .. )
+             {-, Metric( .. )-}
+             , Epsilon( nearZero )
              , (^+^)
              , (^/)
+             , normalize
              )
 
+type Vector = V2 Float
 type Point = V2 Float
 
-infix  4 ^<, ^<=^, ^<^, ^==^
+infix  4 ^<, ^<=^, ^<^, ^==^, ^/=^
 infixr 3 ^&&^
 infixr 2 ^||^
 
@@ -51,6 +59,9 @@ infixr 2 ^||^
 
 (^<) :: (Applicative a, Ord v) => a v -> v -> a Bool
 (^<) vec v = (< v) <$> vec
+
+(^/=^) :: (Applicative a, Eq v) => a v -> a v -> a Bool
+(^/=^) = liftA2 (/=)
 
 vmin :: (Ord n, Applicative a) => a n -> a n -> a n
 vmin = liftA2 min
@@ -77,4 +88,12 @@ vpartition :: (Applicative a) => a Bool -> a v -> a v -> a v
 vpartition = liftA3 choose
   where choose True a _ = a
         choose False _ b = b
+
+normal :: (Floating v, Epsilon v) => V2 v -> V2 v -> V2 v
+normal (V2 ax ay) (V2 bx by) = normalize $ V2 (by - ay) (bx - ax)
+
+ifZero :: (Applicative a, Floating v, Epsilon v) => a v -> a v -> a v
+ifZero = liftA2 go
+  where go v1 v2 | nearZero v1 = v2
+                 | otherwise = v1
 

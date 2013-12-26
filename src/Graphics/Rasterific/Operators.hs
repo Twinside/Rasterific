@@ -90,7 +90,7 @@ vpartition = liftA3 choose
         choose False _ b = b
 
 normal :: (Floating v, Epsilon v) => V2 v -> V2 v -> V2 v
-normal (V2 ax ay) (V2 bx by) = normalize $ V2 (by - ay) (bx - ax)
+normal (V2 ax ay) (V2 bx by) = normalize $ V2 (ay - by) (bx - ax)
 
 ifZero :: (Applicative a, Floating v, Epsilon v) => a v -> a v -> a v
 ifZero = liftA2 go

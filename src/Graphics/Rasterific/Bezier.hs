@@ -131,20 +131,22 @@ roundJoin offset p = go
                 b = n ^* 2 ^-^ (a `midPoint` c)
                 w = (a `normal` c) `ifZero` u
 
-offsetAndJoin :: (Applicative a, Monoid (a Bezier), Foldable a)
-              => Float -> Float -> Float -> Bezier -> Bezier -> a Bezier
-              -> a Bezier
-offsetAndJoin offset l c zl@(Bezier la _ _) zi@(Bezier _ _ ic) lst
-  -- If the two bezier curves are not joined.
-  | ic /= la = trace "offsetClean" $ content <> joinBeziers offset l zi zl <> finisher
-  -- Otherwise if the point are the same.
-  | otherwise = trace "offsetOtherwise" $ content <> capBezier offset c zi <> finisher
-  where finisher = offsetBezier offset zi
-        content = foldMap process lst
-        process zj = trace "offsetList" 
-                   $ offsetAndJoin offset l c zl zj mempty
-                  <> joinBeziers offset l zi zj
-                  <> offsetBezier offset zi
+offsetAndJoin :: Float -> Float -> Float -> [Bezier]
+              -> [Bezier]
+offsetAndJoin _ _ _ [] = []
+offsetAndJoin offset l c lst@(firstBezier@(Bezier la _ _):_) =
+    go firstBezier lst
+  where joiner = joinBeziers offset l
+        offseter = offsetBezier offset
+        caper = capBezier offset c
+
+        go    _ [] = []
+        go prev [x@(Bezier _ _ cp)]
+           | la /= cp = joiner x firstBezier <> lastInfo
+           | otherwise = caper x <> lastInfo
+          where lastInfo = joiner prev x <> offseter x
+        go prev (x:xs) =
+            joiner prev x <> offseter x <> go x xs
 
 -- | Rewrite the bezier curve to avoid degenerate cases.
 sanitizeBezier :: (Applicative a, Monoid (a Bezier))
@@ -215,11 +217,8 @@ offsetBezier offset (Bezier a b c)
 strokizeBezierPath :: Float -> Float -> Float -> [Bezier]
                    -> [Bezier]
 strokizeBezierPath width l c beziers =
-    strokeOneSide sanitized <> 
-        strokeOneSide (reverse $ reverseBezier <$> sanitized)
+    offseter $ sanitized <> 
+        (reverse $ reverseBezier <$> sanitized)
   where sanitized = foldMap sanitizeBezier beziers
-
-        strokeOneSide [] = mempty
-        strokeOneSide (v : rest) =
-            offsetAndJoin (width / 2) l c v v rest
+        offseter = offsetAndJoin (width / 2) l c
 

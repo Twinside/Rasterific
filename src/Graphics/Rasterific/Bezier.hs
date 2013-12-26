@@ -109,10 +109,9 @@ capBezier offset cVal (Bezier _ b c)
 miterJoin :: (Applicative a, Monoid (a Bezier))
           => Float -> Float -> Point -> Vector -> Vector -> a Bezier
 miterJoin offset l point u v
-  | u `dot` w >= l / max 1 l = trace "miterSubdivide"
-      pure (Bezier m (m `midPoint` c) c) <>
-        pure (Bezier a (a `midPoint` m) m)
-  | otherwise = trace "miterSimple" $ pure $ Bezier a (a `midPoint` c) c
+  | u `dot` w >= l / max 1 l = trace "miterSubdivide" $
+      pure (m `straightLine` c) <> pure (a `straightLine` m)
+  | otherwise = trace "miterSimple" $ pure $ a `straightLine` c
   where a = point ^+^ u ^* offset
         c = point ^+^ v ^* offset
         w = (a `normal` c) `ifZero` u
@@ -134,19 +133,17 @@ roundJoin offset p = go
 offsetAndJoin :: Float -> Float -> Float -> [Bezier]
               -> [Bezier]
 offsetAndJoin _ _ _ [] = []
-offsetAndJoin offset l c lst@(firstBezier@(Bezier la _ _):_) =
-    go firstBezier lst
+offsetAndJoin offset l c (firstBezier@(Bezier la _ _):rest) =
+    go firstBezier rest
   where joiner = joinBeziers offset l
         offseter = offsetBezier offset
         caper = capBezier offset c
 
-        go    _ [] = []
-        go prev [x@(Bezier _ _ cp)]
-           | la /= cp = joiner x firstBezier <> lastInfo
-           | otherwise = caper x <> lastInfo
-          where lastInfo = joiner prev x <> offseter x
+        go prev@(Bezier _ _ cp) []
+           | la == cp = joiner prev firstBezier <> offseter prev
+           | otherwise = caper prev <> offseter prev
         go prev (x:xs) =
-            joiner prev x <> offseter x <> go x xs
+            go x xs <> joiner prev x <> offseter prev
 
 -- | Rewrite the bezier curve to avoid degenerate cases.
 sanitizeBezier :: (Applicative a, Monoid (a Bezier))
@@ -185,7 +182,7 @@ offsetBezier offset (Bezier a b c)
         trace (printf "offset: %s -> %s" (show $ Bezier a b c) (show $ Bezier shiftedA mergedB shiftedC)) $
         pure $ Bezier shiftedA mergedB shiftedC
     -- Otherwise, divide and conquer
-    | a /= b && b /= c = trace "Combining"
+    | a /= b && b /= c = trace "offset Combining" $
         offsetBezier offset (Bezier abbc bc c) <>
             offsetBezier offset (Bezier a ab abbc)
     | otherwise = trace "Empty offseting" mempty
@@ -217,8 +214,8 @@ offsetBezier offset (Bezier a b c)
 strokizeBezierPath :: Float -> Float -> Float -> [Bezier]
                    -> [Bezier]
 strokizeBezierPath width l c beziers =
-    offseter $ sanitized <> 
-        (reverse $ reverseBezier <$> sanitized)
+    offseter sanitized <> 
+        offseter (reverse $ reverseBezier <$> sanitized)
   where sanitized = foldMap sanitizeBezier beziers
         offseter = offsetAndJoin (width / 2) l c
 

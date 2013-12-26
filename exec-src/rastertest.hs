@@ -55,17 +55,19 @@ strokeTest = writePng "stroke.png" img
   where texture = uniformTexture black
         beziers base = take 1 <$>
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
-        drawing = sequence_ $
-            {-
-            [strokeBezierShape texture (6 + ix) ix ix b
-                    | (ix, b) <- zip [1 ..] (beziers 10)] ++
-            [strokeBezierShape texture ix 1 1 b
-                    | (ix, b) <- zip [1 ..] (beziers 60)] ++
-            [strokeBezierShape texture ix 1 (-1) b
-                    | (ix, b) <- zip [1 ..] (beziers 110)] ++
-                        -- -}
-            [strokeBezierShape texture 10 1 0 . take 1 $
+        drawing = sequence_ . concat $
+          [ []
+          , [strokeBezierShape texture (6 + ix) ix ix b
+                    | (ix, b) <- zip [1 ..] (beziers 10)]
+          , [strokeBezierShape texture ix 1 1 b
+                    | (ix, b) <- zip [1 ..] (beziers 60)]
+          , [strokeBezierShape texture ix 1 (-1) b
+                    | (ix, b) <- zip [1 ..] (beziers 110)]
+          , [strokeBezierShape texture 15 1 0 . take 1 $
                     logo 150 False $ V2 200 200]
+          , [strokeBezierShape texture 5 1 0 $
+                    logo 100 False $ V2 240 240]
+          ]
             
         white = (PixelRGBA8 255 255 255 0)
         black = (PixelRGBA8 0 120 250 255)

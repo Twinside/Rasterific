@@ -59,10 +59,10 @@ strokeTest2 = writePng "stroke2.png" img
         
         drawing = sequence_ . concat $
             [ []
-            , [strokePolygonShape texture 9 (ix * 3) (CapRound, CapStraight 0) $
+            , [strokePolygonShape texture 9 JoinRound (CapRound, CapStraight 0) $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
-            , [strokePolygonShape texture 9 (ix * 3) (CapStraight 0, CapRound) $
+            , [strokePolygonShape texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound) $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             {-, [strokePolygonShape texture 8 5 (CapRound ) $-}
@@ -79,17 +79,20 @@ strokeTest = writePng "stroke.png" img
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
         drawing = sequence_ . concat $
           [ []
-          , [strokeBezierShape texture (6 + ix) ix
+          , [strokeBezierShape texture (6 + ix) (JoinMiter ix)
                     (CapStraight 0, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 10)]
-          , [strokeBezierShape texture ix 1 (CapRound, CapStraight 1) b
+          , [strokeBezierShape texture ix
+                    (JoinMiter 1) (CapRound, CapStraight 1) b
                     | (ix, b) <- zip [1 ..] (beziers 60)]
-          , [strokeBezierShape texture ix 1 (CapRound, CapRound) b
+          , [strokeBezierShape texture ix (JoinMiter 1) (CapRound, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 110)]
-          , [strokeBezierShape texture 15 1 (CapStraight 1, CapStraight 0)
+          , [strokeBezierShape texture 15
+                    (JoinMiter 1) (CapStraight 1, CapStraight 0)
                     . take 1 $
                     logo 150 False $ V2 200 200]
-          , [strokeBezierShape texture 5 1 (CapStraight 0, CapStraight 0) $
+          , [strokeBezierShape texture 5
+                    (JoinMiter 1) (CapStraight 0, CapStraight 0) $
                     logo 100 False $ V2 240 240]
           ]
         img = renderContext 500 500 background drawing

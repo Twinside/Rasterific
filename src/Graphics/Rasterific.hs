@@ -44,16 +44,16 @@ renderContext width height background drawing = runST $
         >>= unsafeFreezeImage
 
 strokePolygonShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                   => Texture px -> Float -> Float -> (Caping, Caping)
+                   => Texture px -> Float -> Join -> (Cap, Cap)
                    -> [Point] -> DrawContext s () px
-strokePolygonShape texture width l caping =
-    fillBezierShape texture . strokizePolygon width l caping
+strokePolygonShape texture width join caping =
+    fillBezierShape texture . strokizePolygon width join caping
 
 strokeBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                  => Texture px -> Float -> Float -> (Caping, Caping)
+                  => Texture px -> Float -> Join -> (Cap, Cap)
                   -> [Bezier] -> DrawContext s () px
-strokeBezierShape texture width l caping =
-    fillBezierShape texture . strokizeBezierPath width l caping
+strokeBezierShape texture width join caping =
+    fillBezierShape texture . strokizeBezierPath width join caping
 
 fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px -> [Bezier] -> DrawContext s () px

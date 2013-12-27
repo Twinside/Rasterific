@@ -85,15 +85,16 @@ clipBezier mini maxi bezier@(Bezier a b c)
         m = vpartition (vabs (abbc ^-^ edge) ^< 0.1) edge abbc
 
 joinBeziers :: (Applicative a, Monoid (a Bezier))
-            => Float -> Float -> Bezier -> Bezier -> a Bezier
-joinBeziers offset l (Bezier _ ib ic) (Bezier ja jb _)
-    | l < 0 = trace "joinRound" $ roundJoin offset ic u v
-    | otherwise = trace "joinMitter" $ miterJoin offset l ic u v
+            => Float -> Join -> Bezier -> Bezier -> a Bezier
+joinBeziers offset join (Bezier _ ib ic) (Bezier ja jb _) =
+  case join of
+    JoinRound -> roundJoin offset ic u v
+    JoinMiter l -> miterJoin offset l ic u v
   where u = ib `normal` ic
         v = ja `normal` jb
 
 capBezier :: (Applicative a, Monoid (a Bezier))
-          => Float -> Caping -> Bezier -> a Bezier
+          => Float -> Cap -> Bezier -> a Bezier
 capBezier offset CapRound (Bezier _ b c) = 
   roundJoin offset c u (- u) where u = b `normal` c
 capBezier offset (CapStraight cVal) (Bezier _ b c) = 
@@ -131,12 +132,12 @@ roundJoin offset p = go
                 b = n ^* 2 ^-^ (a `midPoint` c)
                 w = (a `normal` c) `ifZero` u
 
-offsetAndJoin :: Float -> Float -> Caping -> [Bezier]
+offsetAndJoin :: Float -> Join -> Cap -> [Bezier]
               -> [Bezier]
 offsetAndJoin _ _ _ [] = []
-offsetAndJoin offset l caping (firstBezier@(Bezier la _ _):rest) =
+offsetAndJoin offset join  caping (firstBezier@(Bezier la _ _):rest) =
     go firstBezier rest
-  where joiner = joinBeziers offset l
+  where joiner = joinBeziers offset join
         offseter = offsetBezier offset
         caper = capBezier offset caping
 
@@ -212,11 +213,11 @@ offsetBezier offset (Bezier a b c)
 
 -- | Transform a bezier path to a bezier shape ready
 -- to be filled
-strokizeBezierPath :: Float -> Float -> (Caping, Caping) -> [Bezier]
+strokizeBezierPath :: Float -> Join -> (Cap, Cap) -> [Bezier]
                    -> [Bezier]
-strokizeBezierPath width l (capStart, capEnd) beziers =
+strokizeBezierPath width join (capStart, capEnd) beziers =
     offseter capEnd sanitized <> 
         offseter capStart (reverse $ reverseBezier <$> sanitized)
   where sanitized = foldMap sanitizeBezier beziers
-        offseter = offsetAndJoin (width / 2) l
+        offseter = offsetAndJoin (width / 2) join
 

@@ -14,8 +14,8 @@ polygonizePoints [] = []
 polygonizePoints lst@(_:rest) =
     uncurry straightLine <$> zip lst rest
 
-strokizePolygon :: Float -> Float -> (Caping, Caping) -> [Point]
+strokizePolygon :: Float -> Join -> (Cap, Cap) -> [Point]
                 -> [Polygon]
-strokizePolygon width l caping =
-    strokizeBezierPath width l caping . polygonizePoints
+strokizePolygon width join caping =
+    strokizeBezierPath width join caping . polygonizePoints
 

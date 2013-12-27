@@ -25,7 +25,9 @@ library
   exposed-modules: Graphics.Rasterific
                  , Graphics.Rasterific.Bezier
                  , Graphics.Rasterific.Compositor
+                 , Graphics.Rasterific.Polygon
                  , Graphics.Rasterific.Texture
+                 , Graphics.Rasterific.Types
 
   other-modules: Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize

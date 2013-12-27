@@ -1,7 +1,5 @@
 module Graphics.Rasterific.Operators
-    ( Point
-    , Vector
-    , (^&&^)
+    ( (^&&^)
     , (^||^)
     , (^==^)
     , (^/=^)
@@ -35,8 +33,7 @@ import Linear( V2( .. )
              , normalize
              )
 
-type Vector = V2 Float
-type Point = V2 Float
+import Graphics.Rasterific.Types
 
 infix  4 ^<, ^<=^, ^<^, ^==^, ^/=^
 infixr 3 ^&&^

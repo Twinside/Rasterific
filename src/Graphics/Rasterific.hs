@@ -11,6 +11,7 @@ module Graphics.Rasterific
     , renderContext
     , fillBezierShape
     , strokeBezierShape
+    , strokePolygonShape
     , compositionDestination
     , compositionAlpha
     ) where
@@ -29,6 +30,8 @@ import Graphics.Rasterific.Compositor
 {-import Graphics.Rasterific.Operators-}
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Polygon
+import Graphics.Rasterific.Types
 
 
 type DrawContext s a px = StateT (MutableImage s px) (ST s) a
@@ -40,11 +43,17 @@ renderContext width height background drawing = runST $
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
+strokePolygonShape :: (Pixel px, Modulable (PixelBaseComponent px))
+                   => Texture px -> Float -> Float -> (Caping, Caping)
+                   -> [Point] -> DrawContext s () px
+strokePolygonShape texture width l caping =
+    fillBezierShape texture . strokizePolygon width l caping
+
 strokeBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                  => Texture px -> Float -> Float -> Float
+                  => Texture px -> Float -> Float -> (Caping, Caping)
                   -> [Bezier] -> DrawContext s () px
-strokeBezierShape texture width l c =
-    fillBezierShape texture . strokizeBezierPath width l c
+strokeBezierShape texture width l caping =
+    fillBezierShape texture . strokizeBezierPath width l caping
 
 fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px -> [Bezier] -> DrawContext s () px

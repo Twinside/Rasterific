@@ -3,6 +3,7 @@ module Graphics.Rasterific.Bezier
     ( Bezier( .. )
     , CubicBezier( .. )
     , clipBezier
+    , straightLine
     , cubicBezierCircle
     , strokizeBezierPath
     ) where
@@ -19,6 +20,7 @@ import Linear( V2( .. )
 import Data.Monoid( Monoid( mempty ), (<>) )
 import Data.Foldable( Foldable, foldMap )
 import Graphics.Rasterific.Operators
+import Graphics.Rasterific.Types
 
 import Debug.Trace
 import Text.Printf
@@ -91,20 +93,19 @@ joinBeziers offset l (Bezier _ ib ic) (Bezier ja jb _)
         v = ja `normal` jb
 
 capBezier :: (Applicative a, Monoid (a Bezier))
-          => Float -> Float -> Bezier -> a Bezier
-capBezier offset cVal (Bezier _ b c)
-  | cVal < 0 = trace "capBezier round" $ roundJoin offset c u (- u)
-  | otherwise = trace "capBezier pure" $
-                pure (d `straightLine` e)
-             <> pure (e `straightLine` f)
-             <> pure (f `straightLine` g)
+          => Float -> Caping -> Bezier -> a Bezier
+capBezier offset CapRound (Bezier _ b c) = 
+  roundJoin offset c u (- u) where u = b `normal` c
+capBezier offset (CapStraight cVal) (Bezier _ b c) = 
+   pure (d `straightLine` e) <> pure (e `straightLine` f)
+                             <> pure (f `straightLine` g)
   where u@(V2 ux uy) = b `normal` c
         v = V2 uy $ negate ux
 
-        d = c ^+^ u ^* offset
-        g = c ^-^ u ^* offset
         e = d ^+^ v ^* (offset * cVal)
         f = g ^+^ v ^* (offset * cVal)
+        d = c ^+^ u ^* offset
+        g = c ^-^ u ^* offset
 
 miterJoin :: (Applicative a, Monoid (a Bezier))
           => Float -> Float -> Point -> Vector -> Vector -> a Bezier
@@ -130,14 +131,14 @@ roundJoin offset p = go
                 b = n ^* 2 ^-^ (a `midPoint` c)
                 w = (a `normal` c) `ifZero` u
 
-offsetAndJoin :: Float -> Float -> Float -> [Bezier]
+offsetAndJoin :: Float -> Float -> Caping -> [Bezier]
               -> [Bezier]
 offsetAndJoin _ _ _ [] = []
-offsetAndJoin offset l c (firstBezier@(Bezier la _ _):rest) =
+offsetAndJoin offset l caping (firstBezier@(Bezier la _ _):rest) =
     go firstBezier rest
   where joiner = joinBeziers offset l
         offseter = offsetBezier offset
-        caper = capBezier offset c
+        caper = capBezier offset caping
 
         go prev@(Bezier _ _ cp) []
            | la == cp = joiner prev firstBezier <> offseter prev
@@ -211,11 +212,11 @@ offsetBezier offset (Bezier a b c)
 
 -- | Transform a bezier path to a bezier shape ready
 -- to be filled
-strokizeBezierPath :: Float -> Float -> Float -> [Bezier]
+strokizeBezierPath :: Float -> Float -> (Caping, Caping) -> [Bezier]
                    -> [Bezier]
-strokizeBezierPath width l c beziers =
-    offseter sanitized <> 
-        offseter (reverse $ reverseBezier <$> sanitized)
+strokizeBezierPath width l (capStart, capEnd) beziers =
+    offseter capEnd sanitized <> 
+        offseter capStart (reverse $ reverseBezier <$> sanitized)
   where sanitized = foldMap sanitizeBezier beziers
-        offseter = offsetAndJoin (width / 2) l c
+        offseter = offsetAndJoin (width / 2) l
 

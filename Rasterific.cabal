@@ -28,9 +28,10 @@ library
                  , Graphics.Rasterific.Polygon
                  , Graphics.Rasterific.Texture
                  , Graphics.Rasterific.Types
+                 , Graphics.Rasterific.Rasterize
+                 , Graphics.Rasterific.Operators
 
-  other-modules: Graphics.Rasterific.Operators
-               , Graphics.Rasterific.Rasterize
+  --other-modules: 
 
   ghc-options: -Wall
   

@@ -1,3 +1,4 @@
+-- | Handle straight lines polygon.
 module Graphics.Rasterific.Polygon
     ( Polygon
     , strokizePolygon

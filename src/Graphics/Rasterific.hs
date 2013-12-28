@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+-- | Main module of Rasterific, an Haskell rasterization engine.
 module Graphics.Rasterific
     ( Bezier( .. )
     , Texture
@@ -33,9 +34,10 @@ import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Polygon
 import Graphics.Rasterific.Types
 
-
+-- | Monad used to describe the drawing context.
 type DrawContext s a px = StateT (MutableImage s px) (ST s) a
 
+-- | Function to call in order to start the image creation.
 renderContext :: (Pixel px)
               => Int -> Int -> px -> (forall s. DrawContext s a px) -> Image px
 renderContext width height background drawing = runST $
@@ -65,7 +67,6 @@ fillBezierShape texture beziers = do
             rasterizeBezier $ beziers >>= clipBezier mini maxi
     lift $ mapM_ (composeCoverageSpan texture img) spans
 
--- let's use inference to debug =)
 composeCoverageSpan :: forall s px .
                       ( Pixel px, Modulable (PixelBaseComponent px) )
                     => Texture px

@@ -1,4 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+-- | Compositor handle the pixel composition, which
+-- leads to texture composition.
+-- Very much a work in progress
 module Graphics.Rasterific.Compositor
     ( Compositor
     , Modulable( .. )
@@ -15,6 +18,8 @@ type Compositor px =
     (PixelBaseComponent px) ->
         (PixelBaseComponent px) -> px -> px -> px
 
+-- | Typeclass intented at pixel value modulation.
+-- May be throwed out soon.
 class Ord a => Modulable a where
   clampCoverage :: Float -> (a, a)
   modulate :: a -> a -> a

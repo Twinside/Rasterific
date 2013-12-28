@@ -22,8 +22,8 @@ import Data.Foldable( Foldable, foldMap )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 
-import Debug.Trace
-import Text.Printf
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 data Bezier = Bezier !Point !Point !Point
   deriving Show
@@ -111,9 +111,9 @@ capBezier offset (CapStraight cVal) (Bezier _ b c) =
 miterJoin :: (Applicative a, Monoid (a Bezier))
           => Float -> Float -> Point -> Vector -> Vector -> a Bezier
 miterJoin offset l point u v
-  | u `dot` w >= l / max 1 l = trace "miterSubdivide" $
+  | u `dot` w >= l / max 1 l =
       pure (m `straightLine` c) <> pure (a `straightLine` m)
-  | otherwise = trace "miterSimple" $ pure $ a `straightLine` c
+  | otherwise = pure $ a `straightLine` c
   where a = point ^+^ u ^* offset
         c = point ^+^ v ^* offset
         w = (a `normal` c) `ifZero` u
@@ -124,8 +124,8 @@ roundJoin :: (Applicative a, Monoid (a Bezier))
           => Float -> Point -> Vector -> Vector -> a Bezier
 roundJoin offset p = go
   where go u v
-          | u `dot` w >= 0.9 = trace "roundSimple" . pure $ Bezier a b c
-          | otherwise = trace "roundSubdivide" $ go w v <> go u w
+          | u `dot` w >= 0.9 = pure $ Bezier a b c
+          | otherwise = go w v <> go u w
           where a = p ^+^ u ^* offset
                 c = p ^+^ v ^* offset
                 n = p ^+^ w ^* offset
@@ -158,18 +158,18 @@ sanitizeBezier bezier@(Bezier a b c)
    -- because u dot v = ||u|| * ||v|| * cos(uv)
    --
    -- This imply that AB and BC are nearly parallel
-   | u `dot` v < -0.9999 = trace "sanitize Divide" $
+   | u `dot` v < -0.9999 =
      -- divide in to halves with
      sanitizeBezier (Bezier abbc (abbc `midPoint` c) c) <>
         sanitizeBezier (Bezier a (a `midPoint` abbc) abbc)
 
    -- b is far enough of b and c, (it's not a point)
    | norm (a ^-^ b) > 0.0001 && norm (b ^-^ c) > 0.0001 =
-       trace "sanitize ok" $ pure bezier
+       pure bezier
 
    -- if b is to nearby a or c, take the midpoint as new reference.
-   | ac /= b = trace "sanitize midpoint" $ sanitizeBezier (Bezier a ac c)
-   | otherwise = trace "sanitize empty" $ mempty
+   | ac /= b = sanitizeBezier (Bezier a ac c)
+   | otherwise = mempty
   where u = a `normal` b
         v = b `normal` c
         ac = a `midPoint` c
@@ -181,13 +181,12 @@ offsetBezier offset (Bezier a b c)
     -- If the spline is not too curvy, just return the
     -- shifted component
     | u `dot` v >= 0.9 =
-        trace (printf "offset: %s -> %s" (show $ Bezier a b c) (show $ Bezier shiftedA mergedB shiftedC)) $
         pure $ Bezier shiftedA mergedB shiftedC
     -- Otherwise, divide and conquer
-    | a /= b && b /= c = trace "offset Combining" $
+    | a /= b && b /= c =
         offsetBezier offset (Bezier abbc bc c) <>
             offsetBezier offset (Bezier a ab abbc)
-    | otherwise = trace "Empty offseting" mempty
+    | otherwise = mempty
   where --
         --         X B   
         --    ^   /^\   ^

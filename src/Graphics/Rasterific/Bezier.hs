@@ -97,9 +97,36 @@ clipBezier mini maxi bezier@(Bezier a b c)
         V2 insideX insideY = mini ^<=^ bmin ^&&^ bmax ^<=^ maxi
         V2 outsideX outsideY = bmax ^<=^ mini ^||^ maxi ^<=^ bmin
 
+        --
+        --         X B
+        --        / \
+        --       /   \
+        --      X--X--X
+        --     / abbc  \
+        --    /         \
+        -- A X           X C
+        --
         abbc = (a `midPoint` b) `midPoint` (b `midPoint` c)
-        edgeSeparator = vabs (abbc ^-^ mini) ^<^ vabs (abbc ^-^ maxi)
+
+        --  mini
+        --     +-------------+
+        --     |             |
+        --     |             |
+        --     |             |
+        --     +-------------+
+        --                   maxi
+        -- the edgeSeparator vector encode which edge
+        -- is te nearest to the midpoint.
+        -- if True then it's the 'min' edges which are
+        -- the nearest, otherwise it's the maximum edge
+        edgeSeparator =
+            vabs (abbc ^-^ mini) ^<^ vabs (abbc ^-^ maxi)
+
+        -- So here we 'solidify' the nearest edge position
+        -- in an edge vector.
         edge = vpartition edgeSeparator mini maxi
+        -- If we're near an edge, snap the component to the
+        -- edge.
         m = vpartition (vabs (abbc ^-^ edge) ^< 0.1) edge abbc
 
 -- | Join two quadratic bezier curves together

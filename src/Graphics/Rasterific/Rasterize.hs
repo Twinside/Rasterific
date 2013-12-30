@@ -7,14 +7,7 @@ import Data.List( mapAccumL, sortBy )
 import Linear( V2( .. ), V1( .. ), Additive( .. ), (^-^) )
 import Graphics.Rasterific.Bezier
 import Graphics.Rasterific.Operators
-
-data EdgeSample = EdgeSample
-  { _sampleX     :: !Float
-  , _sampleY     :: !Float
-  , _sampleAlpha :: !Float
-  , _sampleH     :: !Float
-  }
-  deriving Show
+import Graphics.Rasterific.Types
 
 decomposeBeziers :: Bezier -> [EdgeSample]
 decomposeBeziers (Bezier a@(V2 ax ay) b c@(V2 cx cy))

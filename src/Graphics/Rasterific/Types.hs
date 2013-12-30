@@ -4,6 +4,9 @@ module Graphics.Rasterific.Types
     , Point
     , Cap( .. )
     , Join( .. )
+    , Rasterizable( .. )
+    , Strokable( .. )
+    , EdgeSample( .. )
     , StrokeWidth
     ) where
 
@@ -38,4 +41,21 @@ data Join =
     -- Seems to make sense in [0;1] only
   | JoinMiter Float 
   deriving (Eq, Show)
+
+-- | Represent a raster line
+data EdgeSample = EdgeSample
+  { _sampleX     :: !Float -- ^ Horizontal position
+  , _sampleY     :: !Float -- ^ Vertical position
+  , _sampleAlpha :: !Float -- ^ Alpha
+  , _sampleH     :: !Float -- ^ Height
+  }
+  deriving Show
+
+class Rasterizable a where
+  decompose :: a -> [EdgeSample]
+  clip :: Point -> Point -> a -> [a]
+
+class Rasterizable a => Strokable a where
+  strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [a]
+           -> [a]
 

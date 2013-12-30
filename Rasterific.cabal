@@ -23,7 +23,8 @@ cabal-version:       >= 1.10
 library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
-                 , Graphics.Rasterific.Bezier
+                 , Graphics.Rasterific.QuadraticBezier
+                 , Graphics.Rasterific.CubicBezier
                  , Graphics.Rasterific.Compositor
                  , Graphics.Rasterific.Polygon
                  , Graphics.Rasterific.Texture

@@ -3,6 +3,7 @@ import Graphics.Rasterific
 import Graphics.Rasterific.Polygon
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
+import Graphics.Rasterific.CubicBezier
 import Codec.Picture
 import Linear( V2( .. ), (^+^), (^*) )
 
@@ -36,6 +37,28 @@ logoTest = writePng "logo.png" img
         inverse = logo 20 True $ V2 20 20
         drawing = fill texture $ beziers ++ inverse
         img = renderContext 100 100 background drawing
+
+cubicTest :: [CubicBezier]
+cubicTest = cubicBezierFromPath 
+    [ V2 50 20 -- zig zag first part
+    , V2 90 60
+    , V2  5 100
+    , V2 50 140
+
+    , V2 70 120
+    , V2 80 100
+    , V2 120 80
+
+    , V2 100 60
+    , V2 70  20
+    , V2 50  20
+    ]
+
+cubicTest1 :: IO ()
+cubicTest1 = writePng "cubic1.png" img
+  where texture = uniformTexture blue
+        drawing = fill texture cubicTest
+        img = renderContext 150 150 background drawing
 
 clipTest :: IO ()
 clipTest = writePng "clip.png" img

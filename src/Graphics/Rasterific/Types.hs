@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
     ( Vector
@@ -55,7 +57,8 @@ class Rasterizable a where
   decompose :: a -> [EdgeSample]
   clip :: Point -> Point -> a -> [a]
 
-class Rasterizable a => Strokable a where
+class Rasterizable (RenderType a) => Strokable a where
+  type RenderType a :: *
   strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [a]
-           -> [a]
+           -> [RenderType a]
 

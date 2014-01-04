@@ -4,15 +4,16 @@
 -- | Main module of Rasterific, an Haskell rasterization engine.
 module Graphics.Rasterific
     ( Bezier( .. )
+    , CubicBezier( .. )
+    , Polygon( .. )
     , Texture
     , Compositor
     , DrawContext
     , Modulable
     , uniformTexture
     , renderContext
-    , fillBezierShape
-    , strokeBezierShape
-    , strokePolygonShape
+    , fill
+    , stroke
     , compositionDestination
     , compositionAlpha
     ) where
@@ -26,7 +27,8 @@ import Codec.Picture.Types( Image( .. )
                           , unsafeFreezeImage )
 
 import Linear( V2( .. ) )
-import Graphics.Rasterific.Bezier
+import Graphics.Rasterific.QuadraticBezier
+import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Compositor
 {-import Graphics.Rasterific.Operators-}
 import Graphics.Rasterific.Rasterize
@@ -45,26 +47,19 @@ renderContext width height background drawing = runST $
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
-strokePolygonShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                   => Texture px -> Float -> Join -> (Cap, Cap)
-                   -> [Point] -> DrawContext s () px
-strokePolygonShape texture width join caping =
-    fillBezierShape texture . strokizePolygon width join caping
+stroke :: ( Pixel px, Modulable (PixelBaseComponent px) , Strokable el)
+       => Texture px -> Float -> Join -> (Cap, Cap)
+       -> [el] -> DrawContext s () px
+stroke texture width join caping =
+    fill texture . strokize width join caping
 
-strokeBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                  => Texture px -> Float -> Join -> (Cap, Cap)
-                  -> [Bezier] -> DrawContext s () px
-strokeBezierShape texture width join caping =
-    fillBezierShape texture . strokizeBezierPath width join caping
-
-fillBezierShape :: (Pixel px, Modulable (PixelBaseComponent px))
-                => Texture px -> [Bezier] -> DrawContext s () px
-fillBezierShape texture beziers = do
+fill :: (Pixel px, Modulable (PixelBaseComponent px), Rasterizable el)
+     => Texture px -> [el] -> DrawContext s () px
+fill texture els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans =
-            rasterizeBezier $ beziers >>= clipBezier mini maxi
+        spans = rasterize $ els >>= clip mini maxi
     lift $ mapM_ (composeCoverageSpan texture img) spans
 
 composeCoverageSpan :: forall s px .

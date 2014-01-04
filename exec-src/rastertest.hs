@@ -1,15 +1,13 @@
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
+import Graphics.Rasterific.Polygon
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.QuadraticBezier
 import Codec.Picture
 import Linear( V2( .. ), (^+^), (^*) )
 
-pathize :: [V2 Float] -> [Bezier]
-pathize (a:b:rest@(c:_)) = Bezier a b c : pathize rest
-pathize _ = []
-
-logo :: Int -> Bool -> V2 Float -> [Bezier]
-logo size inv offset = pathize . way $ map (^+^ offset)
+logo :: Int -> Bool -> Vector -> [Bezier]
+logo size inv offset = bezierFromPath . way $ map (^+^ offset)
     [ (V2   0  is)
     , (V2   0   0)
     , (V2  is   0)
@@ -36,7 +34,7 @@ logoTest = writePng "logo.png" img
   where texture = uniformTexture blue
         beziers = logo 40 False $ V2 10 10
         inverse = logo 20 True $ V2 20 20
-        drawing = fillBezierShape texture $ beziers ++ inverse
+        drawing = fill texture $ beziers ++ inverse
         img = renderContext 100 100 background drawing
 
 clipTest :: IO ()
@@ -49,20 +47,24 @@ clipTest = writePng "clip.png" img
             , logo 20 False $ V2 80 0
             ]
 
-        drawing = mapM_ (fillBezierShape texture) beziers
+        drawing = mapM_ (fill texture) beziers
         img = renderContext 100 100 background drawing
 
 strokeTest2 :: IO ()
 strokeTest2 = writePng "stroke2.png" img
   where texture = uniformTexture blue
-        points = [V2 10 10, V2 100 100, V2 200 20, V2 300 100, V2 450 50]
+        points = 
+            [ V2 10 10, V2 100 100
+            , V2 200 20, V2 300 100, V2 450 50]
         
         drawing = sequence_ . concat $
             [ []
-            , [strokePolygonShape texture 9 JoinRound (CapRound, CapStraight 0) $
+            , [stroke texture 9 JoinRound (CapRound, CapStraight 0)
+                    . polygonFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
-            , [strokePolygonShape texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound) $
+            , [stroke texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+                . polygonFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             {-, [strokePolygonShape texture 8 5 (CapRound ) $-}
@@ -79,19 +81,19 @@ strokeTest = writePng "stroke.png" img
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
         drawing = sequence_ . concat $
           [ []
-          , [strokeBezierShape texture (6 + ix) (JoinMiter ix)
+          , [stroke texture (6 + ix) (JoinMiter ix)
                     (CapStraight 0, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 10)]
-          , [strokeBezierShape texture ix
+          , [stroke texture ix
                     (JoinMiter 1) (CapRound, CapStraight 1) b
                     | (ix, b) <- zip [1 ..] (beziers 60)]
-          , [strokeBezierShape texture ix (JoinMiter 1) (CapRound, CapRound) b
+          , [stroke texture ix (JoinMiter 1) (CapRound, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 110)]
-          , [strokeBezierShape texture 15
+          , [stroke texture 15
                     (JoinMiter 1) (CapStraight 1, CapStraight 0)
                     . take 1 $
                     logo 150 False $ V2 200 200]
-          , [strokeBezierShape texture 5
+          , [stroke texture 5
                     (JoinMiter 1) (CapStraight 0, CapStraight 0) $
                     logo 100 False $ V2 240 240]
           ]
@@ -100,6 +102,7 @@ strokeTest = writePng "stroke.png" img
 main :: IO ()
 main = do
   logoTest
+  cubicTest1
   clipTest
   strokeTest
   strokeTest2

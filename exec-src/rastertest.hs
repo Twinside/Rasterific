@@ -1,14 +1,26 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
+import System.FilePath( (</>) )
+import System.Directory( createDirectoryIfMissing )
+
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
-import Graphics.Rasterific.Polygon
+import Graphics.Rasterific.Line
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 import Codec.Picture
 import Linear( V2( .. ), (^+^), (^*) )
 
-logo :: Int -> Bool -> Vector -> [Bezier]
-logo size inv offset = bezierFromPath . way $ map (^+^ offset)
+type Stroker s =
+    Texture PixelRGBA8 -> Float -> Join -> (Cap, Cap) -> [Primitive]
+        -> DrawContext s PixelRGBA8 ()
+
+outFolder :: FilePath
+outFolder = "test_results"
+
+logo :: Int -> Bool -> Vector -> [Primitive]
+logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
     [ (V2   0  is)
     , (V2   0   0)
     , (V2  is   0)
@@ -26,20 +38,24 @@ logo size inv offset = bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue :: PixelRGBA8
-background = (PixelRGBA8 255 255 255 0)
-blue = (PixelRGBA8 0 120 250 255)
+background, blue, black, grey, yellow :: PixelRGBA8
+background = PixelRGBA8 128 128 128 255
+blue = PixelRGBA8 0 020 150 255
+black = PixelRGBA8 0 0 0 255
+grey = PixelRGBA8 128 128 128 255
+yellow = PixelRGBA8 255 255 0 255
+brightblue = PixelRGBA8 0 255 255 255
 
 logoTest :: IO ()
-logoTest = writePng "logo.png" img
+logoTest = writePng (outFolder </> "logo.png") img
   where texture = uniformTexture blue
         beziers = logo 40 False $ V2 10 10
         inverse = logo 20 True $ V2 20 20
         drawing = fill texture $ beziers ++ inverse
         img = renderContext 100 100 background drawing
 
-cubicTest :: [CubicBezier]
-cubicTest = cubicBezierFromPath 
+cubicTest :: [Primitive]
+cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
     [ V2 50 20 -- zig zag first part
     , V2 90 60
     , V2  5 100
@@ -55,13 +71,13 @@ cubicTest = cubicBezierFromPath
     ]
 
 cubicTest1 :: IO ()
-cubicTest1 = writePng "cubic1.png" img
+cubicTest1 = writePng (outFolder </> "cubic1.png") img
   where texture = uniformTexture blue
         drawing = fill texture cubicTest
         img = renderContext 150 150 background drawing
 
 clipTest :: IO ()
-clipTest = writePng "clip.png" img
+clipTest = writePng (outFolder </> "clip.png") img
   where texture = uniformTexture blue
         beziers =
             [ logo 20 False $ V2 (-10) (-10)
@@ -73,8 +89,9 @@ clipTest = writePng "clip.png" img
         drawing = mapM_ (fill texture) beziers
         img = renderContext 100 100 background drawing
 
-strokeTest2 :: IO ()
-strokeTest2 = writePng "stroke2.png" img
+strokeTest2 :: (forall s. Stroker s) -> String -> IO ()
+strokeTest2 stroker prefix =
+    writePng (outFolder </> (prefix ++ "stroke2.png")) img
   where texture = uniformTexture blue
         points = 
             [ V2 10 10, V2 100 100
@@ -82,51 +99,88 @@ strokeTest2 = writePng "stroke2.png" img
         
         drawing = sequence_ . concat $
             [ []
-            , [stroke texture 9 JoinRound (CapRound, CapStraight 0)
-                    . polygonFromPath $
+            , [stroker texture 9 JoinRound (CapRound, CapStraight 0)
+                    . map LinePrim . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
-            , [stroke texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
-                . polygonFromPath $
+            , [stroker texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+                . map LinePrim . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
-            {-, [strokePolygonShape texture 8 5 (CapRound ) $-}
-                {-(^+^ (V2 15 (20 * (ix + 20)))) <$> points-}
-                {-| ix <- [-10 .. 0]]-}
             ]
 
         img = renderContext 500 500 background drawing
 
-strokeTest :: IO ()
-strokeTest = writePng "stroke.png" img
+strokeLogo :: (forall s. Stroker s) -> String -> IO ()
+strokeLogo stroker prefix =
+  writePng (outFolder </> (prefix ++ "stroke_logo.png")) img
+    where texture = uniformTexture blue
+          beziers = logo 40 False $ V2 10 10
+          inverse = logo 20 True $ V2 20 20
+          img = renderContext 100 100 background 
+              $ stroker texture 4 JoinRound (CapRound, CapRound)
+              $ beziers ++ inverse
+
+strokeQuadraticIntersection :: (forall s. Stroker s) -> String -> IO ()
+strokeQuadraticIntersection stroker prefix =
+  writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
+    where texture = uniformTexture blue
+          img = renderContext 500 500 background 
+              $ stroker texture 40 JoinRound (CapRound, CapRound)
+              $ map BezierPrim
+              $ bezierFromPath
+                [ V2 30 30
+                , V2 150 200
+                , V2 450 450
+
+                , V2 450 90
+                , V2 30  450
+                ]
+
+strokeTest :: (forall s. Stroker s) -> String -> IO ()
+strokeTest stroker prefix =
+    writePng (outFolder </> (prefix ++ "stroke.png")) img
   where texture = uniformTexture blue
         beziers base = take 1 <$>
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
         drawing = sequence_ . concat $
           [ []
-          , [stroke texture (6 + ix) (JoinMiter ix)
+          , [stroker texture (6 + ix) (JoinMiter ix)
                     (CapStraight 0, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 10)]
-          , [stroke texture ix
+          , [stroker texture ix
                     (JoinMiter 1) (CapRound, CapStraight 1) b
                     | (ix, b) <- zip [1 ..] (beziers 60)]
-          , [stroke texture ix (JoinMiter 1) (CapRound, CapRound) b
+          , [stroker texture ix (JoinMiter 1) (CapRound, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 110)]
-          , [stroke texture 15
+          , [stroker texture 15
                     (JoinMiter 1) (CapStraight 1, CapStraight 0)
                     . take 1 $
                     logo 150 False $ V2 200 200]
-          , [stroke texture 5
+          , [stroker texture 5
                     (JoinMiter 1) (CapStraight 0, CapStraight 0) $
-                    logo 100 False $ V2 240 240]
+                   logo 100 False $ V2 240 240]
           ]
         img = renderContext 500 500 background drawing
 
+debugStroke :: Stroker s
+debugStroke =
+    strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
+
 main :: IO ()
 main = do
+  createDirectoryIfMissing True outFolder
   logoTest
   cubicTest1
   clipTest
-  strokeTest
-  strokeTest2
+  strokeTest stroke ""
+  strokeTest debugStroke "debug_"
+
+  strokeQuadraticIntersection stroke ""
+  strokeQuadraticIntersection debugStroke "debug_"
+
+  strokeTest2 stroke ""
+  strokeTest2 debugStroke "debug_"
+
+  strokeLogo debugStroke "debug_"
 

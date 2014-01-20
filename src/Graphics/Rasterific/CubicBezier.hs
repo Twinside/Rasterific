@@ -1,7 +1,11 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Graphics.Rasterific.CubicBezier
-    ( CubicBezier( .. )
-    , cubicBezierCircle
+    ( cubicBezierCircle
     , cubicBezierFromPath
+    , clipCubicBezier
+    , decomposeCubicBeziers
     ) where
 
 import Prelude hiding( or )
@@ -18,18 +22,10 @@ import Linear( V1( .. )
              {-, dot-}
              {-, norm-}
              )
-import Data.Monoid( Monoid, (<>) )
+import Data.Monoid( (<>) )
 {-import Data.Foldable( Foldable, foldMap )-}
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
-
--- | Represent a cubic bezier curve.
-data CubicBezier = CubicBezier !Point !Point !Point !Point
-    deriving (Eq, Show)
-
-instance Rasterizable CubicBezier where
-  clip = clipCubicBezier
-  decompose = decomposeCubicBeziers
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -60,22 +56,21 @@ straightLine a b = CubicBezier a p p b
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
 clipCubicBezier
-    :: (Applicative a, Monoid (a CubicBezier))
-    => Point   -- ^ Point representing the "minimal" point for cliping
+    :: Point   -- ^ Point representing the "minimal" point for cliping
     -> Point  -- ^ Point representing the "maximal" point for cliping
     -> CubicBezier -- ^ The cubic bezier curve to be clamped
-    -> a CubicBezier
+    -> [Primitive]
 clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
     -- If we are in the range bound, return the curve
     -- unaltered
-    | insideX && insideY = pure bezier
+    | insideX && insideY = pure $ CubicBezierPrim bezier
     -- If one of the component is outside, clamp
     -- the components on the boundaries and output a
     -- straight line on this boundary. Useful for the
     -- filing case, to clamp the polygon drawing on
     -- the edge
     | outsideX || outsideY =
-        pure $ clampedA `straightLine` clampedD
+        pure . CubicBezierPrim $ clampedA `straightLine` clampedD
     -- Not completly inside nor outside, just divide
     -- and conquer.
     | otherwise =

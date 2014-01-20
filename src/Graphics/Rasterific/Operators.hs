@@ -9,6 +9,7 @@ module Graphics.Rasterific.Operators
     , (^<=^)
     , (^<^)
     , (^<)
+
       -- *  Lifted functions
     , vmin
     , vmax

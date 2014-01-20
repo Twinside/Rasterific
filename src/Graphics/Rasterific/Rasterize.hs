@@ -5,6 +5,8 @@ module Graphics.Rasterific.Rasterize
 
 import Data.List( mapAccumL, sortBy )
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.QuadraticBezier
+import Graphics.Rasterific.CubicBezier
 
 data CoverageSpan = CoverageSpan
     { _coverageX      :: !Float
@@ -27,7 +29,12 @@ combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
                where p1 = CoverageSpan x y (min 1 $ abs a) 1
                      p2 = CoverageSpan (x + 1) y (min 1 $ abs h) (x' - x - 1)
 
-rasterize :: Rasterizable el => [el] -> [CoverageSpan]
+decompose :: Primitive -> [EdgeSample]
+decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2
+decompose (BezierPrim b) = decomposeBeziers b
+decompose (CubicBezierPrim c) = decomposeCubicBeziers c
+
+rasterize :: [Primitive] -> [CoverageSpan]
 rasterize = combineEdgeSamples . sortBy xy . concatMap decompose
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
 

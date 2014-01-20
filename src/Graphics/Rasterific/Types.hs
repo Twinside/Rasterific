@@ -1,14 +1,19 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
     ( Vector
     , Point
     , Cap( .. )
     , Join( .. )
-    , Rasterizable( .. )
-    , Strokable( .. )
     , EdgeSample( .. )
+    , Primitive( .. )
+    , Line( .. )
+    , Bezier( .. )
+    , CubicBezier( .. )
     , StrokeWidth
     ) where
 
@@ -46,19 +51,38 @@ data Join =
 
 -- | Represent a raster line
 data EdgeSample = EdgeSample
-  { _sampleX     :: !Float -- ^ Horizontal position
-  , _sampleY     :: !Float -- ^ Vertical position
-  , _sampleAlpha :: !Float -- ^ Alpha
-  , _sampleH     :: !Float -- ^ Height
+  { _sampleX     :: {-# UNPACK #-} !Float -- ^ Horizontal position
+  , _sampleY     :: {-# UNPACK #-} !Float -- ^ Vertical position
+  , _sampleAlpha :: {-# UNPACK #-} !Float -- ^ Alpha
+  , _sampleH     :: {-# UNPACK #-} !Float -- ^ Height
   }
   deriving Show
 
-class Rasterizable a where
-  decompose :: a -> [EdgeSample]
-  clip :: Point -> Point -> a -> [a]
+data Line = Line
+  { _lineX0 :: !Point
+  , _lineX1 :: !Point
+  }
+  deriving (Eq, Show)
 
-class Rasterizable (RenderType a) => Strokable a where
-  type RenderType a :: *
-  strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [a]
-           -> [RenderType a]
+data Bezier = Bezier
+  { _bezierX0 :: !Point
+  , _bezierX1 :: !Point
+  , _bezierX2 :: !Point
+  }
+  deriving (Eq, Show)
+
+data CubicBezier = CubicBezier 
+  { _cBezierX0 :: !Point
+  , _cBezierX1 :: !Point
+  , _cBezierX2 :: !Point
+  , _cBezierX3 :: !Point
+  }
+  deriving (Eq, Show)
+
+data Primitive
+  = LinePrim !Line
+  | BezierPrim !Bezier
+  | CubicBezierPrim !CubicBezier
+  deriving (Eq, Show)
+
 

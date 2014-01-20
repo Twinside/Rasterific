@@ -3,9 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 module Graphics.Rasterific
-    ( Bezier( .. )
-    , CubicBezier( .. )
-    , Polygon( .. )
+    ( Primitive( .. )
     , Texture
     , Compositor
     , DrawContext
@@ -14,10 +12,14 @@ module Graphics.Rasterific
     , renderContext
     , fill
     , stroke
+    , strokeDebug
     , compositionDestination
     , compositionAlpha
+
     ) where
 
+{-import Control.Applicative( (<$>) )-}
+import Control.Monad( forM_ )
 import Control.Monad.ST( ST, runST )
 import Control.Monad.State( StateT, execStateT, get, lift )
 import Codec.Picture.Types( Image( .. )
@@ -27,34 +29,55 @@ import Codec.Picture.Types( Image( .. )
                           , unsafeFreezeImage )
 
 import Linear( V2( .. ) )
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Compositor
 {-import Graphics.Rasterific.Operators-}
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Polygon
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.Line
+import Graphics.Rasterific.QuadraticBezier
+import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.Stroke
+
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 -- | Monad used to describe the drawing context.
-type DrawContext s a px = StateT (MutableImage s px) (ST s) a
+type DrawContext s px a = StateT (MutableImage s px) (ST s) a
 
 -- | Function to call in order to start the image creation.
 renderContext :: (Pixel px)
-              => Int -> Int -> px -> (forall s. DrawContext s a px) -> Image px
+              => Int -> Int -> px -> (forall s. DrawContext s px a) -> Image px
 renderContext width height background drawing = runST $
   createMutableImage width height background
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
-stroke :: ( Pixel px, Modulable (PixelBaseComponent px) , Strokable el)
+stroke :: ( Pixel px, Modulable (PixelBaseComponent px))
        => Texture px -> Float -> Join -> (Cap, Cap)
-       -> [el] -> DrawContext s () px
+       -> [Primitive] -> DrawContext s px ()
 stroke texture width join caping =
     fill texture . strokize width join caping
 
-fill :: (Pixel px, Modulable (PixelBaseComponent px), Rasterizable el)
-     => Texture px -> [el] -> DrawContext s () px
+strokeDebug :: ( Pixel px, Modulable (PixelBaseComponent px))
+            => Texture px -> Texture px -> Texture px
+            -> Float -> Join -> (Cap, Cap)
+            -> [Primitive] -> DrawContext s px ()
+strokeDebug debugPair debugImpair texture width join caping elems =
+  fill texture stroked >> forM_ (zip debugColor stroked) subStroke
+    where stroked = strokize width join caping elems
+          -- | Infinite list repeating color pattern
+          debugColor = debugPair : debugImpair : debugColor
+          subStroke (color, el) =
+            stroke color 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) [el]
+
+clip :: Point -> Point -> Primitive -> [Primitive]
+clip mini maxi (LinePrim l) = clipLine mini maxi l
+clip mini maxi (BezierPrim b) = clipBezier mini maxi b
+clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
+
+fill :: (Pixel px, Modulable (PixelBaseComponent px))
+     => Texture px -> [Primitive] -> DrawContext s px ()
 fill texture els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0

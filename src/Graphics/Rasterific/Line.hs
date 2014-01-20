@@ -1,64 +1,58 @@
-{-# LANGUAGE TypeFamilies #-}
 -- | Handle straight lines polygon.
-module Graphics.Rasterific.Polygon
-    ( Polygon( .. )
-    , polygonFromPath
+module Graphics.Rasterific.Line
+    ( lineFromPath
+    , clipLine
+    , sanitizeLine
     ) where
 
 import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( Monoid, (<>) )
+import Data.Monoid( (<>) )
 import Linear( V2( .. ), (^-^) )
 
 import Graphics.Rasterific.Operators
-import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.Types
 
-data Polygon = Polygon !Point !Point
+lineFromPath :: [Point] -> [Line]
+lineFromPath [] = []
+lineFromPath lst@(_:rest) =
+    uncurry Line <$> zip lst rest
 
-polygonFromPath :: [Point] -> [Polygon]
-polygonFromPath [] = []
-polygonFromPath lst@(_:rest) =
-    uncurry Polygon <$> zip lst rest
-
-quadraticBezierOfPolygon :: Polygon -> Bezier
-quadraticBezierOfPolygon (Polygon a b) = a `straightLine` b
-
-instance Strokable Polygon where
-  type RenderType Polygon = Bezier
-  strokize width join cap =
-    strokize width join cap . fmap quadraticBezierOfPolygon
-
-instance Rasterizable Polygon where
+sanitizeLine :: Line -> [Primitive]
+sanitizeLine l@(Line p1 p2)
+  | p1 == p2 = []
+  | otherwise = [LinePrim l]
+    
+{-  
+instance Rasterizable (Shape Polygon) where
     clip = clipPolygon
     decompose (Polygon a b) =
         decompose $ a `straightLine` b
-
+-}
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipPolygon :: (Applicative a, Monoid (a Polygon))
-             => Point     -- ^ Point representing the "minimal" point for cliping
-             -> Point     -- ^ Point representing the "maximal" point for cliping
-             -> Polygon    -- ^ The line
-             -> a Polygon
-clipPolygon mini maxi poly@(Polygon a b)
+clipLine :: Point     -- ^ Point representing the "minimal" point for cliping
+         -> Point     -- ^ Point representing the "maximal" point for cliping
+         -> Line      -- ^ The line
+         -> [Primitive]
+clipLine mini maxi poly@(Line a b)
     -- If we are in the range bound, return the curve
     -- unaltered
-    | insideX && insideY = pure poly
+    | insideX && insideY = pure . LinePrim $ poly
     -- If one of the component is outside, clamp
     -- the components on the boundaries and output a
     -- straight line on this boundary. Useful for the
     -- filing case, to clamp the polygon drawing on
     -- the edge
-    | outsideX || outsideY = pure $ Polygon clampedA clampedB
+    | outsideX || outsideY = pure . LinePrim $ Line clampedA clampedB
 
     -- Not completly inside nor outside, just divide
     -- and conquer.
-    | otherwise = recurse (Polygon m b) <> recurse (Polygon a m)
+    | otherwise = recurse (Line m b) <> recurse (Line a m)
   where -- Minimal & maximal dimension of the bezier curve
         bmin = vmin a b
         bmax = vmax a b
 
-        recurse = clipPolygon mini maxi
+        recurse = clipLine mini maxi
 
         clamper = clampPoint mini maxi
         clampedA = clamper a

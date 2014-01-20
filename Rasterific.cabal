@@ -12,7 +12,7 @@ maintainer:          twinside@gmail.com
 
 -- A copyright notice.
 -- copyright:           
-category:            Graphics
+category:            Graphics, Codec, Codecs
 build-type:          Simple
 
 -- extra-source-files:  
@@ -26,15 +26,16 @@ library
                  , Graphics.Rasterific.QuadraticBezier
                  , Graphics.Rasterific.CubicBezier
                  , Graphics.Rasterific.Compositor
-                 , Graphics.Rasterific.Polygon
+                 , Graphics.Rasterific.Line
                  , Graphics.Rasterific.Texture
                  , Graphics.Rasterific.Types
                  , Graphics.Rasterific.Rasterize
                  , Graphics.Rasterific.Operators
+                 , Graphics.Rasterific.Stroke
 
   --other-modules: 
 
-  ghc-options: -Wall
+  ghc-options: -O2 -Wall
   
   -- Modules included in this library but not exported.
   -- other-modules:       
@@ -63,4 +64,6 @@ Executable test
                  , Rasterific
                  , JuicyPixels
                  , linear      >= 1.3.1
+                 , directory   >= 1.2
+                 , filepath
 

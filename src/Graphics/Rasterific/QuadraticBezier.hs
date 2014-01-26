@@ -13,6 +13,7 @@ module Graphics.Rasterific.QuadraticBezier
     , clipBezier
     , sanitizeBezier
     , offsetBezier
+    , bezierBreakAt
     ) where
 
 import Control.Applicative( (<$>)
@@ -30,9 +31,6 @@ import Linear( V2( .. )
 import Data.Monoid( Monoid( mempty ), (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
-
-{-import Debug.Trace-}
-{-import Text.Printf-}
 
 -- | Create a list of bezier patch from a list of points,
 --
@@ -178,6 +176,20 @@ sanitizeBezier bezier@(Bezier a b c)
         v = b `normal` c
         ac = a `midPoint` c
         abbc = (a `midPoint` b) `midPoint` (b `midPoint` c)
+
+bezierBreakAt :: Bezier -> Float -> (Bezier, Bezier)
+bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
+  where
+    --         X B
+    --        / \
+    --       /   \
+    --   ab X--X--X bc
+    --     / abbc  \
+    --    /         \
+    -- A X           X C
+    ab = lerpPoint a b t
+    bc = lerpPoint b c t
+    abbc = lerpPoint ab bc t
 
 -- | Move the bezier to a new position with an offset.
 offsetBezier :: (Applicative a, Monoid (a Primitive))

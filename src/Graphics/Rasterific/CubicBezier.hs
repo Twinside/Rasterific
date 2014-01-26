@@ -4,11 +4,11 @@
 module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
     , cubicBezierFromPath
+    , cubicBezierBreakAt
     , clipCubicBezier
     , decomposeCubicBeziers
     , sanitizeCubicBezier
     , offsetCubicBezier
-    , cubicBezierBreakAt
     ) where
 
 import Prelude hiding( or )
@@ -26,12 +26,8 @@ import Linear( V1( .. )
              , norm
              )
 import Data.Monoid( Monoid, mempty, (<>) )
-{-import Data.Foldable( Foldable, foldMap )-}
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
-
-{-import Debug.Trace-}
-{-import Text.Printf-}
 
 -- | Create a list of cubic bezier patch from a list of points.
 --

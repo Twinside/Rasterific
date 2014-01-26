@@ -3,6 +3,7 @@ module Graphics.Rasterific.Line
     ( lineFromPath
     , clipLine
     , sanitizeLine
+    , lineBreakAt
     ) where
 
 import Control.Applicative( Applicative, (<$>), pure )
@@ -21,13 +22,11 @@ sanitizeLine :: Line -> [Primitive]
 sanitizeLine l@(Line p1 p2)
   | p1 == p2 = []
   | otherwise = [LinePrim l]
-    
-{-  
-instance Rasterizable (Shape Polygon) where
-    clip = clipPolygon
-    decompose (Polygon a b) =
-        decompose $ a `straightLine` b
--}
+
+lineBreakAt :: Line -> Float -> (Line, Line)
+lineBreakAt (Line a b) t = (Line a ab, Line ab b)
+  where ab = lerpPoint a b t
+
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
 clipLine :: Point     -- ^ Point representing the "minimal" point for cliping

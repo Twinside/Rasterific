@@ -9,6 +9,7 @@ module Graphics.Rasterific.Types
     , Point
     , Cap( .. )
     , Join( .. )
+    , DashPattern
     , EdgeSample( .. )
     , Primitive( .. )
     , Line( .. )
@@ -28,6 +29,9 @@ type Point = V2 Float
 -- | Type alias just to get more meaningful
 -- type signatures
 type StrokeWidth = Float
+
+-- | Dash pattern to use
+type DashPattern = [Float]
 
 -- | Describe how we will "finish" the stroking
 -- that don't loop.
@@ -84,5 +88,4 @@ data Primitive
   | BezierPrim !Bezier
   | CubicBezierPrim !CubicBezier
   deriving (Eq, Show)
-
 

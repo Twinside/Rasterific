@@ -9,6 +9,7 @@ import Graphics.Rasterific.Line
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.Texture
 import Codec.Picture
 import Linear( V2( .. ), (^+^), (^*) )
 
@@ -38,21 +39,44 @@ logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, grey, yellow :: PixelRGBA8
+background, blue, black, grey, yellow, red, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
+red = PixelRGBA8 255 0 0 255
 black = PixelRGBA8 0 0 0 255
 grey = PixelRGBA8 128 128 128 255
 yellow = PixelRGBA8 255 255 0 255
 brightblue = PixelRGBA8 0 255 255 255
+white = PixelRGBA8 255 255 255 255
 
-logoTest :: IO ()
-logoTest = writePng (outFolder </> "logo.png") img
-  where texture = uniformTexture blue
-        beziers = logo 40 False $ V2 10 10
-        inverse = logo 20 True $ V2 20 20
-        drawing = fill texture $ beziers ++ inverse
-        img = renderContext 100 100 background drawing
+biColor, triColor :: Gradient PixelRGBA8
+biColor = [ (0.0, black) , (1.0, yellow) ]
+triColor = [ (0.0, blue), (0.5, white) , (1.0, red) ]
+
+logoTest :: Texture PixelRGBA8 -> String -> IO ()
+logoTest texture prefix =
+    writePng (outFolder </> (prefix ++ "logo.png")) img
+  where 
+    beziers = logo 40 False $ V2 10 10
+    inverse = logo 20 True $ V2 20 20
+    drawing = fill texture $ beziers ++ inverse
+    img = renderContext 100 100 background drawing
+
+makeBox :: Point -> Point -> [Primitive]
+makeBox (V2 sx sy) (V2 ex ey) = map LinePrim $ lineFromPath
+    [ V2 sx sy
+    , V2 ex sy
+    , V2 ex ey
+    , V2 sx ey
+    , V2 sx sy
+    ]
+
+bigBox :: Texture PixelRGBA8 -> String -> IO ()
+bigBox texture prefix =
+    writePng (outFolder </> (prefix ++ "box.png")) img
+  where 
+    drawing = fill texture $ makeBox (V2 10 10) (V2 390 390)
+    img = renderContext 400 400 background drawing
 
 cubicTest :: [Primitive]
 cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
@@ -200,8 +224,23 @@ debugStroke =
 
 main :: IO ()
 main = do
+  let uniform = uniformTexture blue
+      biGradient =
+        linearGradientTexture biColor (V2 10 10) (V2 90 90)
+      bigBiGradient =
+        linearGradientTexture biColor (V2 0 10) (V2 0 390)
+      triGradient =
+        linearGradientTexture triColor (V2 0 10) (V2 0 390)
+
   createDirectoryIfMissing True outFolder
-  logoTest
+  logoTest uniform ""
+  logoTest biGradient "gradient_"
+
+  bigBox uniform ""
+  bigBox biGradient "gradient_"
+  bigBox bigBiGradient "gradient_big_"
+  bigBox triGradient "gradient_tri_"
+
   cubicTest1
   clipTest
   strokeTest stroke ""

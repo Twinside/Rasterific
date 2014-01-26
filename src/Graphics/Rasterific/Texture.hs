@@ -6,9 +6,15 @@ module Graphics.Rasterific.Texture
     , Gradient
     , uniformTexture
     , linearGradientTexture
+    , radialGradientTexture
     ) where
 
-import Linear( V2( .. ), (^-^), (^/), dot )
+import Linear( V2( .. )
+             , (^-^)
+             , (^/)
+             , dot
+             , norm
+             )
 import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. ) )
@@ -55,4 +61,13 @@ linearGradientTexture gradient start end =
     vector = end ^-^ start
     d = vector ^/ (vector `dot` vector)
     s00 = start `dot` d
+
+radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
+                      => Gradient px -> Point -> Float -> Texture px
+radialGradientTexture gradient center radius =
+    \x y -> colorAt $ norm ((V2 (fi x) (fi y)) ^-^ center) / radius
+  where
+    fi = fromIntegral
+    colorAt = gradientColorAt gradArray
+    gradArray = V.fromList gradient
 

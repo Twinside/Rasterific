@@ -145,11 +145,11 @@ strokeLogo stroker prefix =
               $ stroker texture 4 JoinRound (CapRound, CapRound)
               $ beziers ++ inverse
 
-strokeQuadraticIntersection :: (forall s. Stroker s) -> String -> IO ()
-strokeQuadraticIntersection stroker prefix =
+strokeQuadraticIntersection ::
+    (forall s. Stroker s) -> Texture PixelRGBA8 -> String -> IO ()
+strokeQuadraticIntersection stroker texture prefix =
   writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
-    where texture = uniformTexture blue
-          img = renderContext 500 500 background 
+    where img = renderContext 500 500 background 
               $ stroker texture 40 JoinRound (CapRound, CapRound)
               $ map BezierPrim
               $ bezierFromPath
@@ -161,11 +161,11 @@ strokeQuadraticIntersection stroker prefix =
                 , V2 30  450
                 ]
 
-strokeCubic :: (forall s. Stroker s) -> String -> IO ()
-strokeCubic stroker prefix =
+strokeCubic :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
+            -> IO ()
+strokeCubic stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
-  where texture = uniformTexture blue
-        img = renderContext 500 500 background drawing
+  where img = renderContext 500 500 background drawing
         cusp = CubicBezier
             (V2 10 230)
             (V2 350 570)
@@ -192,11 +192,11 @@ strokeCubic stroker prefix =
                     [CubicBezierPrim loop]]
             ]
 
-strokeTest :: (forall s. Stroker s) -> String -> IO ()
-strokeTest stroker prefix =
+strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
+           -> IO ()
+strokeTest stroker texture prefix =
     writePng (outFolder </> (prefix ++ "stroke.png")) img
-  where texture = uniformTexture blue
-        beziers base = take 1 <$>
+  where beziers base = take 1 <$>
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
         drawing = sequence_ . concat $
           [ []
@@ -227,10 +227,14 @@ main = do
   let uniform = uniformTexture blue
       biGradient =
         linearGradientTexture biColor (V2 10 10) (V2 90 90)
+      radBiGradient =
+        radialGradientTexture biColor (V2 45 45) 60
       bigBiGradient =
         linearGradientTexture biColor (V2 0 10) (V2 0 390)
       triGradient =
         linearGradientTexture triColor (V2 0 10) (V2 0 390)
+      radTriGradient =
+        radialGradientTexture triColor (V2 250 250) 200
 
   createDirectoryIfMissing True outFolder
   logoTest uniform ""
@@ -240,20 +244,28 @@ main = do
   bigBox biGradient "gradient_"
   bigBox bigBiGradient "gradient_big_"
   bigBox triGradient "gradient_tri_"
+  bigBox radBiGradient "rad_gradient_"
+  bigBox radTriGradient "rad_trigradient_"
 
   cubicTest1
   clipTest
-  strokeTest stroke ""
-  strokeTest debugStroke "debug_"
+  strokeTest stroke uniform ""
+  strokeTest stroke bigBiGradient "gradient_"
+  strokeTest stroke radTriGradient "rad_gradient_"
+  strokeTest debugStroke uniform "debug_"
 
-  strokeQuadraticIntersection stroke ""
-  strokeQuadraticIntersection debugStroke "debug_"
+  strokeQuadraticIntersection stroke uniform ""
+  strokeQuadraticIntersection stroke triGradient "gradient_"
+  strokeQuadraticIntersection stroke radBiGradient "rad_gradient_"
+  strokeQuadraticIntersection debugStroke uniform "debug_"
 
   strokeTest2 stroke ""
   strokeTest2 debugStroke "debug_"
 
   strokeLogo debugStroke "debug_"
 
-  strokeCubic stroke ""
-  strokeCubic debugStroke "debug_"
+  strokeCubic stroke uniform ""
+  strokeCubic stroke bigBiGradient "gradient_"
+  strokeCubic stroke radTriGradient "rad_gradient_"
+  strokeCubic debugStroke uniform "debug_"
 

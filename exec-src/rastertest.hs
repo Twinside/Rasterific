@@ -141,9 +141,32 @@ strokeCubic :: (forall s. Stroker s) -> String -> IO ()
 strokeCubic stroker prefix =
     writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
   where texture = uniformTexture blue
-        img = renderContext 500 500 background
-            $ stroker texture 4 JoinRound (CapRound, CapRound)
-            $ take 1 cubicTest 
+        img = renderContext 500 500 background drawing
+        cusp = CubicBezier
+            (V2 10 230)
+            (V2 350 570)
+            (V2 10 570)
+            (V2 350 230)
+
+        loop = CubicBezier
+            (V2 160 20)
+            (V2 770 500)
+            (V2 140 500)
+            (V2 480 70)
+
+        drawing = sequence_ . concat $
+            [ []
+            , [stroker texture 4 JoinRound (CapRound, CapRound)
+                    $ take 1 cubicTest ]
+
+            , [stroker texture 15 (JoinMiter 0)
+                    (CapStraight 0, CapStraight 0)
+                    [CubicBezierPrim cusp]]
+
+            , [stroker texture 25 (JoinMiter 0)
+                    (CapStraight 0, CapStraight 0)
+                    [CubicBezierPrim loop]]
+            ]
 
 strokeTest :: (forall s. Stroker s) -> String -> IO ()
 strokeTest stroker prefix =
@@ -193,4 +216,5 @@ main = do
   strokeLogo debugStroke "debug_"
 
   strokeCubic stroke ""
+  strokeCubic debugStroke "debug_"
 

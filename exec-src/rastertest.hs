@@ -137,6 +137,14 @@ strokeQuadraticIntersection stroker prefix =
                 , V2 30  450
                 ]
 
+strokeCubic :: (forall s. Stroker s) -> String -> IO ()
+strokeCubic stroker prefix =
+    writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
+  where texture = uniformTexture blue
+        img = renderContext 500 500 background
+            $ stroker texture 4 JoinRound (CapRound, CapRound)
+            $ take 1 cubicTest 
+
 strokeTest :: (forall s. Stroker s) -> String -> IO ()
 strokeTest stroker prefix =
     writePng (outFolder </> (prefix ++ "stroke.png")) img
@@ -183,4 +191,6 @@ main = do
   strokeTest2 debugStroke "debug_"
 
   strokeLogo debugStroke "debug_"
+
+  strokeCubic stroke ""
 

@@ -13,6 +13,7 @@ import Linear( V2( .. )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
+import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Line
 
 lastPoint :: Primitive -> Point
@@ -145,7 +146,7 @@ offsetPrimitives :: Float -> Primitive -> [Primitive]
 offsetPrimitives offset (LinePrim (Line x1 x2)) =
     offsetPrimitives offset . BezierPrim $ straightLine x1 x2
 offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
-offsetPrimitives _offset (CubicBezierPrim _c) = error "Unimplemented"
+offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 
 offsetAndJoin :: Float -> Join -> Cap -> [Primitive]
               -> [Primitive]
@@ -164,7 +165,7 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
 sanitize :: Primitive -> [Primitive]
 sanitize (LinePrim l) = sanitizeLine l
 sanitize (BezierPrim b) = sanitizeBezier b
-sanitize c@(CubicBezierPrim _) = pure c
+sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 
 strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
          -> [Primitive]

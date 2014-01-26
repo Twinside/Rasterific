@@ -6,6 +6,8 @@ module Graphics.Rasterific.CubicBezier
     , cubicBezierFromPath
     , clipCubicBezier
     , decomposeCubicBeziers
+    , sanitizeCubicBezier
+    , offsetCubicBezier
     ) where
 
 import Prelude hiding( or )
@@ -17,15 +19,18 @@ import Control.Applicative( Applicative
 import Linear( V1( .. )
              , V2( .. )
              , (^-^)
-             {-, (^+^)-}
-             {-, (^*)-}
-             {-, dot-}
-             {-, norm-}
+             , (^+^)
+             , (^*)
+             , dot
+             , norm
              )
-import Data.Monoid( (<>) )
+import Data.Monoid( Monoid, mempty, (<>) )
 {-import Data.Foldable( Foldable, foldMap )-}
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
+
+import Debug.Trace
+{-import Text.Printf-}
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -52,6 +57,102 @@ cubicBezierCircle =
 straightLine :: Point -> Point -> CubicBezier
 straightLine a b = CubicBezier a p p b
   where p = a `midPoint` b
+
+type BezierBasis = (Point, Point, Point, Point)
+
+bezierBasis :: CubicBezier -> BezierBasis
+bezierBasis (CubicBezier p0 p1 p2 p3) = (a, b, c, d)
+  where a = negate p0 ^+^ (p1 ^-^ p2) ^* 3 + p3
+        b = (p0 ^-^ p1 ^* 2 ^+^ p2) ^* 3
+        c = (p1 ^-^ p0) ^* 3
+        d = p0
+
+
+--               3                    2            2                  3      
+-- x(t) = (1 - t) ∙x     + 3∙t∙(1 - t) ∙x     + 3∙t ∙(1 - t)∙x     + t ∙x    
+--                   0                    1                    2          3  
+--
+--               3                    2            2                  3      
+-- y(t) = (1 - t) ∙y     + 3∙t∙(1 - t) ∙y     + 3∙t ∙(1 - t)∙y     + t ∙y    
+--                   0                    1                    2          3  
+
+cusp :: BezierBasis -> Float
+cusp (V2 ax ay, V2 bx by, V2 cx cy, _) =
+    - 0.5 * ( (ay * cx - ax * cy)
+            / (ay * bx - ax * by) )
+
+data Inflections
+    = InflectionNone
+    | InflectionOne Float
+    | InflectionTwo Float Float
+    deriving (Eq, Show)
+
+inflectionPoints :: CubicBezier -> Inflections
+inflectionPoints bez
+    | val < 0     = InflectionNone
+    | val < 0.001 = InflectionOne tCusp
+    | otherwise   = InflectionTwo (tCusp - sqrt val) (tCusp + sqrt val)
+  where
+    basis@(V2 ax ay, V2 bx by, V2 cx cy, _) = bezierBasis bez
+    val = (\a -> trace ("tCusp:" ++ show tCusp ++ "  val:" ++ show a) a) $ tCusp * tCusp * quadrature / 3
+    tCusp = trace (show basis) $ cusp basis
+    quadrature = (by * cx - bx * cy)
+               / (ay * bx - ax * by)
+
+offsetCurve :: (Applicative a, Monoid (a Primitive))
+            => Float -> CubicBezier -> a Primitive
+offsetCurve offset (CubicBezier a b c d)
+    | u `dot` v >= 0.9 && u `dot` s >= 0.9 && s `dot` v >= 0.9 =
+        pure . CubicBezierPrim $ CubicBezier shiftedA shiftedB shiftedC shiftedD
+    | a /= b && b /= c && c /= d =
+        offsetCurve offset  (CubicBezier a ab abbc abbcbccd) <>
+            offsetCurve offset (CubicBezier abbcbccd bccd cd d)
+    | otherwise = mempty
+  where
+    u = a `normal` b
+    v = c `normal` d
+    s = b `normal` c
+
+    --                     BC
+    --         B X----------X---------X C  
+    --    ^     /      ___/   \___     \     ^
+    --   u \   /   __X------X------X_   \   / v
+    --      \ /___/ ABBC       BCCD  \___\ /
+    --    AB X/                          \X CD
+    --      /                              \
+    --     /                                \
+    --    /                                  \
+    -- A X                                    X D
+    ab = a `midPoint` b
+    bc = b `midPoint` c
+    cd = c `midPoint` d
+
+    w = ab `normal` bc
+    x = bc `normal` cd
+
+    abbc = ab `midPoint` bc
+    bccd = bc `midPoint` cd
+    abbcbccd = abbc `midPoint` bccd
+
+    shiftedA = a ^+^ (u ^* offset)
+    shiftedD = d ^+^ (v ^* offset)
+
+    {-shiftedABBCBCCD = abbcbccd ^+^ (w ^* offset)-}
+    shiftedB = (b ^+^ (w ^* offset))
+    shiftedC = (c ^+^ (x ^* offset))
+
+offsetCubicBezier :: (Applicative a, Monoid (a Primitive))
+                  => Float -> CubicBezier -> a Primitive
+offsetCubicBezier offsetVal bezier = go . (\a -> trace (show a) a) $ inflectionPoints bezier
+  where
+    offset = offsetCurve offsetVal
+
+    go InflectionNone = offset bezier
+    go (InflectionOne f) = offset a <> offset b
+        where (a, b) = cubicBezierBreakAt bezier f
+    go (InflectionTwo f1 f2) = offset a <> offset b' <> offset c
+        where (a, b) = cubicBezierBreakAt bezier f1
+              (b', c) = cubicBezierBreakAt b $ (f2 - f1) / (1 - f1)
 
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
@@ -111,6 +212,19 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
         edge = vpartition edgeSeparator mini maxi
         m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbc
 
+-- | Will subdivide the bezier from 0 to coeff and coeff to 1
+cubicBezierBreakAt :: CubicBezier -> Float -> (CubicBezier, CubicBezier)
+cubicBezierBreakAt (CubicBezier a b c d) val =
+    (CubicBezier a ab abbc abbcbccd, CubicBezier abbcbccd bccd cd d)
+  where
+    ab = lerpPoint a b val
+    bc = lerpPoint b c val
+    cd = lerpPoint c d val
+
+    abbc = lerpPoint ab bc val
+    bccd = lerpPoint bc cd val
+    abbcbccd = lerpPoint abbc bccd val
+
 decomposeCubicBeziers :: CubicBezier -> [EdgeSample]
 decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
     | insideX && insideY = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h]
@@ -157,4 +271,21 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
 
         m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax
                       <*> abbcbccd
+
+sanitizeCubicBezier :: (Applicative a, Monoid (a Primitive))
+                    => CubicBezier -> a Primitive
+sanitizeCubicBezier bezier@(CubicBezier a b c d)
+  | norm (a ^-^ b) > 0.0001 &&
+        norm (b ^-^ c) > 0.0001 && 
+        norm (c ^-^ d) > 0.0001 =
+       pure . CubicBezierPrim $ bezier
+  | ac /= b && bd /= c =
+      pure . CubicBezierPrim $ CubicBezier a ac bd d
+  | ac /= b = 
+      pure . CubicBezierPrim $ CubicBezier a ac c d
+  | bd /= c = 
+      pure . CubicBezierPrim $ CubicBezier a b bd d
+  | otherwise = mempty
+    where ac = a `midPoint` c
+          bd = a `midPoint` d
 

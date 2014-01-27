@@ -235,6 +235,8 @@ main = do
         linearGradientTexture triColor (V2 0 10) (V2 0 390)
       radTriGradient =
         radialGradientTexture triColor (V2 250 250) 200
+      radFocusTriGradient =
+        radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
 
   createDirectoryIfMissing True outFolder
   logoTest uniform ""
@@ -246,6 +248,7 @@ main = do
   bigBox triGradient "gradient_tri_"
   bigBox radBiGradient "rad_gradient_"
   bigBox radTriGradient "rad_trigradient_"
+  bigBox radFocusTriGradient "rad_focus_trigradient_"
 
   cubicTest1
   clipTest

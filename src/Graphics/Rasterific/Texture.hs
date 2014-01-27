@@ -7,11 +7,15 @@ module Graphics.Rasterific.Texture
     , uniformTexture
     , linearGradientTexture
     , radialGradientTexture
+    , radialGradientWithFocusTexture
     ) where
 
+{-import Control.Applicative( liftA )-}
 import Linear( V2( .. )
              , (^-^)
+             , (^+^)
              , (^/)
+             , (^*)
              , dot
              , norm
              )
@@ -70,4 +74,31 @@ radialGradientTexture gradient center radius =
     fi = fromIntegral
     colorAt = gradientColorAt gradArray
     gradArray = V.fromList gradient
+
+repeatGradient :: Float -> Float
+repeatGradient v = v - fromIntegral (floor v :: Int)
+
+radialGradientWithFocusTexture
+    :: (Pixel px, Modulable (PixelBaseComponent px))
+    => Gradient px -> Point -> Float -> Point -> Texture px
+radialGradientWithFocusTexture gradient center radius focus =
+    \x y -> colorAt . go $ V2 (fromIntegral x) (fromIntegral y)
+  where
+   vectorToFocus = focus ^-^ center
+   gradArray = V.fromList gradient
+   colorAt = gradientColorAt gradArray
+   rSquare = radius * radius
+
+   go point | distToFocus > 0 = distToFocus / (t + dist)
+            | otherwise = 0
+     where
+       focusToPoint = point ^-^ focus
+       distToFocus = sqrt $ focusToPoint `dot` focusToPoint
+       directionVector = focusToPoint ^/ distToFocus
+
+       t = directionVector `dot` vectorToFocus
+       closestPoint = directionVector ^* t ^+^ focus
+       vectorToClosest = (closestPoint ^-^ center)
+       distToCircleSquared = vectorToClosest `dot` vectorToClosest
+       dist = sqrt $ rSquare + distToCircleSquared
 

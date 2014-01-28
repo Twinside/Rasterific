@@ -5,10 +5,6 @@ import System.Directory( createDirectoryIfMissing )
 
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
-import Graphics.Rasterific.Line
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Texture
 import Codec.Picture
 import Linear( V2( .. ), (^+^), (^*) )

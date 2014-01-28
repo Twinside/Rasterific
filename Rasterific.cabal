@@ -23,17 +23,16 @@ cabal-version:       >= 1.10
 library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
-                 , Graphics.Rasterific.QuadraticBezier
-                 , Graphics.Rasterific.CubicBezier
                  , Graphics.Rasterific.Compositor
-                 , Graphics.Rasterific.Line
                  , Graphics.Rasterific.Texture
-                 , Graphics.Rasterific.Types
-                 , Graphics.Rasterific.Rasterize
-                 , Graphics.Rasterific.Operators
-                 , Graphics.Rasterific.Stroke
 
-  --other-modules: 
+  other-modules: Graphics.Rasterific.Line
+               , Graphics.Rasterific.QuadraticBezier
+               , Graphics.Rasterific.CubicBezier
+               , Graphics.Rasterific.Stroke
+               , Graphics.Rasterific.Operators
+               , Graphics.Rasterific.Rasterize
+               , Graphics.Rasterific.Types
 
   ghc-options: -O2 -Wall
   

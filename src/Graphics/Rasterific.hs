@@ -3,18 +3,38 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 module Graphics.Rasterific
-    ( Primitive( .. )
+    ( 
+      -- * Rasterization command
+      fill
+    , stroke
+    , strokeDebug
+    , renderContext
+
+      -- * Rasterization types
     , Texture
     , Compositor
     , DrawContext
     , Modulable
-    , uniformTexture
-    , renderContext
-    , fill
-    , stroke
-    , strokeDebug
-    , compositionDestination
-    , compositionAlpha
+
+      -- * Geometry description
+    , Point
+    , Vector
+    , CubicBezier( .. )
+    , Line( .. )
+    , Bezier( .. )
+    , Primitive( .. )
+
+      -- ** Geometry Helpers
+    , clip
+    , bezierFromPath
+    , lineFromPath
+    , cubicBezierFromPath
+
+      -- * Rasterization control
+    , Join( .. )
+    , Cap( .. )
+    , SamplerRepeat( .. )
+    , DashPattern
 
     ) where
 
@@ -43,22 +63,35 @@ import Graphics.Rasterific.Stroke
 {-import Text.Printf-}
 
 -- | Monad used to describe the drawing context.
-type DrawContext s px a = StateT (MutableImage s px) (ST s) a
+type DrawContext s px a =
+    StateT (MutableImage s px) (ST s) a
 
 -- | Function to call in order to start the image creation.
+-- the upper left corner is the point (0, 0)
 renderContext :: (Pixel px)
-              => Int -> Int -> px -> (forall s. DrawContext s px a) -> Image px
+              => Int -- ^ Rendering width
+              -> Int -- ^ Rendering height
+              -> px  -- ^ Background color
+              -> (forall s. DrawContext s px a) -- ^ Rendering action
+              -> Image px
 renderContext width height background drawing = runST $
   createMutableImage width height background
         >>= execStateT drawing
         >>= unsafeFreezeImage
 
+-- | Will stroke geometry with a given stroke width.
+-- The elements should be connected
 stroke :: ( Pixel px, Modulable (PixelBaseComponent px))
-       => Texture px -> Float -> Join -> (Cap, Cap)
-       -> [Primitive] -> DrawContext s px ()
+       => Texture px  -- ^ Stroke color/texture
+       -> Float       -- ^ Stroke width
+       -> Join        -- ^ Which kind of join will be used
+       -> (Cap, Cap)  -- ^ Start and end capping.
+       -> [Primitive] -- ^ List of elements to render
+       -> DrawContext s px ()
 stroke texture width join caping =
     fill texture . strokize width join caping
 
+-- | Internal debug function
 strokeDebug :: ( Pixel px, Modulable (PixelBaseComponent px))
             => Texture px -> Texture px -> Texture px
             -> Float -> Join -> (Cap, Cap)
@@ -71,13 +104,24 @@ strokeDebug debugPair debugImpair texture width join caping elems =
           subStroke (color, el) =
             stroke color 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) [el]
 
-clip :: Point -> Point -> Primitive -> [Primitive]
+-- | Clip the geometry to a rectangle.
+clip :: Point     -- ^ Minimum point (corner upper left)
+     -> Point     -- ^ Maximum point (corner bottom right)
+     -> Primitive -- ^ Primitive to be clipped
+     -> [Primitive]
 clip mini maxi (LinePrim l) = clipLine mini maxi l
 clip mini maxi (BezierPrim b) = clipBezier mini maxi b
 clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
 
+-- | Fill some geometry. The geometry should be "looping",
+-- ie. the last point of the last primitive should
+-- be equal to the first point of the first primitive.
+--
+-- The primitive should be connected.
 fill :: (Pixel px, Modulable (PixelBaseComponent px))
-     => Texture px -> [Primitive] -> DrawContext s px ()
+     => Texture px  -- ^ Color/Texture used for the filling
+     -> [Primitive] -- ^ Primitives to fill
+     -> DrawContext s px ()
 fill texture els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0

@@ -32,9 +32,18 @@ type Texture px = Int -> Int -> px
 
 -- | The uniform texture is the simplest texture of all:
 -- an uniform color.
-uniformTexture :: px -> Texture px
+uniformTexture :: px -- ^ The color used for all the texture.
+               -> Texture px
 uniformTexture px _ _ = px
 
+-- | A gradient definition is just a list of stop
+-- and pixel values. For instance for a simple gradient
+-- of black to white, the finition would be :
+--
+-- > [(0, PixelRGBA8 0 0 0 255), (1, PixelRGBA8 255 255 255 255)]
+-- 
+-- the stop value must be zero and one.
+--
 type Gradient px = [(Float, px)]
 type GradientArray px = V.Vector (Float, px)
 
@@ -54,8 +63,12 @@ gradientColorAt grad at
             zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
             (cov, icov) = clampCoverage zeroToOne
 
+-- | Linear gradient texture.
 linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => Gradient px -> Point -> Point -> Texture px
+                      => Gradient px -- ^ Gradient description.
+                      -> Point       -- ^ Linear gradient start point.
+                      -> Point       -- ^ Linear gradient end point.
+                      -> Texture px
 linearGradientTexture gradient start end =
     \x y -> colorAt $ ((V2 (fi x) (fi y)) `dot` d) - s00
   where
@@ -66,8 +79,12 @@ linearGradientTexture gradient start end =
     d = vector ^/ (vector `dot` vector)
     s00 = start `dot` d
 
+-- | Radial gradient texture
 radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => Gradient px -> Point -> Float -> Texture px
+                      => Gradient px -- ^ Gradient description
+                      -> Point       -- ^ Radial gradient center
+                      -> Float       -- ^ Radial gradient radius
+                      -> Texture px
 radialGradientTexture gradient center radius =
     \x y -> colorAt $ norm ((V2 (fi x) (fi y)) ^-^ center) / radius
   where
@@ -78,9 +95,14 @@ radialGradientTexture gradient center radius =
 repeatGradient :: Float -> Float
 repeatGradient v = v - fromIntegral (floor v :: Int)
 
+-- | Radial gradient texture with a focus point.
 radialGradientWithFocusTexture
     :: (Pixel px, Modulable (PixelBaseComponent px))
-    => Gradient px -> Point -> Float -> Point -> Texture px
+    => Gradient px -- ^ Gradient description
+    -> Point      -- ^ Radial gradient center
+    -> Float      -- ^ Radial gradient radius
+    -> Point      -- ^ Radial gradient focus point
+    -> Texture px
 radialGradientWithFocusTexture gradient center radius focus =
     \x y -> colorAt . go $ V2 (fromIntegral x) (fromIntegral y)
   where

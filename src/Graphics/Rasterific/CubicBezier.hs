@@ -9,6 +9,7 @@ module Graphics.Rasterific.CubicBezier
     , decomposeCubicBeziers
     , sanitizeCubicBezier
     , offsetCubicBezier
+    , flattenCubicBezier
     ) where
 
 import Prelude hiding( or )
@@ -65,6 +66,33 @@ isSufficientlyFlat tol (CubicBezier a b c d) =
         (^*^) = liftA2 (*)
         V2 x y = vmax (u ^*^ u) (v ^*^ v)
         tolerance = 16 * tol * tol
+
+flattenCubicBezier :: (Applicative a, Monoid (a Primitive))
+                   => CubicBezier -> a Primitive
+flattenCubicBezier bezier@(CubicBezier a b c d)
+    | isSufficientlyFlat 1 bezier = pure $ CubicBezierPrim bezier
+    | otherwise =
+        flattenCubicBezier (CubicBezier a ab abbc abbcbccd) <>
+            flattenCubicBezier (CubicBezier abbcbccd bccd cd d)
+  where
+    --                     BC
+    --         B X----------X---------X C
+    --    ^     /      ___/   \___     \     ^
+    --   u \   /   __X------X------X_   \   / v
+    --      \ /___/ ABBC       BCCD  \___\ /
+    --    AB X/                          \X CD
+    --      /                              \
+    --     /                                \
+    --    /                                  \
+    -- A X                                    X D
+    ab = a `midPoint` b
+    bc = b `midPoint` c
+    cd = c `midPoint` d
+
+    abbc = ab `midPoint` bc
+    bccd = bc `midPoint` cd
+    abbcbccd = abbc `midPoint` bccd
+
 
 --               3                    2            2                  3
 -- x(t) = (1 - t) ∙x     + 3∙t∙(1 - t) ∙x     + 3∙t ∙(1 - t)∙x     + t ∙x

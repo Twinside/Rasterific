@@ -13,6 +13,7 @@ module Graphics.Rasterific.QuadraticBezier
     , clipBezier
     , sanitizeBezier
     , offsetBezier
+    , flattenBezier
     , bezierBreakAt
     ) where
 
@@ -190,6 +191,33 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     ab = lerpPoint a b t
     bc = lerpPoint b c t
     abbc = lerpPoint ab bc t
+
+flattenBezier :: (Applicative a, Monoid (a Primitive))
+              => Bezier -> a Primitive
+flattenBezier bezier@(Bezier a b c)
+    -- If the spline is not too curvy, just return the
+    -- shifted component
+    | u `dot` v >= 0.9 = pure $ BezierPrim bezier
+    -- Otherwise, divide and conquer
+    | a /= b && b /= c =
+        flattenBezier (Bezier a ab abbc) <>
+            flattenBezier (Bezier abbc bc c)
+    | otherwise = mempty
+  where --
+        --         X B   
+        --    ^   /^\   ^
+        --   u \ /w| \ / v
+        --      X-----X
+        --     /       \
+        --    /         \
+        -- A X           X C
+        --
+        u = a `normal` b
+        v = b `normal` c
+
+        ab = (a `midPoint` b)
+        bc = (b `midPoint` c)
+        abbc = ab `midPoint` bc
 
 -- | Move the bezier to a new position with an offset.
 offsetBezier :: (Applicative a, Monoid (a Primitive))

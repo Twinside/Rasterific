@@ -4,6 +4,7 @@ module Graphics.Rasterific.Line
     , clipLine
     , sanitizeLine
     , lineBreakAt
+    , flattenLine
     ) where
 
 import Control.Applicative( Applicative, (<$>), pure )
@@ -26,6 +27,9 @@ sanitizeLine l@(Line p1 p2)
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
   where ab = lerpPoint a b t
+
+flattenLine :: Line -> Line
+flattenLine = id
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.

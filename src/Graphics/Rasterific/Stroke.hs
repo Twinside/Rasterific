@@ -1,8 +1,13 @@
-module Graphics.Rasterific.Stroke  where
+module Graphics.Rasterific.Stroke
+    ( flatten
+    , dashize
+    , strokize
+    , dashedStrokize
+    )  where
 
 import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( Monoid, (<>) )
-import Data.Foldable( foldMap )
+import Data.Monoid( Monoid, (<>), mempty )
+import Data.Foldable( Foldable, foldMap )
 import Linear( V2( .. )
              , (^-^)
              , (^+^)
@@ -47,7 +52,7 @@ roundJoin offset p = go
           -- don't bother doing anything
           | u `dot` w >= 0.9 = pure . BezierPrim $ Bezier a b c
           | otherwise = go w v <> go u w
-          where --     ^    
+          where --     ^
                 --     |w
                 -- a X---X c
                 --    \ /
@@ -66,11 +71,12 @@ roundJoin offset p = go
 
 -- | Put a cap at the end of a bezier curve, depending
 -- on the kind of cap wanted.
-cap :: Float -> Cap -> Primitive -> [Primitive]
+cap :: (Applicative a, Monoid (a Primitive))
+    => Float -> Cap -> Primitive -> a Primitive
 cap offset CapRound prim = roundJoin offset p u (- u)
   where (p, u) = lastPointAndNormal prim
 
-cap offset (CapStraight cVal) prim = 
+cap offset (CapStraight cVal) prim =
    pure (d `lineFromTo` e) <> pure (e `lineFromTo` f)
                            <> pure (f `lineFromTo` g)
   where -- The usual "normal"
@@ -92,7 +98,7 @@ cap offset (CapStraight cVal) prim =
         g = p ^-^ u ^* offset
 
         -- Create the "far" points
-        -- 
+        --
         --       e        f
         --        /     /   ^
         --       /     /   / v * offset * cVal
@@ -108,14 +114,16 @@ cap offset (CapStraight cVal) prim =
 lineFromTo :: Point -> Point -> Primitive
 lineFromTo a b = LinePrim (Line a b)
 
-miterJoin :: Float -> Float -> Point -> Vector -> Vector -> [Primitive]
+miterJoin :: (Applicative a, Monoid (a Primitive))
+          => Float -> Float -> Point -> Vector -> Vector
+          -> a Primitive
 miterJoin offset l point u v
   | u `dot` w >= l / max 1 l =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
   where --      X m
-        --     /\   
+        --     /\
         --    /|w\
         -- a X---X c
         --    \ /
@@ -133,8 +141,9 @@ miterJoin offset l point u v
         -- middle point for "straight joining"
         m = point + w ^* p
 
-joinPrimitives :: StrokeWidth -> Join -> Primitive -> Primitive
-               -> [Primitive]
+joinPrimitives :: (Applicative a, Monoid (a Primitive))
+               => StrokeWidth -> Join -> Primitive -> Primitive
+               -> a Primitive
 joinPrimitives offset join prim1 prim2  =
   case join of
     JoinRound -> roundJoin offset p u v
@@ -142,15 +151,17 @@ joinPrimitives offset join prim1 prim2  =
   where (p, u) = lastPointAndNormal prim1
         (_, v) = firstPointAndNormal prim2
 
-offsetPrimitives :: Float -> Primitive -> [Primitive]
+offsetPrimitives :: (Applicative a, Monoid (a Primitive))
+                 => Float -> Primitive -> a Primitive
 offsetPrimitives offset (LinePrim (Line x1 x2)) =
     offsetPrimitives offset . BezierPrim $ straightLine x1 x2
 offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
 offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 
-offsetAndJoin :: Float -> Join -> Cap -> [Primitive]
-              -> [Primitive]
-offsetAndJoin _ _ _ [] = []
+offsetAndJoin :: (Foldable a, Applicative a, Monoid (a Primitive))
+              => Float -> Join -> Cap -> [Primitive]
+              -> a Primitive
+offsetAndJoin _ _ _ [] = mempty
 offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
   where joiner = joinPrimitives offset join
         offseter = offsetPrimitives offset
@@ -160,9 +171,16 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
            | firstPoint == lastPoint prev = joiner prev firstShape <> offseter prev
            | otherwise = cap offset caping prev <> offseter prev
         go prev (x:xs) =
-            go x xs <> joiner prev x <> offseter prev
+             joiner prev x <> offseter prev <> go x xs
 
-sanitize :: Primitive -> [Primitive]
+approximateLength :: Primitive -> Float
+approximateLength (LinePrim l) = lineLength l
+approximateLength (BezierPrim b) = bezierLengthApproximation b
+approximateLength (CubicBezierPrim c) = cubicBezierLengthApproximation c
+
+
+sanitize :: (Applicative a, Monoid (a Primitive))
+         => Primitive -> a Primitive
 sanitize (LinePrim l) = sanitizeLine l
 sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
@@ -170,8 +188,66 @@ sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
          -> [Primitive]
 strokize width join (capStart, capEnd) beziers =
-    offseter capEnd sanitized <> 
+    offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
   where sanitized = foldMap sanitize beziers
         offseter = offsetAndJoin (width / 2) join
+
+flattenPrimitive :: (Applicative a, Monoid (a Primitive))
+                 => Primitive -> a Primitive
+flattenPrimitive (BezierPrim bezier) = flattenBezier bezier
+flattenPrimitive (CubicBezierPrim bezier) = flattenCubicBezier bezier
+flattenPrimitive (LinePrim line) = flattenLine line
+
+breakPrimitiveAt :: Primitive -> Float -> (Primitive, Primitive)
+breakPrimitiveAt (BezierPrim bezier) at = (BezierPrim a, BezierPrim b)
+  where (a, b) = bezierBreakAt bezier at
+breakPrimitiveAt (CubicBezierPrim bezier) at = (CubicBezierPrim a, CubicBezierPrim b)
+  where (a, b) = cubicBezierBreakAt bezier at
+breakPrimitiveAt (LinePrim line) at = (LinePrim a, LinePrim b)
+  where (a, b) = lineBreakAt line at
+
+
+flatten :: (Applicative a, Foldable a, Monoid (a Primitive))
+        => a Primitive -> a Primitive
+flatten = foldMap flattenPrimitive
+
+splitPrimitiveUntil :: Float -> [Primitive] -> ([Primitive], [Primitive])
+splitPrimitiveUntil at = go at
+  where
+    go _ [] = ([], [])
+    go left lst
+      | left <= 0 = ([], lst)
+    go left (x : xs)
+      | left > primLength = (x : inInterval, afterInterval)
+      | otherwise = ([beforeStop], afterStop : xs)
+      where
+        primLength = approximateLength x
+        (inInterval, afterInterval) = go (left - primLength) xs
+
+        (beforeStop, afterStop) =
+            breakPrimitiveAt x $ left / primLength
+
+
+dashize :: DashPattern -> [Primitive] -> [[Primitive]]
+dashize pattern = taker infinitePattern
+                . concatMap flattenPrimitive
+                . concatMap sanitize
+  where
+    infinitePattern = cycle pattern
+
+    taker _ [] = []
+    taker [] _ = [] -- Impossible by construction, pattern is infinite
+    taker (atValue:atRest) stream  = toKeep : droper atRest next
+      where (toKeep, next) = splitPrimitiveUntil atValue stream
+
+    droper _ [] = []
+    droper [] _ = [] -- Impossible by construction, pattern is infinite
+    droper (atValue:atRest) stream = taker atRest next
+      where (_toKeep, next) = splitPrimitiveUntil atValue stream
+
+dashedStrokize :: DashPattern -> StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
+               -> [[Primitive]]
+dashedStrokize dashPattern width join capping beziers =
+    strokize width join capping <$> dashize dashPattern beziers
 

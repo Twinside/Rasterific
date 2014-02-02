@@ -28,7 +28,9 @@ import Graphics.Rasterific.Compositor
 
 -- | A texture is just a function which given pixel coordinate
 -- give back a pixel.
-type Texture px = Int -> Int -> px
+-- The float coordinate type allow for transformations
+-- to happen in the pixel space.
+type Texture px = Float -> Float -> px
 
 -- | The uniform texture is the simplest texture of all:
 -- an uniform color.
@@ -70,9 +72,8 @@ linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       -> Point       -- ^ Linear gradient end point.
                       -> Texture px
 linearGradientTexture gradient start end =
-    \x y -> colorAt $ ((V2 (fi x) (fi y)) `dot` d) - s00
+    \x y -> colorAt $ ((V2 x y) `dot` d) - s00
   where
-    fi = fromIntegral
     colorAt = gradientColorAt gradArray
     gradArray = V.fromList gradient
     vector = end ^-^ start
@@ -86,9 +87,8 @@ radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       -> Float       -- ^ Radial gradient radius
                       -> Texture px
 radialGradientTexture gradient center radius =
-    \x y -> colorAt $ norm ((V2 (fi x) (fi y)) ^-^ center) / radius
+    \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
   where
-    fi = fromIntegral
     colorAt = gradientColorAt gradArray
     gradArray = V.fromList gradient
 
@@ -104,7 +104,7 @@ radialGradientWithFocusTexture
     -> Point      -- ^ Radial gradient focus point
     -> Texture px
 radialGradientWithFocusTexture gradient center radius focus =
-    \x y -> colorAt . go $ V2 (fromIntegral x) (fromIntegral y)
+    \x y -> colorAt . go $ V2 x y
   where
    vectorToFocus = focus ^-^ center
    gradArray = V.fromList gradient

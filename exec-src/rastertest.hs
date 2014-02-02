@@ -7,11 +7,17 @@ import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
 import Codec.Picture
-import Linear( V2( .. ), (^+^), (^*) )
+import Linear( V2( .. )
+             , (^+^)
+             {-, (^*)-}
+             )
 
 type Stroker s =
     Texture PixelRGBA8 -> Float -> Join -> (Cap, Cap) -> [Primitive]
         -> DrawContext s PixelRGBA8 ()
+
+type DashStroker s =
+    DashPattern -> Stroker s
 
 outFolder :: FilePath
 outFolder = "test_results"
@@ -35,12 +41,12 @@ logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, grey, yellow, red, white :: PixelRGBA8
+background, blue, black, brightblue, yellow, red, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
 black = PixelRGBA8 0 0 0 255
-grey = PixelRGBA8 128 128 128 255
+{-grey = PixelRGBA8 128 128 128 255-}
 yellow = PixelRGBA8 255 255 0 255
 brightblue = PixelRGBA8 0 255 255 255
 white = PixelRGBA8 255 255 255 255
@@ -188,6 +194,38 @@ strokeCubic stroker texture prefix =
                     [CubicBezierPrim loop]]
             ]
 
+strokeCubicDashed :: (forall s. DashStroker s) -> Texture PixelRGBA8 -> String
+                  -> IO ()
+strokeCubicDashed stroker texture prefix =
+    writePng (outFolder </> (prefix ++ "cubicStrokeDashed.png")) img
+  where img = renderContext 500 500 background drawing
+        cusp = CubicBezier
+            (V2 10 230)
+            (V2 350 570)
+            (V2 10 570)
+            (V2 350 230)
+
+        loop = CubicBezier
+            (V2 160 20)
+            (V2 770 500)
+            (V2 140 500)
+            (V2 480 70)
+
+        dashPattern = [10, 5, 20, 10]
+
+        drawing = sequence_ . concat $
+            [ []
+            , [stroker dashPattern texture 4 JoinRound (CapRound, CapRound)
+                    $ take 1 cubicTest ]
+
+            , [stroker dashPattern texture 15 (JoinMiter 0)
+                    (CapStraight 0, CapStraight 0)
+                    [CubicBezierPrim cusp]]
+
+            , [stroker dashPattern texture 25 (JoinMiter 0)
+                    (CapStraight 0, CapStraight 0)
+                    [CubicBezierPrim loop]]
+            ]
 strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
@@ -267,4 +305,6 @@ main = do
   strokeCubic stroke bigBiGradient "gradient_"
   strokeCubic stroke radTriGradient "rad_gradient_"
   strokeCubic debugStroke uniform "debug_"
+
+  strokeCubicDashed dashedStroke uniform ""
 

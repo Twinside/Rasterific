@@ -1,8 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | Module handling math regarding the handling of quadratic
 -- and cubic bezier curve.
 module Graphics.Rasterific.QuadraticBezier
@@ -15,6 +12,7 @@ module Graphics.Rasterific.QuadraticBezier
     , offsetBezier
     , flattenBezier
     , bezierBreakAt
+    , bezierLengthApproximation
     ) where
 
 import Control.Applicative( (<$>)
@@ -44,10 +42,17 @@ bezierFromPath :: [Point] -> [Bezier]
 bezierFromPath (a:b:rest@(c:_)) = Bezier a b c : bezierFromPath rest
 bezierFromPath _ = []
 
+-- | Only work if the quadratic bezier curve
+-- is nearly flat
+bezierLengthApproximation :: Bezier -> Float
+bezierLengthApproximation (Bezier a _ c) =
+    norm $ c ^-^ a
+
 decomposeBeziers :: Bezier -> [EdgeSample]
 decomposeBeziers (Bezier a@(V2 ax ay) b c@(V2 cx cy))
     | insideX && insideY = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h]
-    | otherwise = recurse (Bezier m bc c) <> recurse (Bezier a ab m)
+    | otherwise = recurse (Bezier a ab m) <>
+                        recurse (Bezier m bc c)
   where floorA = vfloor a
         floorC = vfloor c
         V2 px py  = fromIntegral <$> vmin floorA floorC
@@ -82,10 +87,11 @@ straightLine a c = Bezier a (a `midPoint` c) c
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipBezier :: Point     -- ^ Point representing the "minimal" point for cliping
+clipBezier :: (Applicative a, Monoid (a Primitive))
+           => Point     -- ^ Point representing the "minimal" point for cliping
            -> Point     -- ^ Point representing the "maximal" point for cliping
            -> Bezier    -- ^ The quadratic bezier curve to be clamped
-           -> [Primitive]
+           -> a Primitive
 clipBezier mini maxi bezier@(Bezier a b c)
     -- If we are in the range bound, return the curve
     -- unaltered
@@ -100,7 +106,8 @@ clipBezier mini maxi bezier@(Bezier a b c)
     -- Not completly inside nor outside, just divide
     -- and conquer.
     | otherwise =
-        recurse (Bezier m bc c) <> recurse (Bezier a ab m)
+        recurse (Bezier a ab m) <>
+            recurse (Bezier m bc c)
   where -- Minimal & maximal dimension of the bezier curve
         bmin = vmin a $ vmin b c
         bmax = vmax a $ vmax b c
@@ -163,8 +170,8 @@ sanitizeBezier bezier@(Bezier a b c)
    -- This imply that AB and BC are nearly parallel
    | u `dot` v < -0.9999 =
      -- divide in to halves with
-     sanitizeBezier (Bezier abbc (abbc `midPoint` c) c) <>
-        sanitizeBezier (Bezier a (a `midPoint` abbc) abbc)
+    sanitizeBezier (Bezier a (a `midPoint` abbc) abbc) <>
+        sanitizeBezier (Bezier abbc (abbc `midPoint` c) c)
 
    -- b is far enough of b and c, (it's not a point)
    | norm (a ^-^ b) > 0.0001 && norm (b ^-^ c) > 0.0001 =
@@ -229,8 +236,8 @@ offsetBezier offset (Bezier a b c)
         pure . BezierPrim $ Bezier shiftedA mergedB shiftedC
     -- Otherwise, divide and conquer
     | a /= b && b /= c =
-        offsetBezier offset (Bezier abbc bc c) <>
-            offsetBezier offset (Bezier a ab abbc)
+        offsetBezier offset (Bezier a ab abbc) <>
+            offsetBezier offset (Bezier abbc bc c)
     | otherwise = mempty
   where --
         --         X B   

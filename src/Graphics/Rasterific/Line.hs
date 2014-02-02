@@ -5,11 +5,12 @@ module Graphics.Rasterific.Line
     , sanitizeLine
     , lineBreakAt
     , flattenLine
+    , lineLength
     ) where
 
 import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( (<>) )
-import Linear( V2( .. ), (^-^) )
+import Data.Monoid( Monoid, (<>), mempty )
+import Linear( V2( .. ), (^-^), norm )
 
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
@@ -19,24 +20,29 @@ lineFromPath [] = []
 lineFromPath lst@(_:rest) =
     uncurry Line <$> zip lst rest
 
-sanitizeLine :: Line -> [Primitive]
+lineLength :: Line -> Float
+lineLength (Line a b) = norm (b ^-^ a)
+
+sanitizeLine :: (Applicative a, Monoid (a Primitive))
+             => Line -> a Primitive
 sanitizeLine l@(Line p1 p2)
-  | p1 == p2 = []
-  | otherwise = [LinePrim l]
+  | p1 == p2 = mempty
+  | otherwise = pure $ LinePrim l
 
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
   where ab = lerpPoint a b t
 
-flattenLine :: Line -> Line
-flattenLine = id
+flattenLine :: (Applicative a) => Line -> a Primitive
+flattenLine = pure . LinePrim
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipLine :: Point     -- ^ Point representing the "minimal" point for cliping
+clipLine :: (Applicative a, Monoid (a Primitive))
+         => Point     -- ^ Point representing the "minimal" point for cliping
          -> Point     -- ^ Point representing the "maximal" point for cliping
          -> Line      -- ^ The line
-         -> [Primitive]
+         -> a Primitive
 clipLine mini maxi poly@(Line a b)
     -- If we are in the range bound, return the curve
     -- unaltered
@@ -50,7 +56,7 @@ clipLine mini maxi poly@(Line a b)
 
     -- Not completly inside nor outside, just divide
     -- and conquer.
-    | otherwise = recurse (Line m b) <> recurse (Line a m)
+    | otherwise = recurse (Line a m) <> recurse (Line m b)
   where -- Minimal & maximal dimension of the bezier curve
         bmin = vmin a b
         bmax = vmax a b

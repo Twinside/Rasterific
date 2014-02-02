@@ -7,6 +7,7 @@ module Graphics.Rasterific
       -- * Rasterization command
       fill
     , stroke
+    , dashedStroke
     , strokeDebug
     , renderContext
 
@@ -91,6 +92,19 @@ stroke :: ( Pixel px, Modulable (PixelBaseComponent px))
 stroke texture width join caping =
     fill texture . strokize width join caping
 
+-- | With stroke geometry with a given stroke width, using
+-- a dash pattern.
+dashedStroke :: ( Pixel px, Modulable (PixelBaseComponent px))
+             => DashPattern -- ^ Dashing pattern to use for stroking
+             -> Texture px  -- ^ Stroke color/texture
+             -> Float       -- ^ Stroke width
+             -> Join        -- ^ Which kind of join will be used
+             -> (Cap, Cap)  -- ^ Start and end capping.
+             -> [Primitive] -- ^ List of elements to render
+             -> DrawContext s px ()
+dashedStroke dashing texture width join caping =
+    mapM_ (fill texture) . dashedStrokize dashing width join caping
+
 -- | Internal debug function
 strokeDebug :: ( Pixel px, Modulable (PixelBaseComponent px))
             => Texture px -> Texture px -> Texture px
@@ -154,6 +168,6 @@ composeCoverageSpan texture img coverage
           oldPixel <- unsafeReadPixel imgData idx
           unsafeWritePixel imgData idx
             . compositionAlpha cov icov oldPixel
-            $ texture x y
+            $ texture (fromIntegral x) (fromIntegral y)
           go (count + 1) (x + 1) $ idx + compCount
 

@@ -35,6 +35,7 @@ library
                , Graphics.Rasterific.Types
 
   ghc-options: -O2 -Wall
+  -- -prof -auto-all -caf-all 
   
   -- Modules included in this library but not exported.
   -- other-modules:       
@@ -58,6 +59,8 @@ library
 Executable test
     default-language:    Haskell2010
     Main-Is: rastertest.hs
+    ghc-options: -Wall -O2
+    --  -rtsopts -prof -auto-all -caf-all
     Hs-Source-Dirs: exec-src
     Build-Depends: base >= 4.6
                  , Rasterific

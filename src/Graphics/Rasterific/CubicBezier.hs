@@ -10,6 +10,7 @@ module Graphics.Rasterific.CubicBezier
     , sanitizeCubicBezier
     , offsetCubicBezier
     , flattenCubicBezier
+    , cubicBezierLengthApproximation
     ) where
 
 import Prelude hiding( or )
@@ -40,6 +41,10 @@ cubicBezierFromPath :: [Point] -> [CubicBezier]
 cubicBezierFromPath (a:b:c:rest@(d:_)) =
     CubicBezier a b c d : cubicBezierFromPath rest
 cubicBezierFromPath _ = []
+
+cubicBezierLengthApproximation :: CubicBezier -> Float
+cubicBezierLengthApproximation (CubicBezier a _ _ d) =
+    norm $ d ^-^ a
 
 -- | Represent a circle of radius 1 centered on 0 of
 -- a cubic bezier curve.
@@ -147,10 +152,11 @@ offsetCubicBezier offset bezier@(CubicBezier a b c d)
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
 clipCubicBezier
-    :: Point   -- ^ Point representing the "minimal" point for cliping
+    :: (Applicative a, Monoid (a Primitive))
+    => Point   -- ^ Point representing the "minimal" point for cliping
     -> Point  -- ^ Point representing the "maximal" point for cliping
     -> CubicBezier -- ^ The cubic bezier curve to be clamped
-    -> [Primitive]
+    -> a Primitive
 clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
     -- If we are in the range bound, return the curve
     -- unaltered
@@ -165,8 +171,8 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
     -- Not completly inside nor outside, just divide
     -- and conquer.
     | otherwise =
-        recurse (CubicBezier m bccd cd d) <>
-            recurse (CubicBezier a ab abbc m)
+        recurse (CubicBezier a ab abbc m) <>
+            recurse (CubicBezier m bccd cd d)
   where -- Minimal & maximal dimension of the bezier curve
         bmin = vmin a . vmin b $ vmin c d
         bmax = vmax a . vmax b $ vmin c d
@@ -203,7 +209,8 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
         m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbc
 
 -- | Will subdivide the bezier from 0 to coeff and coeff to 1
-cubicBezierBreakAt :: CubicBezier -> Float -> (CubicBezier, CubicBezier)
+cubicBezierBreakAt :: CubicBezier -> Float
+                   -> (CubicBezier, CubicBezier)
 cubicBezierBreakAt (CubicBezier a b c d) val =
     (CubicBezier a ab abbc abbcbccd, CubicBezier abbcbccd bccd cd d)
   where
@@ -215,12 +222,14 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     bccd = lerpPoint bc cd val
     abbcbccd = lerpPoint abbc bccd val
 
-decomposeCubicBeziers :: CubicBezier -> [EdgeSample]
+decomposeCubicBeziers :: (Applicative a, Monoid (a EdgeSample))
+                      => CubicBezier -> a EdgeSample
 decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
-    | insideX && insideY = [EdgeSample (px + 0.5) (py + 0.5) (w * h) h]
+    | insideX && insideY =
+        pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
     | otherwise =
-        recurse (CubicBezier m bccd cd d) <>
-            recurse (CubicBezier a ab abbc m)
+        recurse (CubicBezier a ab abbc m) <>
+            recurse (CubicBezier m bccd cd d)
   where recurse = decomposeCubicBeziers
         floorA = vfloor a
         floorD = vfloor d

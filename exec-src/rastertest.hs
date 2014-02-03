@@ -6,6 +6,7 @@ import System.Directory( createDirectoryIfMissing )
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+
 import Codec.Picture
 import Linear( V2( .. )
              , (^+^)

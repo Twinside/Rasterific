@@ -4,9 +4,14 @@ import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
 import Control.Applicative( (<$>) )
+import Control.Monad( forM_ )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+import Graphics.Text.TrueType
 
+import Data.Binary( decodeFile )
+
+import qualified Data.Vector.Unboxed as VU
 import Codec.Picture
 import Linear( V2( .. )
              , (^+^)
@@ -227,6 +232,24 @@ strokeCubicDashed stroker texture prefix =
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim loop]]
             ]
+textTest :: IO ()
+textTest = do
+    font <- decodeFile "C:/Windows/Fonts/Consola.ttf"
+    forM_ [0 .. 30] $ \ix ->
+        let curves = getGlyphIndexCurvesAtPointSize font 90 24 ix
+            beziers =
+                [map BezierPrim . bezierFromPath 
+                                . map (uncurry V2)
+                                $ VU.toList c | c <- curves]
+            filename = outFolder </> ("char_" ++ show ix ++ ".png")
+            img = renderContext 100 100 backColor
+                $ mapM_ (fill stroke) beziers
+        in
+        writePng filename img
+  where
+    backColor = uniformTexture white
+    stroke = uniformTexture black
+
 strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
@@ -256,6 +279,7 @@ strokeTest stroker texture prefix =
 debugStroke :: Stroker s
 debugStroke =
     strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
+
 
 main :: IO ()
 main = do
@@ -308,4 +332,5 @@ main = do
   strokeCubic debugStroke uniform "debug_"
 
   strokeCubicDashed dashedStroke uniform ""
+  textTest
 

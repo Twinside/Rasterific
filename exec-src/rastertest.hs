@@ -235,20 +235,20 @@ strokeCubicDashed stroker texture prefix =
 textTest :: IO ()
 textTest = do
     font <- decodeFile "C:/Windows/Fonts/Consola.ttf"
-    forM_ [0 .. 30] $ \ix ->
-        let curves = getGlyphIndexCurvesAtPointSize font 90 24 ix
+    forM_ [0 .. 90] $ \ix ->
+        let curves = getGlyphIndexCurvesAtPointSize font 90 12 ix
             beziers =
                 [map BezierPrim . bezierFromPath 
-                                . map (uncurry V2)
+                                . map (\(x,y) -> V2 x y ^+^ V2 30 30)
                                 $ VU.toList c | c <- curves]
             filename = outFolder </> ("char_" ++ show ix ++ ".png")
             img = renderContext 100 100 backColor
-                $ mapM_ (fill stroke) beziers
+                $ mapM_ (fill strokeColor) beziers
         in
         writePng filename img
   where
-    backColor = uniformTexture white
-    stroke = uniformTexture black
+    backColor = white
+    strokeColor = uniformTexture black
 
 strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
            -> IO ()

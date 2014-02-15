@@ -3,7 +3,7 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Control.Applicative( (<$>) )
+import Control.Applicative( (<$>), liftA2 )
 import Control.Monad( forM_ )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
@@ -232,23 +232,34 @@ strokeCubicDashed stroker texture prefix =
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim loop]]
             ]
-textTest :: IO ()
-textTest = do
-    font <- decodeFile "C:/Windows/Fonts/Consola.ttf"
-    forM_ [0 .. 90] $ \ix ->
-        let curves = getGlyphIndexCurvesAtPointSize font 90 72 ix
-            beziers = concat
-                [map BezierPrim . bezierFromPath 
-                                . map (\(x,y) -> V2 x y ^+^ V2 20 20)
-                                $ VU.toList c | c <- curves]
-            filename = outFolder </> ("char_" ++ show ix ++ ".png")
-            img = renderContext 100 100 backColor
-                $ fill strokeColor beziers
-        in
-        writePng filename img
+
+textTest :: String -> IO ()
+textTest fontName = do
+    putStrLn $ "Rendering " ++ fontName
+    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    writePng (outFolder </> ("charArray_" ++ fontName ++ ".png")) $ renderer $ img font
   where
     backColor = white
     strokeColor = uniformTexture black
+    sizePerChar = 50
+    xCount = 20
+    yCount = 20
+    renderer = 
+        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+    (^*^) = liftA2 (*)
+
+    indices = 
+        [(x,y, y * xCount + x) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1] ]
+
+    img font = forM_ indices $ \(xp, yp, charId) -> do
+      let curves = getGlyphIndexCurvesAtPointSize font 90 36 charId
+          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
+          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
+          beziers = concat
+              [map BezierPrim . bezierFromPath 
+                              . map (\(x,y) -> V2 x y ^+^ vector)
+                              $ VU.toList c | c <- curves]
+      fill strokeColor $ beziers
 
 strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
            -> IO ()
@@ -332,5 +343,20 @@ main = do
   strokeCubic debugStroke uniform "debug_"
 
   strokeCubicDashed dashedStroke uniform ""
-  textTest
+  textTest "consola"
+  textTest "arial"
+  textTest "comic"
+  textTest "verdana"
+  textTest "webdings"
+  textTest "webdings"
+  textTest "wingding"
+  textTest "WINGDNG2"
+  textTest "WINGDNG3"
+  textTest "PAPYRUS"
+  textTest "COLONNA"
+  textTest "BRUSHSCI"
+  textTest "BROADW"
+  textTest "cour"
+  textTest "courbd"
+
 

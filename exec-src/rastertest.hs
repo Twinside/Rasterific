@@ -236,14 +236,14 @@ textTest :: IO ()
 textTest = do
     font <- decodeFile "C:/Windows/Fonts/Consola.ttf"
     forM_ [0 .. 90] $ \ix ->
-        let curves = getGlyphIndexCurvesAtPointSize font 90 12 ix
-            beziers =
+        let curves = getGlyphIndexCurvesAtPointSize font 90 72 ix
+            beziers = concat
                 [map BezierPrim . bezierFromPath 
-                                . map (\(x,y) -> V2 x y ^+^ V2 30 30)
+                                . map (\(x,y) -> V2 x y ^+^ V2 20 20)
                                 $ VU.toList c | c <- curves]
             filename = outFolder </> ("char_" ++ show ix ++ ".png")
             img = renderContext 100 100 backColor
-                $ mapM_ (fill strokeColor) beziers
+                $ fill strokeColor beziers
         in
         writePng filename img
   where

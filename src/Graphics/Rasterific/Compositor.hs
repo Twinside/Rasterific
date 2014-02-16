@@ -21,11 +21,15 @@ type Compositor px =
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.
 class Ord a => Modulable a where
+  emptyValue :: a
+  fullValue  :: a
   clampCoverage :: Float -> (a, a)
   modulate :: a -> a -> a
   alphaOver :: a -> a -> a -> a -> a
 
 instance Modulable Word8 where
+  emptyValue = 0
+  fullValue = 255
   clampCoverage f = (fromIntegral c, fromIntegral $ 255 - c)
      where c = toWord8 f
 
@@ -49,5 +53,8 @@ compositionDestination c _ _ a = colorMap (modulate c) $ a
 
 compositionAlpha :: (Pixel px, Modulable (PixelBaseComponent px))
                  => Compositor px
-compositionAlpha c ic = mixWith (\_ -> alphaOver c ic)
+compositionAlpha c ic 
+    | c == emptyValue = const
+    | c == fullValue = \_ n -> n
+    | otherwise = mixWith (\_ -> alphaOver c ic)
 

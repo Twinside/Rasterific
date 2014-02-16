@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Module describing the various filling method of the
 -- geometric primitives.
 module Graphics.Rasterific.Texture
@@ -8,6 +9,8 @@ module Graphics.Rasterific.Texture
     , linearGradientTexture
     , radialGradientTexture
     , radialGradientWithFocusTexture
+    , imageTexture
+    , modulateTexture
     ) where
 
 {-import Control.Applicative( liftA )-}
@@ -21,10 +24,10 @@ import Linear( V2( .. )
              )
 import qualified Data.Vector as V
 
-import Codec.Picture.Types( Pixel( .. ) )
+import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
 import Graphics.Rasterific.Types( Point )
 import Graphics.Rasterific.Compositor
-    ( Modulable( clampCoverage ), compositionAlpha )
+    ( Modulable( clampCoverage, modulate ), compositionAlpha )
 
 -- | A texture is just a function which given pixel coordinate
 -- give back a pixel.
@@ -80,6 +83,17 @@ linearGradientTexture gradient start end =
     d = vector ^/ (vector `dot` vector)
     s00 = start `dot` d
 
+imageTexture :: forall px. (Pixel px) => Image px -> Texture px
+imageTexture img x y =
+    unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
+  where
+   clampedX = min (w - 1) . max 0 $ floor x
+   clampedY = min (h - 1) . max 0 $ floor y
+   compCount = componentCount (undefined :: px)
+   w = imageWidth img
+   h = imageHeight img
+   rawData = imageData img
+
 -- | Radial gradient texture
 radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       => Gradient px -- ^ Gradient description
@@ -124,3 +138,10 @@ radialGradientWithFocusTexture gradient center radius focus =
        distToCircleSquared = vectorToClosest `dot` vectorToClosest
        dist = sqrt $ rSquare + distToCircleSquared
 
+modulateTexture :: (Pixel px, Modulable (PixelBaseComponent px))
+                => Texture px
+                -> Texture (PixelBaseComponent px)
+                -> Texture px
+modulateTexture fullTexture modulator x y =
+    colorMap (modulate modulation) $ fullTexture x y
+  where modulation = modulator x y

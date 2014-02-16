@@ -72,8 +72,7 @@ isSufficientlyFlat tol (CubicBezier a b c d) =
         V2 x y = vmax (u ^*^ u) (v ^*^ v)
         tolerance = 16 * tol * tol
 
-flattenCubicBezier :: (Applicative a, Monoid (a Primitive))
-                   => CubicBezier -> a Primitive
+flattenCubicBezier :: CubicBezier -> Container Primitive
 flattenCubicBezier bezier@(CubicBezier a b c d)
     | isSufficientlyFlat 1 bezier = pure $ CubicBezierPrim bezier
     | otherwise =
@@ -107,8 +106,7 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
 -- y(t) = (1 - t) ∙y     + 3∙t∙(1 - t) ∙y     + 3∙t ∙(1 - t)∙y     + t ∙y
 --                   0                    1                    2          3
 
-offsetCubicBezier :: (Applicative a, Monoid (a Primitive))
-                  => Float -> CubicBezier -> a Primitive
+offsetCubicBezier :: Float -> CubicBezier -> Container Primitive
 offsetCubicBezier offset bezier@(CubicBezier a b c d)
     | isSufficientlyFlat 1 bezier =
         pure . CubicBezierPrim $ CubicBezier shiftedA shiftedB shiftedC shiftedD
@@ -152,11 +150,10 @@ offsetCubicBezier offset bezier@(CubicBezier a b c d)
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
 clipCubicBezier
-    :: (Applicative a, Monoid (a Primitive))
-    => Point   -- ^ Point representing the "minimal" point for cliping
+    :: Point   -- ^ Point representing the "minimal" point for cliping
     -> Point  -- ^ Point representing the "maximal" point for cliping
     -> CubicBezier -- ^ The cubic bezier curve to be clamped
-    -> a Primitive
+    -> Container Primitive
 clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
     -- If we are in the range bound, return the curve
     -- unaltered
@@ -222,8 +219,7 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     bccd = lerpPoint bc cd val
     abbcbccd = lerpPoint abbc bccd val
 
-decomposeCubicBeziers :: (Applicative a, Monoid (a EdgeSample))
-                      => CubicBezier -> a EdgeSample
+decomposeCubicBeziers :: CubicBezier -> Container EdgeSample
 decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
     | insideX && insideY =
         pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
@@ -271,8 +267,7 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
         m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax
                       <*> abbcbccd
 
-sanitizeCubicBezier :: (Applicative a, Monoid (a Primitive))
-                    => CubicBezier -> a Primitive
+sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | norm (a ^-^ b) > 0.0001 &&
         norm (b ^-^ c) > 0.0001 &&

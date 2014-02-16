@@ -12,6 +12,7 @@ module Graphics.Rasterific.Types
     , Bezier( .. )
     , CubicBezier( .. )
     , Primitive( .. )
+    , Container
 
       -- * Rasterization control types
     , Cap( .. )
@@ -79,25 +80,25 @@ data EdgeSample = EdgeSample
 
 -- | Describe a simple 2D line between two points.
 data Line = Line
-  { _lineX0 :: !Point -- ^ Origin point
-  , _lineX1 :: !Point -- ^ End point
+  { _lineX0 :: {-# UNPACK #-} !Point -- ^ Origin point
+  , _lineX1 :: {-# UNPACK #-} !Point -- ^ End point
   }
   deriving (Eq, Show)
 
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
 data Bezier = Bezier
-  { _bezierX0 :: !Point -- ^ Origin points, the spline will pass through it.
-  , _bezierX1 :: !Point -- ^ Control point, the spline won't pass on it.
-  , _bezierX2 :: !Point -- ^ End point, the spline will pass through it.
+  { _bezierX0 :: {-# UNPACK #-} !Point -- ^ Origin points, the spline will pass through it.
+  , _bezierX1 :: {-# UNPACK #-} !Point -- ^ Control point, the spline won't pass on it.
+  , _bezierX2 :: {-# UNPACK #-} !Point -- ^ End point, the spline will pass through it.
   }
   deriving (Eq, Show)
 
 data CubicBezier = CubicBezier 
-  { _cBezierX0 :: !Point
-  , _cBezierX1 :: !Point
-  , _cBezierX2 :: !Point
-  , _cBezierX3 :: !Point
+  { _cBezierX0 :: {-# UNPACK #-} !Point
+  , _cBezierX1 :: {-# UNPACK #-} !Point
+  , _cBezierX2 :: {-# UNPACK #-} !Point
+  , _cBezierX3 :: {-# UNPACK #-} !Point
   }
   deriving (Eq, Show)
 
@@ -106,4 +107,6 @@ data Primitive
   | BezierPrim !Bezier
   | CubicBezierPrim !CubicBezier
   deriving (Eq, Show)
+
+type Container a = [a]
 

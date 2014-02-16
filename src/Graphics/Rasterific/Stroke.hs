@@ -44,8 +44,7 @@ reversePrimitive (CubicBezierPrim (CubicBezier a b c d)) =
     (CubicBezierPrim (CubicBezier d c b a))
 
 -- | Create a "rounded" join or cap
-roundJoin :: (Applicative a, Monoid (a Primitive))
-          => Float -> Point -> Vector -> Vector -> a Primitive
+roundJoin :: Float -> Point -> Vector -> Vector -> Container Primitive
 roundJoin offset p = go
   where go u v
           -- If we're already on a nice curvature,
@@ -71,8 +70,7 @@ roundJoin offset p = go
 
 -- | Put a cap at the end of a bezier curve, depending
 -- on the kind of cap wanted.
-cap :: (Applicative a, Monoid (a Primitive))
-    => Float -> Cap -> Primitive -> a Primitive
+cap :: Float -> Cap -> Primitive -> Container Primitive
 cap offset CapRound prim = roundJoin offset p u (- u)
   where (p, u) = lastPointAndNormal prim
 
@@ -114,9 +112,8 @@ cap offset (CapStraight cVal) prim =
 lineFromTo :: Point -> Point -> Primitive
 lineFromTo a b = LinePrim (Line a b)
 
-miterJoin :: (Applicative a, Monoid (a Primitive))
-          => Float -> Float -> Point -> Vector -> Vector
-          -> a Primitive
+miterJoin :: Float -> Float -> Point -> Vector -> Vector
+          -> Container Primitive
 miterJoin offset l point u v
   | u `dot` w >= l / max 1 l =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
@@ -141,9 +138,8 @@ miterJoin offset l point u v
         -- middle point for "straight joining"
         m = point + w ^* p
 
-joinPrimitives :: (Applicative a, Monoid (a Primitive))
-               => StrokeWidth -> Join -> Primitive -> Primitive
-               -> a Primitive
+joinPrimitives :: StrokeWidth -> Join -> Primitive -> Primitive
+               -> Container Primitive
 joinPrimitives offset join prim1 prim2  =
   case join of
     JoinRound -> roundJoin offset p u v
@@ -151,16 +147,14 @@ joinPrimitives offset join prim1 prim2  =
   where (p, u) = lastPointAndNormal prim1
         (_, v) = firstPointAndNormal prim2
 
-offsetPrimitives :: (Applicative a, Monoid (a Primitive))
-                 => Float -> Primitive -> a Primitive
+offsetPrimitives :: Float -> Primitive -> Container Primitive
 offsetPrimitives offset (LinePrim (Line x1 x2)) =
     offsetPrimitives offset . BezierPrim $ straightLine x1 x2
 offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
 offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 
-offsetAndJoin :: (Foldable a, Applicative a, Monoid (a Primitive))
-              => Float -> Join -> Cap -> [Primitive]
-              -> a Primitive
+offsetAndJoin :: Float -> Join -> Cap -> [Primitive]
+              -> Container Primitive
 offsetAndJoin _ _ _ [] = mempty
 offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
   where joiner = joinPrimitives offset join
@@ -179,8 +173,7 @@ approximateLength (BezierPrim b) = bezierLengthApproximation b
 approximateLength (CubicBezierPrim c) = cubicBezierLengthApproximation c
 
 
-sanitize :: (Applicative a, Monoid (a Primitive))
-         => Primitive -> a Primitive
+sanitize :: Primitive -> Container Primitive
 sanitize (LinePrim l) = sanitizeLine l
 sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
@@ -193,8 +186,7 @@ strokize width join (capStart, capEnd) beziers =
   where sanitized = foldMap sanitize beziers
         offseter = offsetAndJoin (width / 2) join
 
-flattenPrimitive :: (Applicative a, Monoid (a Primitive))
-                 => Primitive -> a Primitive
+flattenPrimitive :: Primitive -> Container Primitive
 flattenPrimitive (BezierPrim bezier) = flattenBezier bezier
 flattenPrimitive (CubicBezierPrim bezier) = flattenCubicBezier bezier
 flattenPrimitive (LinePrim line) = flattenLine line
@@ -208,8 +200,7 @@ breakPrimitiveAt (LinePrim line) at = (LinePrim a, LinePrim b)
   where (a, b) = lineBreakAt line at
 
 
-flatten :: (Applicative a, Foldable a, Monoid (a Primitive))
-        => a Primitive -> a Primitive
+flatten :: Container Primitive -> Container Primitive
 flatten = foldMap flattenPrimitive
 
 splitPrimitiveUntil :: Float -> [Primitive] -> ([Primitive], [Primitive])

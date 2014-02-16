@@ -23,8 +23,7 @@ lineFromPath lst@(_:rest) =
 lineLength :: Line -> Float
 lineLength (Line a b) = norm (b ^-^ a)
 
-sanitizeLine :: (Applicative a, Monoid (a Primitive))
-             => Line -> a Primitive
+sanitizeLine :: Line -> Container Primitive
 sanitizeLine l@(Line p1 p2)
   | p1 == p2 = mempty
   | otherwise = pure $ LinePrim l
@@ -33,16 +32,15 @@ lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
   where ab = lerpPoint a b t
 
-flattenLine :: (Applicative a) => Line -> a Primitive
+flattenLine :: Line -> Container Primitive
 flattenLine = pure . LinePrim
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipLine :: (Applicative a, Monoid (a Primitive))
-         => Point     -- ^ Point representing the "minimal" point for cliping
+clipLine :: Point     -- ^ Point representing the "minimal" point for cliping
          -> Point     -- ^ Point representing the "maximal" point for cliping
          -> Line      -- ^ The line
-         -> a Primitive
+         -> Container Primitive
 clipLine mini maxi poly@(Line a b)
     -- If we are in the range bound, return the curve
     -- unaltered

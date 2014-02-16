@@ -87,11 +87,10 @@ straightLine a c = Bezier a (a `midPoint` c) c
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipBezier :: (Applicative a, Monoid (a Primitive))
-           => Point     -- ^ Point representing the "minimal" point for cliping
+clipBezier :: Point     -- ^ Point representing the "minimal" point for cliping
            -> Point     -- ^ Point representing the "maximal" point for cliping
            -> Bezier    -- ^ The quadratic bezier curve to be clamped
-           -> a Primitive
+           -> Container Primitive
 clipBezier mini maxi bezier@(Bezier a b c)
     -- If we are in the range bound, return the curve
     -- unaltered
@@ -158,8 +157,7 @@ clipBezier mini maxi bezier@(Bezier a b c)
 
 
 -- | Rewrite the bezier curve to avoid degenerate cases.
-sanitizeBezier :: (Applicative a, Monoid (a Primitive))
-               => Bezier -> a Primitive
+sanitizeBezier :: Bezier -> Container Primitive
 sanitizeBezier bezier@(Bezier a b c)
    -- If the two normals vector are far apart (cos nearly -1)
    --
@@ -199,8 +197,7 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     bc = lerpPoint b c t
     abbc = lerpPoint ab bc t
 
-flattenBezier :: (Applicative a, Monoid (a Primitive))
-              => Bezier -> a Primitive
+flattenBezier :: Bezier -> Container Primitive
 flattenBezier bezier@(Bezier a b c)
     -- If the spline is not too curvy, just return the
     -- shifted component
@@ -227,8 +224,7 @@ flattenBezier bezier@(Bezier a b c)
         abbc = ab `midPoint` bc
 
 -- | Move the bezier to a new position with an offset.
-offsetBezier :: (Applicative a, Monoid (a Primitive))
-             => Float -> Bezier -> a Primitive
+offsetBezier :: Float -> Bezier -> Container Primitive
 offsetBezier offset (Bezier a b c)
     -- If the spline is not too curvy, just return the
     -- shifted component

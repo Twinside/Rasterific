@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
+import Data.Word( Word8 )
 
 import Control.Applicative( (<$>), liftA2 )
 import Control.Monad( forM_ )
@@ -18,12 +19,11 @@ import Linear( V2( .. )
              {-, (^*)-}
              )
 
-type Stroker s =
-    Texture PixelRGBA8 -> Float -> Join -> (Cap, Cap) -> [Primitive]
-        -> DrawContext s PixelRGBA8 ()
+type Stroker =
+    Float -> Join -> (Cap, Cap) -> [Primitive]
+        -> Drawing PixelRGBA8 ()
 
-type DashStroker s =
-    DashPattern -> Stroker s
+type DashStroker = DashPattern -> Stroker
 
 outFolder :: FilePath
 outFolder = "test_results"
@@ -67,7 +67,7 @@ logoTest texture prefix =
   where 
     beziers = logo 40 False $ V2 10 10
     inverse = logo 20 True $ V2 20 20
-    drawing = fill texture $ beziers ++ inverse
+    drawing = withTexture texture . fill $ beziers ++ inverse
     img = renderContext 100 100 background drawing
 
 makeBox :: Point -> Point -> [Primitive]
@@ -83,8 +83,15 @@ bigBox :: Texture PixelRGBA8 -> String -> IO ()
 bigBox texture prefix =
     writePng (outFolder </> (prefix ++ "box.png")) img
   where 
-    drawing = fill texture $ makeBox (V2 10 10) (V2 390 390)
+    drawing = withTexture texture . fill $ makeBox (V2 10 10) (V2 390 390)
     img = renderContext 400 400 background drawing
+
+circleTest :: Texture PixelRGBA8 -> String -> IO ()
+circleTest texture prefix =
+    writePng (outFolder </> (prefix ++ "circle.png")) img
+  where 
+    drawing = withTexture texture . fill $ circle (V2 100 100) 90
+    img = renderContext 200 200 background drawing
 
 cubicTest :: [Primitive]
 cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
@@ -105,7 +112,7 @@ cubicTest = map CubicBezierPrim $ cubicBezierFromPath
 cubicTest1 :: IO ()
 cubicTest1 = writePng (outFolder </> "cubic1.png") img
   where texture = uniformTexture blue
-        drawing = fill texture cubicTest
+        drawing = withTexture texture $ fill cubicTest
         img = renderContext 150 150 background drawing
 
 clipTest :: IO ()
@@ -118,10 +125,10 @@ clipTest = writePng (outFolder </> "clip.png") img
             , logo 20 False $ V2 80 0
             ]
 
-        drawing = mapM_ (fill texture) beziers
+        drawing = withTexture texture $ mapM_ fill beziers
         img = renderContext 100 100 background drawing
 
-strokeTest2 :: (forall s. Stroker s) -> String -> IO ()
+strokeTest2 :: Stroker -> String -> IO ()
 strokeTest2 stroker prefix =
     writePng (outFolder </> (prefix ++ "stroke2.png")) img
   where texture = uniformTexture blue
@@ -129,13 +136,13 @@ strokeTest2 stroker prefix =
             [ V2 10 10, V2 100 100
             , V2 200 20, V2 300 100, V2 450 50]
         
-        drawing = sequence_ . concat $
+        drawing = withTexture texture . sequence_ . concat $
             [ []
-            , [stroker texture 9 JoinRound (CapRound, CapStraight 0)
+            , [stroker 9 JoinRound (CapRound, CapStraight 0)
                     . map LinePrim . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
-            , [stroker texture 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+            , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
                 . map LinePrim . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
@@ -143,23 +150,51 @@ strokeTest2 stroker prefix =
 
         img = renderContext 500 500 background drawing
 
-strokeLogo :: (forall s. Stroker s) -> String -> IO ()
+strokeTestCliping :: Stroker -> String -> IO ()
+strokeTestCliping stroker prefix =
+    writePng (outFolder </> (prefix ++ "stroke_clipping.png")) img
+  where texture = uniformTexture blue
+        points = 
+            [ V2 10 10, V2 100 100
+            , V2 200 20, V2 300 100, V2 450 50]
+
+        clipShape = fill $ circle (V2 250 250) 200
+        
+        drawing =
+          withClipping clipShape .
+            withTexture texture . sequence_ . concat $
+            [ []
+            , [stroker 9 JoinRound (CapRound, CapStraight 0)
+                    . map LinePrim . lineFromPath $
+                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                    | ix <- [-5 .. -1] ]
+            , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+                . map LinePrim . lineFromPath $
+                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                    | ix <- [0 .. 5] ]
+            ]
+
+        img = renderContext 500 500 background drawing
+
+strokeLogo :: Stroker -> String -> IO ()
 strokeLogo stroker prefix =
   writePng (outFolder </> (prefix ++ "stroke_logo.png")) img
     where texture = uniformTexture blue
           beziers = logo 40 False $ V2 10 10
           inverse = logo 20 True $ V2 20 20
           img = renderContext 100 100 background 
-              $ stroker texture 4 JoinRound (CapRound, CapRound)
+              . withTexture texture
+              . stroker 4 JoinRound (CapRound, CapRound)
               $ beziers ++ inverse
 
 strokeQuadraticIntersection ::
-    (forall s. Stroker s) -> Texture PixelRGBA8 -> String -> IO ()
+    Stroker -> Texture PixelRGBA8 -> String -> IO ()
 strokeQuadraticIntersection stroker texture prefix =
   writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
     where img = renderContext 500 500 background 
-              $ stroker texture 40 JoinRound (CapRound, CapRound)
-              $ map BezierPrim
+              . withTexture texture
+              . stroker 40 JoinRound (CapRound, CapRound)
+              . map BezierPrim
               $ bezierFromPath
                 [ V2 30 30
                 , V2 150 200
@@ -169,7 +204,7 @@ strokeQuadraticIntersection stroker texture prefix =
                 , V2 30  450
                 ]
 
-strokeCubic :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
+strokeCubic :: Stroker -> Texture PixelRGBA8 -> String
             -> IO ()
 strokeCubic stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
@@ -186,21 +221,21 @@ strokeCubic stroker texture prefix =
             (V2 140 500)
             (V2 480 70)
 
-        drawing = sequence_ . concat $
+        drawing = withTexture texture . sequence_ . concat $
             [ []
-            , [stroker texture 4 JoinRound (CapRound, CapRound)
+            , [stroker 4 JoinRound (CapRound, CapRound)
                     $ take 1 cubicTest ]
 
-            , [stroker texture 15 (JoinMiter 0)
+            , [stroker 15 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim cusp]]
 
-            , [stroker texture 25 (JoinMiter 0)
+            , [stroker 25 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim loop]]
             ]
 
-strokeCubicDashed :: (forall s. DashStroker s) -> Texture PixelRGBA8 -> String
+strokeCubicDashed :: DashStroker -> Texture PixelRGBA8 -> String
                   -> IO ()
 strokeCubicDashed stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStrokeDashed.png")) img
@@ -219,16 +254,16 @@ strokeCubicDashed stroker texture prefix =
 
         dashPattern = [10, 5, 20, 10]
 
-        drawing = sequence_ . concat $
+        drawing = withTexture texture . sequence_ . concat $
             [ []
-            , [stroker dashPattern texture 4 JoinRound (CapRound, CapRound)
+            , [stroker dashPattern 4 JoinRound (CapRound, CapRound)
                     $ take 1 cubicTest ]
 
-            , [stroker dashPattern texture 15 (JoinMiter 0)
+            , [stroker dashPattern 15 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim cusp]]
 
-            , [stroker dashPattern texture 25 (JoinMiter 0)
+            , [stroker dashPattern 25 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
                     [CubicBezierPrim loop]]
             ]
@@ -246,6 +281,7 @@ textTest fontName = do
     yCount = 20
     renderer = 
         renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+            . withTexture strokeColor
     (^*^) = liftA2 (*)
 
     indices = 
@@ -259,35 +295,63 @@ textTest fontName = do
               [map BezierPrim . bezierFromPath 
                               . map (\(x,y) -> V2 x y ^+^ vector)
                               $ VU.toList c | c <- curves]
-      fill strokeColor $ beziers
+      fill $ beziers
 
-strokeTest :: (forall s. Stroker s) -> Texture PixelRGBA8 -> String
+textSizeTest :: String -> IO ()
+textSizeTest fontName = do
+    putStrLn $ "Rendering " ++ fontName
+    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    writePng (outFolder </> ("charArray_" ++ fontName ++ "_size.png")) $ renderer $ img font
+  where
+    backColor = 255 :: Word8
+    strokeColor = uniformTexture 0
+    sizePerChar = 50
+    xCount = 20
+    yCount = 20
+    renderer = 
+        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+    (^*^) = liftA2 (*)
+
+    indices = 
+        [(x,y, 1 * xCount + x) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1] ]
+
+    img font = forM_ indices $ \(xp, yp, charId) -> do
+      let curves = getGlyphIndexCurvesAtPointSize font 90 (yp * 3) charId
+          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
+          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
+          beziers = concat
+              [map BezierPrim . bezierFromPath 
+                              . map (\(x,y) -> V2 x y ^+^ vector)
+                              $ VU.toList c | c <- curves]
+      withTexture strokeColor $ fill beziers
+
+strokeTest :: Stroker -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
     writePng (outFolder </> (prefix ++ "stroke.png")) img
   where beziers base = take 1 <$>
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
-        drawing = sequence_ . concat $
+        drawing = withTexture texture $ sequence_ . concat $
           [ []
-          , [stroker texture (6 + ix) (JoinMiter ix)
+          , [stroker (6 + ix) (JoinMiter ix)
                     (CapStraight 0, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 10)]
-          , [stroker texture ix
+          , [stroker ix
                     (JoinMiter 1) (CapRound, CapStraight 1) b
                     | (ix, b) <- zip [1 ..] (beziers 60)]
-          , [stroker texture ix (JoinMiter 1) (CapRound, CapRound) b
+          , [stroker ix (JoinMiter 1) (CapRound, CapRound) b
                     | (ix, b) <- zip [1 ..] (beziers 110)]
-          , [stroker texture 15
+          , [stroker 15
                     (JoinMiter 1) (CapStraight 1, CapStraight 0)
                     . take 1 $
                     logo 150 False $ V2 200 200]
-          , [stroker texture 5
+          , [stroker 5
                     (JoinMiter 1) (CapStraight 0, CapStraight 0) $
                    logo 100 False $ V2 240 240]
           ]
         img = renderContext 500 500 background drawing
 
-debugStroke :: Stroker s
+debugStroke :: Stroker
 debugStroke =
     strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
 
@@ -320,6 +384,9 @@ main = do
   bigBox radTriGradient "rad_trigradient_"
   bigBox radFocusTriGradient "rad_focus_trigradient_"
 
+  circleTest uniform ""
+  strokeTestCliping stroke ""
+
   cubicTest1
   clipTest
   strokeTest stroke uniform ""
@@ -344,8 +411,11 @@ main = do
 
   strokeCubicDashed dashedStroke uniform ""
   textTest "consola"
+  textSizeTest "consola"
   textTest "arial"
+  textSizeTest "arial"
   textTest "comic"
+  textSizeTest "comic"
   textTest "verdana"
   textTest "webdings"
   textTest "webdings"
@@ -358,5 +428,4 @@ main = do
   textTest "BROADW"
   textTest "cour"
   textTest "courbd"
-
 

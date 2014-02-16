@@ -160,7 +160,7 @@ strokeTestCliping stroker prefix =
 
         clipShape = fill $ circle (V2 250 250) 200
         
-        drawing =
+        drawing = do
           withClipping clipShape .
             withTexture texture . sequence_ . concat $
             [ []
@@ -173,6 +173,8 @@ strokeTestCliping stroker prefix =
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             ]
+          withTexture (uniformTexture $ PixelRGBA8 255 128 100 64)
+                    . fill $ circle (V2 150 150) 40
 
         img = renderContext 500 500 background drawing
 

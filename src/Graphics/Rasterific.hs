@@ -249,7 +249,7 @@ composeCoverageSpan :: forall s px .
                     -> ST s ()
 {-# INLINE composeCoverageSpan #-}
 composeCoverageSpan texture img coverage 
-  | cov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
+  | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
         maxi = _coverageLength coverage
@@ -259,14 +259,18 @@ composeCoverageSpan texture img coverage
         imgWidth = mutableImageWidth img
         imgHeight = mutableImageHeight img
         initIndex = (initialX + y * imgWidth) * compCount
-        (cov, icov) = clampCoverage $ _coverageVal coverage
+        (initialCov, _) =
+            clampCoverage $ _coverageVal coverage
 
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
+          let px = texture (fromIntegral x) (fromIntegral y)
+              opacity = pixelOpacity px
+              (cov, icov) = coverageModulate initialCov opacity
           unsafeWritePixel imgData idx
-            . compositionAlpha cov icov oldPixel
-            $ texture (fromIntegral x) (fromIntegral y)
+            $ compositionAlpha cov icov oldPixel px
+            
           go (count + 1) (x + 1) $ idx + compCount
 
 composeCoverageSpanWithMask
@@ -281,7 +285,7 @@ composeCoverageSpanWithMask
     -> ST s ()
 {-# INLINE composeCoverageSpanWithMask #-}
 composeCoverageSpanWithMask texture mask img coverage 
-  | cov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
+  | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
         maxi = _coverageLength coverage
@@ -291,7 +295,8 @@ composeCoverageSpanWithMask texture mask img coverage
         imgWidth = mutableImageWidth img
         imgHeight = mutableImageHeight img
         initIndex = (initialX + y * imgWidth) * compCount
-        (cov, icov) = clampCoverage $ _coverageVal coverage
+        (initialCov, _) =
+            clampCoverage $ _coverageVal coverage
 
         go count _   _ | count >= maxi = return ()
         go count x idx = do
@@ -299,11 +304,11 @@ composeCoverageSpanWithMask texture mask img coverage
           let fx = fromIntegral x
               fy = fromIntegral y
               maskValue = mask fx fy
-              cov' = min maskValue cov
-              icov' = max (fullValue - maskValue) icov
+              px = texture fx fy
+              (coeffMasked, _) = coverageModulate initialCov maskValue
+              (cov, icov) = coverageModulate coeffMasked $ pixelOpacity px
           unsafeWritePixel imgData idx
-            . compositionAlpha cov' icov' oldPixel
-            $ texture fx fy
+            $ compositionAlpha cov icov oldPixel px
           go (count + 1) (x + 1) $ idx + compCount
 
 

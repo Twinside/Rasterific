@@ -26,6 +26,7 @@ class Ord a => Modulable a where
   clampCoverage :: Float -> (a, a)
   modulate :: a -> a -> a
   alphaOver :: a -> a -> a -> a -> a
+  coverageModulate :: a -> a -> (a, a)
 
 instance Modulable Word8 where
   emptyValue = 0
@@ -37,6 +38,11 @@ instance Modulable Word8 where
     where fi :: Word8 -> Word32
           fi = fromIntegral
           v = fi c * fi a
+
+  coverageModulate c a = (clamped, fullValue - clamped)
+    where
+      v = fromIntegral c * fromIntegral a :: Word32
+      clamped = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
 
   alphaOver c ic b a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
     where fi :: Word8 -> Word32

@@ -299,6 +299,38 @@ textTest fontName = do
                               $ VU.toList c | c <- curves]
       fill $ beziers
 
+textStringTest :: String -> String -> String -> IO ()
+textStringTest fontName filename txt = do
+    putStrLn $ "Rendering " ++ fontName
+    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    writePng (outFolder </> filename) $ renderer $ img font
+  where
+    backColor = white
+    strokeColor = uniformTexture black
+    sizePerChar = 50
+    xCount = 20
+    yCount = 4
+    renderer = 
+        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+            . withTexture strokeColor
+    (^*^) = liftA2 (*)
+
+    indices = 
+        [(x, y, c)
+            | ((x,y), c) <- zip [(x,y) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1]] txt
+            ]
+
+    img font = forM_ indices $ \(xp, yp, charId) -> do
+      let curves = getCharCurvesAtPointSize font 90 36 charId
+          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
+          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
+          beziers = concat
+              [map BezierPrim . bezierFromPath 
+                              . map (\(x,y) -> V2 x y ^+^ vector)
+                              $ VU.toList c | c <- curves]
+      fill $ beziers
+
+
 textSizeTest :: String -> IO ()
 textSizeTest fontName = do
     putStrLn $ "Rendering " ++ fontName
@@ -430,4 +462,9 @@ main = do
   textTest "BROADW"
   textTest "cour"
   textTest "courbd"
+
+  let testText =  "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"
+  textStringTest "consola" "basicTestConsolas.png" testText
+  textStringTest "comic" "basicTestComic.png" testText
+  textStringTest "arial" "basicTestArial.png" testText
 

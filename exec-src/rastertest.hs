@@ -394,17 +394,18 @@ main :: IO ()
 main = do
   let uniform = uniformTexture blue
       biGradient =
-        linearGradientTexture biColor (V2 10 10) (V2 90 90)
+        linearGradientTexture SamplerPad biColor (V2 10 10) (V2 90 90)
       radBiGradient =
-        radialGradientTexture biColor (V2 45 45) 60
+        radialGradientTexture SamplerPad biColor (V2 45 45) 60
       bigBiGradient =
-        linearGradientTexture biColor (V2 0 10) (V2 0 390)
+        linearGradientTexture SamplerPad biColor (V2 0 10) (V2 0 390)
       triGradient =
-        linearGradientTexture triColor (V2 0 10) (V2 0 390)
+        linearGradientTexture SamplerPad triColor (V2 0 10) (V2 0 390)
       radTriGradient =
-        radialGradientTexture triColor (V2 250 250) 200
+        radialGradientTexture SamplerPad triColor (V2 250 250) 200
       radFocusTriGradient =
-        radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
+        radialGradientWithFocusTexture SamplerPad triColor
+            (V2 200 200) 70 (V2 230 200)
 
   createDirectoryIfMissing True outFolder
   logoTest uniform ""

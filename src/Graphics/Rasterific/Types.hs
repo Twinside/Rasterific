@@ -77,9 +77,16 @@ data Join
 -- | Describe the behaviour of samplers and texturers
 -- when they are "out of bound
 data SamplerRepeat
-  = SamplerPad     -- ^ Will clamp (ie. repeat the last pixel) when out of bound
-  | SamplerRepeat  -- ^ Will loop on it's definition domain
-  | SamplerReflect -- ^ Will loop inverting axises
+    -- | Will clamp (ie. repeat the last pixel) when
+    -- out of bound
+    -- <<docimages/sampler_pad.png>>
+  = SamplerPad
+    -- | Will loop on it's definition domain
+    -- <<docimages/sampler_repeat.png>>
+  | SamplerRepeat
+    -- | Will loop inverting axises
+    -- <<docimages/sampler_reflect.png>>
+  | SamplerReflect
   deriving (Eq, Show)
 
 
@@ -102,16 +109,25 @@ data Line = Line
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
 data Bezier = Bezier
-  { _bezierX0 :: {-# UNPACK #-} !Point -- ^ Origin points, the spline will pass through it.
-  , _bezierX1 :: {-# UNPACK #-} !Point -- ^ Control point, the spline won't pass on it.
-  , _bezierX2 :: {-# UNPACK #-} !Point -- ^ End point, the spline will pass through it.
+  { -- | Origin points, the spline will pass through it.
+    _bezierX0 :: {-# UNPACK #-} !Point 
+    -- | Control point, the spline won't pass on it.
+  , _bezierX1 :: {-# UNPACK #-} !Point 
+    -- | End point, the spline will pass through it.
+  , _bezierX2 :: {-# UNPACK #-} !Point 
   }
   deriving (Eq, Show)
 
+-- | Describe a cubic bezier spline, described
+-- using 4 points.
 data CubicBezier = CubicBezier 
-  { _cBezierX0 :: {-# UNPACK #-} !Point
-  , _cBezierX1 :: {-# UNPACK #-} !Point
+  { -- | Origin point, the spline will pass through it.
+    _cBezierX0 :: {-# UNPACK #-} !Point 
+    -- | First control point of the cubic bezier curve.
+  , _cBezierX1 :: {-# UNPACK #-} !Point 
+    -- | Second control point of the cubic bezier curve.
   , _cBezierX2 :: {-# UNPACK #-} !Point
+    -- | End point of the cubic bezier curve
   , _cBezierX3 :: {-# UNPACK #-} !Point
   }
   deriving (Eq, Show)

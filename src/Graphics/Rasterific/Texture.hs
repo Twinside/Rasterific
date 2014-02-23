@@ -17,6 +17,7 @@ module Graphics.Rasterific.Texture
     ) where
 
 {-import Control.Applicative( liftA )-}
+import Data.Fixed( mod' )
 import Linear( V2( .. )
              , (^-^)
              , (^+^)
@@ -27,8 +28,10 @@ import Linear( V2( .. )
              )
 import qualified Data.Vector as V
 
-import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
-import Graphics.Rasterific.Types( Point )
+import Codec.Picture.Types( Pixel( .. )
+                          , Image( .. )
+                          )
+import Graphics.Rasterific.Types( Point, SamplerRepeat( .. ) )
 import Graphics.Rasterific.Compositor
     ( Modulable( clampCoverage, modulate ), compositionAlpha )
 
@@ -50,11 +53,18 @@ uniformTexture px _ _ = px
 --
 -- > [(0, PixelRGBA8 0 0 0 255), (1, PixelRGBA8 255 255 255 255)]
 -- 
--- the stop value must be zero and one.
+-- the first stop value must be zero and the last, one.
 --
 type Gradient px = [(Float, px)]
 type GradientArray px = V.Vector (Float, px)
 
+repeatGradient :: Float -> Float
+repeatGradient s = s - fromIntegral (floor s :: Int)
+
+reflectGradient :: Float -> Float
+reflectGradient s =
+    abs (abs (s - 1) `mod'` 2 - 1)
+   
 gradientColorAt :: (Pixel px, Modulable (PixelBaseComponent px))
                 => GradientArray px -> Float -> px
 gradientColorAt grad at
@@ -71,25 +81,35 @@ gradientColorAt grad at
             zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
             (cov, icov) = clampCoverage zeroToOne
 
+gradientColorAtRepeat :: (Pixel px, Modulable (PixelBaseComponent px))
+                      => SamplerRepeat -> GradientArray px -> Float -> px
+gradientColorAtRepeat SamplerPad grad = gradientColorAt grad
+gradientColorAtRepeat SamplerRepeat grad =
+    gradientColorAt grad . repeatGradient
+gradientColorAtRepeat SamplerReflect grad =
+    gradientColorAt grad . reflectGradient
+
 -- | Linear gradient texture.
 --
 -- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
 -- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
 -- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
--- > withTexture (linearGradientTexture gradDef (V2 40 40) (V2 130 130)) $
+-- > withTexture (linearGradientTexture SamplerPad gradDef
+-- >                        (V2 40 40) (V2 130 130)) $
 -- >    fill $ circle (V2 100 100) 100
 --
 -- <<docimages/linear_gradient.png>>
 --
 linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => Gradient px -- ^ Gradient description.
+                      => SamplerRepeat
+                      -> Gradient px -- ^ Gradient description.
                       -> Point       -- ^ Linear gradient start point.
                       -> Point       -- ^ Linear gradient end point.
                       -> Texture px
-linearGradientTexture gradient start end =
+linearGradientTexture repeating gradient start end =
     \x y -> colorAt $ ((V2 x y) `dot` d) - s00
   where
-    colorAt = gradientColorAt gradArray
+    colorAt = gradientColorAtRepeat repeating gradArray
     gradArray = V.fromList gradient
     vector = end ^-^ start
     d = vector ^/ (vector `dot` vector)
@@ -112,31 +132,31 @@ imageTexture img x y =
 -- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
 -- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
 -- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
--- > withTexture (radialGradientTexture gradDef (V2 100 100) 75) $
+-- > withTexture (radialGradientTexture SamplerPad gradDef
+-- >                    (V2 100 100) 75) $
 -- >    fill $ circle (V2 100 100) 100
 --
 -- <<docimages/radial_gradient.png>>
 --
 radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => Gradient px -- ^ Gradient description
+                      => SamplerRepeat
+                      -> Gradient px -- ^ Gradient description
                       -> Point       -- ^ Radial gradient center
                       -> Float       -- ^ Radial gradient radius
                       -> Texture px
-radialGradientTexture gradient center radius =
+radialGradientTexture repeating gradient center radius =
     \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
   where
-    colorAt = gradientColorAt gradArray
+    colorAt = gradientColorAtRepeat repeating gradArray
     gradArray = V.fromList gradient
 
-repeatGradient :: Float -> Float
-repeatGradient v = v - fromIntegral (floor v :: Int)
 
 -- | Radial gradient texture with a focus point.
 --
 -- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
 -- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
 -- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
--- > withTexture (radialGradientWithFocusTexture gradDef
+-- > withTexture (radialGradientWithFocusTexture SamplerPad gradDef
 -- >                    (V2 100 100) 75 (V2 70 70) ) $
 -- >    fill $ circle (V2 100 100) 100
 --
@@ -144,17 +164,18 @@ repeatGradient v = v - fromIntegral (floor v :: Int)
 --
 radialGradientWithFocusTexture
     :: (Pixel px, Modulable (PixelBaseComponent px))
-    => Gradient px -- ^ Gradient description
+    => SamplerRepeat
+    -> Gradient px -- ^ Gradient description
     -> Point      -- ^ Radial gradient center
     -> Float      -- ^ Radial gradient radius
     -> Point      -- ^ Radial gradient focus point
     -> Texture px
-radialGradientWithFocusTexture gradient center radius focus =
+radialGradientWithFocusTexture repeating gradient center radius focus =
     \x y -> colorAt . go $ V2 x y
   where
    vectorToFocus = focus ^-^ center
    gradArray = V.fromList gradient
-   colorAt = gradientColorAt gradArray
+   colorAt = gradientColorAtRepeat repeating gradArray
    rSquare = radius * radius
 
    go point | distToFocus > 0 = distToFocus / (t + dist)

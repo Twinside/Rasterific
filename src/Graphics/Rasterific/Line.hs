@@ -15,6 +15,10 @@ import Linear( V2( .. ), (^-^), norm )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 
+-- | Transform a list a point to a list of lines
+--
+-- > lineFromPath [a, b, c, d] = [Line a b, Line b c, Line c d]
+--
 lineFromPath :: [Point] -> [Line]
 lineFromPath [] = []
 lineFromPath lst@(_:rest) =

@@ -46,17 +46,31 @@ data Cap
     -- | Create a straight caping on the stroke.
     -- Cap value should be positive and represent
     -- the distance from the end of curve to the actual cap
+    --
+    --  * cap straight with param 0 : <<docimages/cap_straight.png>>
+    --
+    --  * cap straight with param 1 : <<docimages/cap_straight_1.png>>
+    --
   = CapStraight Float 
-  | CapRound          -- ^ Create a rounded caping on the stroke.
+
+    -- | Create a rounded caping on the stroke.
+    -- <<docimages/cap_round.png>>
+  | CapRound          
   deriving (Eq, Show)
 
 -- | Describe how to display the join of broken lines
 -- while stroking.
 data Join
     -- | Make a curved join.
+    -- <<docimages/join_round.png>>
   = JoinRound       
     -- | Make a mitter join. Value must be positive or null.
     -- Seems to make sense in [0;1] only
+    --
+    --  * Miter join with 0 : <<docimages/join_miter.png>>
+    --
+    --  * Miter join with 5 : <<docimages/join_miter_5.png>>
+    --
   | JoinMiter Float 
   deriving (Eq, Show)
 

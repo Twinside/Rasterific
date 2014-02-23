@@ -2,6 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Module describing the various filling method of the
 -- geometric primitives.
+--
+-- All points coordinate given in this module are expressed
+-- final image pixel coordinates.
 module Graphics.Rasterific.Texture
     ( Texture
     , Gradient
@@ -69,6 +72,15 @@ gradientColorAt grad at
             (cov, icov) = clampCoverage zeroToOne
 
 -- | Linear gradient texture.
+--
+-- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+-- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+-- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
+-- > withTexture (linearGradientTexture gradDef (V2 40 40) (V2 130 130)) $
+-- >    fill $ circle (V2 100 100) 100
+--
+-- <<docimages/linear_gradient.png>>
+--
 linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       => Gradient px -- ^ Gradient description.
                       -> Point       -- ^ Linear gradient start point.
@@ -83,6 +95,7 @@ linearGradientTexture gradient start end =
     d = vector ^/ (vector `dot` vector)
     s00 = start `dot` d
 
+-- | Use another image as a texture for the filling.
 imageTexture :: forall px. (Pixel px) => Image px -> Texture px
 imageTexture img x y =
     unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
@@ -95,6 +108,15 @@ imageTexture img x y =
    rawData = imageData img
 
 -- | Radial gradient texture
+--
+-- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+-- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+-- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
+-- > withTexture (radialGradientTexture gradDef (V2 100 100) 75) $
+-- >    fill $ circle (V2 100 100) 100
+--
+-- <<docimages/radial_gradient.png>>
+--
 radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       => Gradient px -- ^ Gradient description
                       -> Point       -- ^ Radial gradient center
@@ -110,6 +132,16 @@ repeatGradient :: Float -> Float
 repeatGradient v = v - fromIntegral (floor v :: Int)
 
 -- | Radial gradient texture with a focus point.
+--
+-- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+-- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+-- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
+-- > withTexture (radialGradientWithFocusTexture gradDef
+-- >                    (V2 100 100) 75 (V2 70 70) ) $
+-- >    fill $ circle (V2 100 100) 100
+--
+-- <<docimages/radial_gradient_focus.png>>
+--
 radialGradientWithFocusTexture
     :: (Pixel px, Modulable (PixelBaseComponent px))
     => Gradient px -- ^ Gradient description
@@ -138,10 +170,13 @@ radialGradientWithFocusTexture gradient center radius focus =
        distToCircleSquared = vectorToClosest `dot` vectorToClosest
        dist = sqrt $ rSquare + distToCircleSquared
 
+-- | Perform a multiplication operation between a full color texture
+-- and a greyscale one, used for clip-path implementation.
 modulateTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                => Texture px
-                -> Texture (PixelBaseComponent px)
-                -> Texture px
+                => Texture px                       -- ^ The full blown texture.
+                -> Texture (PixelBaseComponent px)  -- ^ A greyscale modulation texture.
+                -> Texture px                       -- ^ The resulting texture.
 modulateTexture fullTexture modulator x y =
     colorMap (modulate modulation) $ fullTexture x y
   where modulation = modulator x y
+

@@ -19,6 +19,8 @@ build-type:          Simple
 
 cabal-version:       >= 1.10
 
+extra-source-files: changelog, docimages/*.png
+extra-doc-files: docimages/*.png
 
 library
   hs-source-dirs: src
@@ -58,6 +60,21 @@ library
   -- Base language which the package is written in.
   default-language:    Haskell2010
   
+Executable doc_builder
+    default-language:    Haskell2010
+    Main-Is: docImageGenerator.hs
+    ghc-options: -Wall -O2
+    ghc-prof-options: -rtsopts -Wall -prof -auto-all
+    Hs-Source-Dirs: exec-src
+    Build-Depends: base >= 4.6
+                 , Rasterific
+                 , JuicyPixels
+                 , linear      >= 1.3.1
+                 , directory   >= 1.2
+                 , filepath
+                 , vector
+                 , FontyFruity
+
 Executable test
     default-language:    Haskell2010
     Main-Is: rastertest.hs

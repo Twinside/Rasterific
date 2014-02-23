@@ -13,7 +13,7 @@ module Graphics.Rasterific
     , dashedStroke
 
     , strokeDebug
-    , renderContext
+    , renderDrawing
 
       -- * Rasterization types
     , Texture
@@ -30,6 +30,8 @@ module Graphics.Rasterific
     , Primitive( .. )
 
       -- * Helpers
+    , line
+    , rectangle
     , circle
 
       -- ** Geometry Helpers
@@ -93,6 +95,17 @@ instance Functor (DrawCommand px) where
     fmap f (WithCliping sub com next) =
         WithCliping sub com (f next)
 
+-- | Define the texture applyied to all the children
+-- draw call.
+--
+-- > withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 255) $ do
+-- >     fill $ circle (V2 50 50) 20
+-- >     fill $ circle (V2 100 100) 20
+-- >     withTexture (uniformTexture $ PixelRGBA8 0xFF 0x53 0x73 255)
+-- >          $ circle (V2 150 150) 20
+--
+-- <<docimages/with_texture.png>>
+--
 withTexture :: Texture px -> Drawing px () -> Drawing px ()
 withTexture texture subActions =
     liftF $ SetTexture texture subActions ()
@@ -102,19 +115,38 @@ withTexture texture subActions =
 -- be equal to the first point of the first primitive.
 --
 -- The primitive should be connected.
+--
+-- > fill $ circle (V2 100 100) 75 
+--
+-- <<docimages/fill_circle.png>>
+--
 fill :: [Primitive] -> Drawing px ()
 fill prims = liftF $ Fill prims ()
 
 -- | Draw some geometry using a clipping path.
+--
+-- > withClipping (fill $ circle (V2 100 100) 75) $
+-- >     mapM_ (stroke 7 JoinRound (CapRound, CapRound))
+-- >       [line (V2 0 yf) (V2 200 (yf + 10)) 
+-- >                      | y <- [5 :: Int, 17 .. 200]
+-- >                      , let yf = fromIntegral y ]
+--
+-- <<docimages/with_clipping.png>>
+--
 withClipping
     :: (forall innerPixel. Drawing innerPixel ()) -- ^ The clipping path
-    -> Drawing px () -- The actual drawed geometry
+    -> Drawing px () -- ^ The actual geometry to clip
     -> Drawing px ()
 withClipping clipPath drawing =
     liftF $ WithCliping clipPath drawing ()
 
 -- | Will stroke geometry with a given stroke width.
 -- The elements should be connected
+--
+-- > stroke 5 JoinRound (CapRound, CapRound) $ circle (V2 100 100) 75
+--
+-- <<docimages/stroke_circle.png>>
+--
 stroke :: Float       -- ^ Stroke width
        -> Join        -- ^ Which kind of join will be used
        -> (Cap, Cap)  -- ^ Start and end capping.
@@ -124,7 +156,7 @@ stroke width join caping = fill . strokize width join caping
 
 -- | Function to call in order to start the image creation.
 -- the upper left corner is the point (0, 0)
-renderContext
+renderDrawing
     :: forall px
      . ( Pixel px
        , Pixel (PixelBaseComponent px)
@@ -136,7 +168,7 @@ renderContext
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderContext width height background drawing = runST $
+renderDrawing width height background drawing = runST $
   createMutableImage width height background
         >>= execStateT (go Nothing stupidDefaultTexture drawing)
         >>= unsafeFreezeImage
@@ -147,7 +179,7 @@ renderContext width height background drawing = runST $
         uniformTexture $ colorMap (const clipBackground) background
 
     clipRender =
-      renderContext width height clipBackground 
+      renderDrawing width height clipBackground 
             . withTexture (uniformTexture clipForeground)
         
 
@@ -176,6 +208,12 @@ renderContext width height background drawing = runST $
 
 -- | With stroke geometry with a given stroke width, using
 -- a dash pattern.
+--
+-- > dashedStroke [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0)
+-- >        [line (V2 0 100) (V2 200 100)]
+--
+-- <<docimages/dashed_stroke.png>>
+--
 dashedStroke
     :: DashPattern -- ^ Dashing pattern to use for stroking
     -> Float       -- ^ Stroke width
@@ -312,9 +350,43 @@ composeCoverageSpanWithMask texture mask img coverage
           go (count + 1) (x + 1) $ idx + compCount
 
 
-circle :: Point -> Float -> [Primitive]
+-- | Generate a list of primitive representing a circle.
+--
+-- > fill $ circle (V2 100 100) 75 
+--
+-- <<docimages/fill_circle.png>>
+--
+circle :: Point -- ^ Circle center in pixels
+       -> Float -- ^ Circle radius in pixels
+       -> [Primitive]
 circle center radius = CubicBezierPrim . scaleMove <$> cubicBezierCircle 
   where
     mv p = (p ^* radius) ^+^ center
     scaleMove (CubicBezier p1 p2 p3 p4) =
         CubicBezier (mv p1) (mv p2) (mv p3) (mv p4)
+
+-- | Generate a list of primitive representing a
+-- rectangle
+--
+-- > fill $ rectangle (V2 30 30) 150 100
+--
+-- <<docimages/fill_rect.png>>
+--
+rectangle :: Point -- ^ Corner upper left
+          -> Float -- ^ Width in pixel
+          -> Float -- ^ Height in pixel
+          -> [Primitive]
+rectangle p@(V2 px py) w h =
+  LinePrim <$> lineFromPath 
+    [ p, V2 (px + w) py, V2 (px + w) (py + h), V2 px (py + h), p ]
+
+-- | Return a simple line ready to be stroked.
+--
+-- > stroke 17 JoinRound (CapRound, CapRound) $
+-- >     line (V2 10 10) (V2 180 170)
+--
+-- <<docimages/stroke_line.png>>
+--
+line :: Point -> Point -> [Primitive]
+line p1 p2 = [LinePrim $ Line p1 p2]
+

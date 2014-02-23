@@ -68,7 +68,7 @@ logoTest texture prefix =
     beziers = logo 40 False $ V2 10 10
     inverse = logo 20 True $ V2 20 20
     drawing = withTexture texture . fill $ beziers ++ inverse
-    img = renderContext 100 100 background drawing
+    img = renderDrawing 100 100 background drawing
 
 makeBox :: Point -> Point -> [Primitive]
 makeBox (V2 sx sy) (V2 ex ey) = map LinePrim $ lineFromPath
@@ -84,14 +84,14 @@ bigBox texture prefix =
     writePng (outFolder </> (prefix ++ "box.png")) img
   where 
     drawing = withTexture texture . fill $ makeBox (V2 10 10) (V2 390 390)
-    img = renderContext 400 400 background drawing
+    img = renderDrawing 400 400 background drawing
 
 circleTest :: Texture PixelRGBA8 -> String -> IO ()
 circleTest texture prefix =
     writePng (outFolder </> (prefix ++ "circle.png")) img
   where 
     drawing = withTexture texture . fill $ circle (V2 100 100) 90
-    img = renderContext 200 200 background drawing
+    img = renderDrawing 200 200 background drawing
 
 cubicTest :: [Primitive]
 cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
@@ -113,7 +113,7 @@ cubicTest1 :: IO ()
 cubicTest1 = writePng (outFolder </> "cubic1.png") img
   where texture = uniformTexture blue
         drawing = withTexture texture $ fill cubicTest
-        img = renderContext 150 150 background drawing
+        img = renderDrawing 150 150 background drawing
 
 clipTest :: IO ()
 clipTest = writePng (outFolder </> "clip.png") img
@@ -126,7 +126,7 @@ clipTest = writePng (outFolder </> "clip.png") img
             ]
 
         drawing = withTexture texture $ mapM_ fill beziers
-        img = renderContext 100 100 background drawing
+        img = renderDrawing 100 100 background drawing
 
 strokeTest2 :: Stroker -> String -> IO ()
 strokeTest2 stroker prefix =
@@ -148,7 +148,7 @@ strokeTest2 stroker prefix =
                     | ix <- [0 .. 5] ]
             ]
 
-        img = renderContext 500 500 background drawing
+        img = renderDrawing 500 500 background drawing
 
 strokeTestCliping :: Stroker -> String -> IO ()
 strokeTestCliping stroker prefix =
@@ -176,7 +176,7 @@ strokeTestCliping stroker prefix =
           withTexture (uniformTexture $ PixelRGBA8 255 128 100 64)
                     . fill $ circle (V2 150 150) 40
 
-        img = renderContext 500 500 background drawing
+        img = renderDrawing 500 500 background drawing
 
 strokeLogo :: Stroker -> String -> IO ()
 strokeLogo stroker prefix =
@@ -184,7 +184,7 @@ strokeLogo stroker prefix =
     where texture = uniformTexture blue
           beziers = logo 40 False $ V2 10 10
           inverse = logo 20 True $ V2 20 20
-          img = renderContext 100 100 background 
+          img = renderDrawing 100 100 background 
               . withTexture texture
               . stroker 4 JoinRound (CapRound, CapRound)
               $ beziers ++ inverse
@@ -193,7 +193,7 @@ strokeQuadraticIntersection ::
     Stroker -> Texture PixelRGBA8 -> String -> IO ()
 strokeQuadraticIntersection stroker texture prefix =
   writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
-    where img = renderContext 500 500 background 
+    where img = renderDrawing 500 500 background 
               . withTexture texture
               . stroker 40 JoinRound (CapRound, CapRound)
               . map BezierPrim
@@ -210,7 +210,7 @@ strokeCubic :: Stroker -> Texture PixelRGBA8 -> String
             -> IO ()
 strokeCubic stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
-  where img = renderContext 500 500 background drawing
+  where img = renderDrawing 500 500 background drawing
         cusp = CubicBezier
             (V2 10 230)
             (V2 350 570)
@@ -241,7 +241,7 @@ strokeCubicDashed :: DashStroker -> Texture PixelRGBA8 -> String
                   -> IO ()
 strokeCubicDashed stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStrokeDashed.png")) img
-  where img = renderContext 500 500 background drawing
+  where img = renderDrawing 500 500 background drawing
         cusp = CubicBezier
             (V2 10 230)
             (V2 350 570)
@@ -282,7 +282,7 @@ textTest fontName = do
     xCount = 20
     yCount = 20
     renderer = 
-        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
             . withTexture strokeColor
     (^*^) = liftA2 (*)
 
@@ -311,7 +311,7 @@ textStringTest fontName filename txt = do
     xCount = 20
     yCount = 4
     renderer = 
-        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
             . withTexture strokeColor
     (^*^) = liftA2 (*)
 
@@ -343,7 +343,7 @@ textSizeTest fontName = do
     xCount = 20
     yCount = 20
     renderer = 
-        renderContext (xCount * sizePerChar) (yCount * sizePerChar) backColor
+        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
     (^*^) = liftA2 (*)
 
     indices = 
@@ -383,7 +383,7 @@ strokeTest stroker texture prefix =
                     (JoinMiter 1) (CapStraight 0, CapStraight 0) $
                    logo 100 False $ V2 240 240]
           ]
-        img = renderContext 500 500 background drawing
+        img = renderDrawing 500 500 background drawing
 
 debugStroke :: Stroker
 debugStroke =

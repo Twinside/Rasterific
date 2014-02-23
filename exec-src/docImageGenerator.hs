@@ -6,8 +6,26 @@ import Graphics.Rasterific.Texture
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
-import Linear( V2( .. ) )
+import Linear( V2( .. ), (^+^) )
 
+logo :: Int -> Bool -> Vector -> [Primitive]
+logo size inv offset =
+    map BezierPrim . bezierFromPath . way $ map (^+^ offset)
+    [ (V2   0  is)
+    , (V2   0   0)
+    , (V2  is   0)
+    , (V2 is2   0)
+    , (V2 is2  is)
+    , (V2 is2 is2)
+    , (V2  is is2)
+    , (V2  0  is2)
+    , (V2  0   is)
+    ]
+  where is = fromIntegral size
+        is2 = is + is
+
+        way | inv = reverse
+            | otherwise = id
 
 backgroundColor :: PixelRGBA8
 backgroundColor = PixelRGBA8 255 255 255 255
@@ -140,4 +158,9 @@ main = do
         withTexture (linearGradientTexture SamplerPad gradDef
                         (V2 80 100) (V2 120 110)) $
             fill $ rectangle (V2 10 10) 180 180)
+
+    produceDocImage (outFolder </> "logo.png") $
+        fill $ logo 80 False (V2 20 20) ++ 
+               logo 40 True (V2 40 40)
+
 

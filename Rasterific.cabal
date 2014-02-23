@@ -2,9 +2,14 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 name:                Rasterific
 version:             0.1.0.0
-synopsis:            A vector rasterization engine
+synopsis:            A pure haskell drawing engine.
 -- A longer description of the package.
--- description:         
+description:
+    <<docimages/logo.png>>
+    .
+    Rasterific is a vector drawing library (a rasterizer)
+    implemented in pure haskell
+
 license:             BSD3
 license-file:        LICENSE
 author:              Vincent Berthoux

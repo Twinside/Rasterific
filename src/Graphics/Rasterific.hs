@@ -11,6 +11,7 @@ module Graphics.Rasterific
     , withClipping
     , stroke
     , dashedStroke
+    , printTextAt
 
     , strokeDebug
     , renderDrawing
@@ -59,7 +60,9 @@ import Codec.Picture.Types( Image( .. )
                           , createMutableImage
                           , unsafeFreezeImage )
 
+import qualified Data.Vector.Unboxed as VU
 import Linear( V2( .. ), (^+^), (^*) )
+
 import Graphics.Rasterific.Compositor
 {-import Graphics.Rasterific.Operators-}
 import Graphics.Rasterific.Rasterize
@@ -69,6 +72,8 @@ import Graphics.Rasterific.Line
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Stroke
+
+import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -84,12 +89,15 @@ type Drawing px a = Free (DrawCommand px) a
 
 data DrawCommand px next
     = Fill [Primitive] next
+    | TextFill Font PointSize Point String next
     | SetTexture (Texture px) 
                  (Drawing px ()) next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
                   (Drawing px ()) next
 
 instance Functor (DrawCommand px) where
+    fmap f (TextFill font size pos str next) =
+        TextFill font size pos str $ f next
     fmap f (Fill prims next) = Fill prims $ f next
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =
@@ -154,6 +162,15 @@ stroke :: Float       -- ^ Stroke width
        -> Drawing px ()
 stroke width join caping = fill . strokize width join caping
 
+-- | Draw a string at a given position
+printTextAt :: Font     -- ^ Drawing font
+            -> Int      -- ^ font Point size
+            -> Point    -- ^ Baseline begining position
+            -> String  -- ^ String to print
+            -> Drawing px ()
+printTextAt font pointSize point string =
+    liftF $ TextFill font pointSize point string ()
+
 -- | Function to call in order to start the image creation.
 -- the upper left corner is the point (0, 0)
 renderDrawing
@@ -194,6 +211,17 @@ renderDrawing width height background drawing = runST $
         fillWithTextureAndMask texture moduler prims >> go mo texture next
     go moduler texture (Free (SetTexture tx sub next)) =
         go moduler tx sub >> go moduler texture next
+    go moduler texture (Free (TextFill font size (V2 x y) str next)) =
+        forM_ drawCalls (go moduler texture) >> go moduler texture next
+      where
+        drawCalls = beziersOfChar <$> getStringCurveAtPoint 90 (x, y) [(font, size, str)]
+
+        beziersOfChar curves = liftF $ Fill bezierCurves ()
+          where
+            bezierCurves = concat
+              [map BezierPrim . bezierFromPath . map (uncurry V2)
+                              $ VU.toList c | c <- curves]
+
     go moduler texture (Free (WithCliping clipPath path next)) =
         go newModuler texture path >> go moduler texture next
       where

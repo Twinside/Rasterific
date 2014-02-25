@@ -31,7 +31,6 @@ library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
                  , Graphics.Rasterific.Texture
-                 , Graphics.Rasterific.Compositor
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.QuadraticBezier
@@ -40,6 +39,7 @@ library
                , Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize
                , Graphics.Rasterific.Types
+               , Graphics.Rasterific.Compositor
 
   ghc-options: -O2 -Wall
   ghc-prof-options: -Wall -prof -auto-all

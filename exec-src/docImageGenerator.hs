@@ -68,7 +68,7 @@ samplerTester (filename, sampler) =
        (let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
                       ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                       ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
-        withTexture (linearGradientTexture sampler gradDef
+        withTexture (withSampler sampler $ linearGradientTexture gradDef
                         (V2 80 100) (V2 120 110)) $
             fill $ rectangle (V2 10 10) 180 180)
 
@@ -131,36 +131,31 @@ main = do
        (let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
                       ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                       ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
-        withTexture (linearGradientTexture SamplerPad gradDef
-                            (V2 40 40) (V2 130 130)) $
+        withTexture (linearGradientTexture gradDef (V2 40 40) (V2 130 130)) $
             fill $ circle (V2 100 100) 100)
 
     produceDocImage (outFolder </> "radial_gradient.png") $
        (let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
                       ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                       ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
-        withTexture (radialGradientTexture SamplerPad gradDef
-                            (V2 100 100) 75) $
+        withTexture (radialGradientTexture gradDef (V2 100 100) 75) $
             fill $ circle (V2 100 100) 100)
 
     produceDocImage (outFolder </> "radial_gradient_focus.png") $
        (let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
                       ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                       ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
-        withTexture (radialGradientWithFocusTexture SamplerPad gradDef
-                        (V2 100 100) 75 (V2 70 70)) $
+        withTexture (radialGradientWithFocusTexture gradDef (V2 100 100) 75 (V2 70 70)) $
             fill $ circle (V2 100 100) 100)
 
     produceDocImage (outFolder </> "sampler_pad.png") $
        (let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
                       ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                       ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
-        withTexture (linearGradientTexture SamplerPad gradDef
-                        (V2 80 100) (V2 120 110)) $
+        withTexture (linearGradientTexture gradDef (V2 80 100) (V2 120 110)) $
             fill $ rectangle (V2 10 10) 180 180)
 
     produceDocImage (outFolder </> "logo.png") $
         fill $ logo 80 False (V2 20 20) ++ 
                logo 40 True (V2 40 40)
-
 

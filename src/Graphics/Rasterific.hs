@@ -300,10 +300,12 @@ composeCoverageSpan texture img coverage
         (initialCov, _) =
             clampCoverage $ _coverageVal coverage
 
+        shader = texture SamplerPad
+
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
-          let px = texture (fromIntegral x) (fromIntegral y)
+          let px = shader (fromIntegral x) (fromIntegral y)
               opacity = pixelOpacity px
               (cov, icov) = coverageModulate initialCov opacity
           unsafeWritePixel imgData idx
@@ -336,13 +338,16 @@ composeCoverageSpanWithMask texture mask img coverage
         (initialCov, _) =
             clampCoverage $ _coverageVal coverage
 
+        maskShader = mask SamplerPad
+        shader = texture SamplerPad
+
         go count _   _ | count >= maxi = return ()
         go count x idx = do
           oldPixel <- unsafeReadPixel imgData idx
           let fx = fromIntegral x
               fy = fromIntegral y
-              maskValue = mask fx fy
-              px = texture fx fy
+              maskValue = maskShader fx fy
+              px = shader fx fy
               (coeffMasked, _) = coverageModulate initialCov maskValue
               (cov, icov) = coverageModulate coeffMasked $ pixelOpacity px
           unsafeWritePixel imgData idx

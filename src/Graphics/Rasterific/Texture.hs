@@ -8,24 +8,24 @@
 module Graphics.Rasterific.Texture
     ( Texture
     , Gradient
+    , withSampler
     , uniformTexture
     , linearGradientTexture
     , radialGradientTexture
     , radialGradientWithFocusTexture
     , imageTexture
+    , sampledImageTexture
     , modulateTexture
     ) where
 
-{-import Control.Applicative( liftA )-}
 import Data.Fixed( mod' )
 import Linear( V2( .. )
              , (^-^)
-             , (^+^)
              , (^/)
-             , (^*)
              , dot
              , norm
              )
+
 import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. )
@@ -39,13 +39,17 @@ import Graphics.Rasterific.Compositor
 -- give back a pixel.
 -- The float coordinate type allow for transformations
 -- to happen in the pixel space.
-type Texture px = Float -> Float -> px
+type Texture px = SamplerRepeat -> Float -> Float -> px
+
+-- | Set the repeat pattern of the texture (if any).
+withSampler :: SamplerRepeat -> Texture px -> Texture px
+withSampler repeating texture _ = texture repeating
 
 -- | The uniform texture is the simplest texture of all:
 -- an uniform color.
 uniformTexture :: px -- ^ The color used for all the texture.
                -> Texture px
-uniformTexture px _ _ = px
+uniformTexture px _ _ _ = px
 
 -- | A gradient definition is just a list of stop
 -- and pixel values. For instance for a simple gradient
@@ -101,12 +105,11 @@ gradientColorAtRepeat SamplerReflect grad =
 -- <<docimages/linear_gradient.png>>
 --
 linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => SamplerRepeat
-                      -> Gradient px -- ^ Gradient description.
+                      => Gradient px -- ^ Gradient description.
                       -> Point       -- ^ Linear gradient start point.
                       -> Point       -- ^ Linear gradient end point.
                       -> Texture px
-linearGradientTexture repeating gradient start end =
+linearGradientTexture gradient start end repeating =
     \x y -> colorAt $ ((V2 x y) `dot` d) - s00
   where
     colorAt = gradientColorAtRepeat repeating gradArray
@@ -117,7 +120,7 @@ linearGradientTexture repeating gradient start end =
 
 -- | Use another image as a texture for the filling.
 imageTexture :: forall px. (Pixel px) => Image px -> Texture px
-imageTexture img x y =
+imageTexture img _ x y =
     unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
   where
    clampedX = min (w - 1) . max 0 $ floor x
@@ -126,6 +129,18 @@ imageTexture img x y =
    w = imageWidth img
    h = imageHeight img
    rawData = imageData img
+
+-- | Use another image as a texture for the filling,
+-- but allow repeating and reflecting alongside with
+-- padding.
+sampledImageTexture :: (Pixel px) => Image px -> Texture px
+sampledImageTexture img SamplerPad = imageTexture img SamplerPad
+sampledImageTexture img SamplerReflect = imageTexture img SamplerPad
+sampledImageTexture img SamplerRepeat = \x y -> texture (x `mod'` w) (y `mod'` h)
+  where
+   texture = imageTexture img SamplerPad
+   w = fromIntegral $ imageWidth img
+   h = fromIntegral $ imageHeight img
 
 -- | Radial gradient texture
 --
@@ -139,12 +154,11 @@ imageTexture img x y =
 -- <<docimages/radial_gradient.png>>
 --
 radialGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                      => SamplerRepeat
-                      -> Gradient px -- ^ Gradient description
+                      => Gradient px -- ^ Gradient description
                       -> Point       -- ^ Radial gradient center
                       -> Float       -- ^ Radial gradient radius
                       -> Texture px
-radialGradientTexture repeating gradient center radius =
+radialGradientTexture gradient center radius repeating =
     \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
   where
     colorAt = gradientColorAtRepeat repeating gradArray
@@ -164,13 +178,12 @@ radialGradientTexture repeating gradient center radius =
 --
 radialGradientWithFocusTexture
     :: (Pixel px, Modulable (PixelBaseComponent px))
-    => SamplerRepeat
-    -> Gradient px -- ^ Gradient description
+    => Gradient px -- ^ Gradient description
     -> Point      -- ^ Radial gradient center
     -> Float      -- ^ Radial gradient radius
     -> Point      -- ^ Radial gradient focus point
     -> Texture px
-radialGradientWithFocusTexture repeating gradient center radius focusScreen =
+radialGradientWithFocusTexture gradient center radius focusScreen repeating =
     \x y -> colorAt . go $ (V2 x y) ^-^ center
   where
     focus@(V2 origFocusX origFocusY) = focusScreen ^-^ center
@@ -211,7 +224,8 @@ modulateTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                 => Texture px                       -- ^ The full blown texture.
                 -> Texture (PixelBaseComponent px)  -- ^ A greyscale modulation texture.
                 -> Texture px                       -- ^ The resulting texture.
-modulateTexture fullTexture modulator x y =
-    colorMap (modulate modulation) $ fullTexture x y
-  where modulation = modulator x y
+modulateTexture fullTexture modulator repeating = \x y ->
+    colorMap (modulate $ modulationTexture x y) $ full x y
+  where modulationTexture = modulator repeating
+        full = fullTexture repeating
 

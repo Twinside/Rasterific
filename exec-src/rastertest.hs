@@ -2,17 +2,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
-import Data.Word( Word8 )
 
-import Control.Applicative( (<$>), liftA2 )
-import Control.Monad( forM_ )
+import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
-import Graphics.Text.TrueType
 
 import Data.Binary( decodeFile )
 
-import qualified Data.Vector.Unboxed as VU
 import Codec.Picture
 import Linear( V2( .. )
              , (^+^)
@@ -270,94 +266,14 @@ strokeCubicDashed stroker texture prefix =
                     [CubicBezierPrim loop]]
             ]
 
-textTest :: String -> IO ()
-textTest fontName = do
+textAlignStringTest :: String -> String -> String -> IO ()
+textAlignStringTest fontName filename txt = do
     putStrLn $ "Rendering " ++ fontName
     font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
-    writePng (outFolder </> ("charArray_" ++ fontName ++ ".png")) $ renderer $ img font
-  where
-    backColor = white
-    strokeColor = uniformTexture black
-    sizePerChar = 50
-    xCount = 20
-    yCount = 20
-    renderer = 
-        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
-            . withTexture strokeColor
-    (^*^) = liftA2 (*)
-
-    indices = 
-        [(x,y, y * xCount + x) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1] ]
-
-    img font = forM_ indices $ \(xp, yp, charId) -> do
-      let curves = getGlyphIndexCurvesAtPointSize font 90 36 charId
-          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
-          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
-          beziers = concat
-              [map BezierPrim . bezierFromPath 
-                              . map (\(x,y) -> V2 x y ^+^ vector)
-                              $ VU.toList c | c <- curves]
-      fill $ beziers
-
-textStringTest :: String -> String -> String -> IO ()
-textStringTest fontName filename txt = do
-    putStrLn $ "Rendering " ++ fontName
-    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
-    writePng (outFolder </> filename) $ renderer $ img font
-  where
-    backColor = white
-    strokeColor = uniformTexture black
-    sizePerChar = 50
-    xCount = 20
-    yCount = 4
-    renderer = 
-        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
-            . withTexture strokeColor
-    (^*^) = liftA2 (*)
-
-    indices = 
-        [(x, y, c)
-            | ((x,y), c) <- zip [(x,y) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1]] txt
-            ]
-
-    img font = forM_ indices $ \(xp, yp, charId) -> do
-      let curves = getCharCurvesAtPointSize font 90 36 charId
-          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
-          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
-          beziers = concat
-              [map BezierPrim . bezierFromPath 
-                              . map (\(x,y) -> V2 x y ^+^ vector)
-                              $ VU.toList c | c <- curves]
-      fill $ beziers
-
-
-textSizeTest :: String -> IO ()
-textSizeTest fontName = do
-    putStrLn $ "Rendering " ++ fontName
-    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
-    writePng (outFolder </> ("charArray_" ++ fontName ++ "_size.png")) $ renderer $ img font
-  where
-    backColor = 255 :: Word8
-    strokeColor = uniformTexture 0
-    sizePerChar = 50
-    xCount = 20
-    yCount = 20
-    renderer = 
-        renderDrawing (xCount * sizePerChar) (yCount * sizePerChar) backColor
-    (^*^) = liftA2 (*)
-
-    indices = 
-        [(x,y, 1 * xCount + x) | y <- [0 .. yCount - 1], x <- [0 .. xCount - 1] ]
-
-    img font = forM_ indices $ \(xp, yp, charId) -> do
-      let curves = getGlyphIndexCurvesAtPointSize font 90 (yp * 3) charId
-          boxSize = V2 (fromIntegral sizePerChar) (fromIntegral sizePerChar)
-          vector = (V2 (fromIntegral xp) (fromIntegral yp) ^*^ boxSize) ^+^ V2 10 10
-          beziers = concat
-              [map BezierPrim . bezierFromPath 
-                              . map (\(x,y) -> V2 x y ^+^ vector)
-                              $ VU.toList c | c <- curves]
-      withTexture strokeColor $ fill beziers
+    writePng (outFolder </> filename) .
+        renderDrawing 300 70 white
+            . withTexture (uniformTexture black) $
+                    printTextAt font 12 (V2 20 40) txt
 
 strokeTest :: Stroker -> Texture PixelRGBA8 -> String
            -> IO ()
@@ -394,18 +310,17 @@ main :: IO ()
 main = do
   let uniform = uniformTexture blue
       biGradient =
-        linearGradientTexture SamplerPad biColor (V2 10 10) (V2 90 90)
+        linearGradientTexture biColor (V2 10 10) (V2 90 90)
       radBiGradient =
-        radialGradientTexture SamplerPad biColor (V2 45 45) 60
+        radialGradientTexture biColor (V2 45 45) 60
       bigBiGradient =
-        linearGradientTexture SamplerPad biColor (V2 0 10) (V2 0 390)
+        linearGradientTexture biColor (V2 0 10) (V2 0 390)
       triGradient =
-        linearGradientTexture SamplerPad triColor (V2 0 10) (V2 0 390)
+        linearGradientTexture triColor (V2 0 10) (V2 0 390)
       radTriGradient =
-        radialGradientTexture SamplerPad triColor (V2 250 250) 200
+        radialGradientTexture triColor (V2 250 250) 200
       radFocusTriGradient =
-        radialGradientWithFocusTexture SamplerPad triColor
-            (V2 200 200) 70 (V2 230 200)
+        radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
 
   createDirectoryIfMissing True outFolder
   logoTest uniform ""
@@ -445,27 +360,11 @@ main = do
   strokeCubic debugStroke uniform "debug_"
 
   strokeCubicDashed dashedStroke uniform ""
-  textTest "consola"
-  textSizeTest "consola"
-  textTest "arial"
-  textSizeTest "arial"
-  textTest "comic"
-  textSizeTest "comic"
-  textTest "verdana"
-  textTest "webdings"
-  textTest "webdings"
-  textTest "wingding"
-  textTest "WINGDNG2"
-  textTest "WINGDNG3"
-  textTest "PAPYRUS"
-  textTest "COLONNA"
-  textTest "BRUSHSCI"
-  textTest "BROADW"
-  textTest "cour"
-  textTest "courbd"
 
-  let testText =  "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"
-  textStringTest "consola" "basicTestConsolas.png" testText
-  textStringTest "comic" "basicTestComic.png" testText
-  textStringTest "arial" "basicTestArial.png" testText
+  let testText =
+        "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"
+
+  textAlignStringTest "CONSOLA" "alignedConsola.png" testText
+  textAlignStringTest "arial" "alignedArial.png"
+        "Just a simple test, gogo !!! Yay ; quoi ?"
 

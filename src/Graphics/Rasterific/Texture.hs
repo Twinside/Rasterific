@@ -170,26 +170,40 @@ radialGradientWithFocusTexture
     -> Float      -- ^ Radial gradient radius
     -> Point      -- ^ Radial gradient focus point
     -> Texture px
-radialGradientWithFocusTexture repeating gradient center radius focus =
-    \x y -> colorAt . go $ V2 x y
+radialGradientWithFocusTexture repeating gradient center radius focusScreen =
+    \x y -> colorAt . go $ (V2 x y) ^-^ center
   where
-   vectorToFocus = focus ^-^ center
-   gradArray = V.fromList gradient
-   colorAt = gradientColorAtRepeat repeating gradArray
-   rSquare = radius * radius
+    focus@(V2 origFocusX origFocusY) = focusScreen ^-^ center
+    colorAt = gradientColorAtRepeat repeating gradArray
+    gradArray = V.fromList gradient
+    radiusSquared = radius * radius
+    dist = sqrt $ focus `dot` focus
+    clampedFocus@(V2 focusX focusY)
+        | dist <= r = focus
+        | otherwise = V2 (r * cos a) (r * sin a)
+           where a = atan2 origFocusY origFocusX
+                 r = radius * 0.99
+    trivial = sqrt $ radiusSquared - focusX * focusY
 
-   go point | distToFocus > 0 = distToFocus / (t + dist)
-            | otherwise = 0
-     where
-       focusToPoint = point ^-^ focus
-       distToFocus = sqrt $ focusToPoint `dot` focusToPoint
-       directionVector = focusToPoint ^/ distToFocus
+    solutionOf (V2 x y) | x == focusX =
+        V2 focusX (if y > focusY then trivial else negate trivial)
+    solutionOf (V2 x y) = V2 xSolution $ slope * xSolution + yint
+      where
+        slope = (y - focusY) / (x - focusX)
+        yint = y - (slope * x)
 
-       t = directionVector `dot` vectorToFocus
-       closestPoint = directionVector ^* t ^+^ focus
-       vectorToClosest = (closestPoint ^-^ center)
-       distToCircleSquared = vectorToClosest `dot` vectorToClosest
-       dist = sqrt $ rSquare + distToCircleSquared
+        a = slope * slope + 1
+        b = 2 * slope * yint
+        c = yint * yint - radiusSquared
+        det = sqrt $ b * b - 4 * a * c
+        xSolution = (-b + (if x < focusX then negate det else det)) / (2 * a)
+
+    go pos = sqrt $ curToFocus / distSquared
+      where
+        solution = solutionOf pos ^-^ clampedFocus
+        toFocus = pos ^-^ clampedFocus
+        distSquared = solution `dot` solution
+        curToFocus = toFocus `dot` toFocus
 
 -- | Perform a multiplication operation between a full color texture
 -- and a greyscale one, used for clip-path implementation.

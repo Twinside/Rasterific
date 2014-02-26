@@ -3,6 +3,30 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
+--
+-- Creating an image is rather simple, here is a simple example
+-- of a drawing and saving it in a PNG file:
+--
+-- > import Codec.Picture( PixelRGBA8( .. ), writePng )
+-- > import Graphics.Rasterific
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >   let white = PixelRGBA8 255 255 255 255
+-- >       drawColor = PixelRGBA8 0 0x86 0xc1 255
+-- >       recColor = PixelRGBA8 0xFF 0x53 0x73 255
+-- >       img = renderDrawing 400 200 white $
+-- >          withTexture (uniformTexture drawColor) $ do
+-- >             fill $ circle (V2 0 0) 30
+-- >             stroke 4 JoinRound (CapRound, CapRound) $
+-- >                    circle (V2 400 200) 40
+-- >             withTexture (uniformTexture recColor) .
+-- >                    fill $ rectangle (V2 100 100) 200 100
+-- >
+-- >   writePng "yourimage.png" img
+-- 
+-- <<docimages/module_example.png>>
+--
 module Graphics.Rasterific
     ( 
       -- * Rasterization command
@@ -15,20 +39,23 @@ module Graphics.Rasterific
 
     , strokeDebug
     , renderDrawing
+    , pathToPrimitives
 
       -- * Rasterization types
     , Texture
-    , Compositor
     , Drawing
     , Modulable
 
       -- * Geometry description
+    , V2( .. )
     , Point
     , Vector
     , CubicBezier( .. )
     , Line( .. )
     , Bezier( .. )
     , Primitive( .. )
+    , Path( .. )
+    , PathCommand( .. )
 
       -- * Helpers
     , line
@@ -85,6 +112,8 @@ type DrawContext s px a =
 ------------------------------------------------
 ----    Free Monad DSL section
 ------------------------------------------------
+
+-- | Monad used to record the drawing actions.
 type Drawing px a = Free (DrawCommand px) a
 
 data DrawCommand px next
@@ -162,7 +191,30 @@ stroke :: Float       -- ^ Stroke width
        -> Drawing px ()
 stroke width join caping = fill . strokize width join caping
 
--- | Draw a string at a given position
+-- | Draw a string at a given position.
+-- Text printing imply loading a font, there is no default
+-- font (yet). Below an example of font rendering using a
+-- font installed on Microsoft Windows.
+--
+-- > import Graphics.Text.TrueType( loadFontFile )
+-- > import Codec.Picture( PixelRGBA8( .. ), writePng )
+-- > import Graphics.Rasterific
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >   fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+-- >   case fontErr of
+-- >     Left err -> putStrLn err
+-- >     Right font ->
+-- >       writePng "text_example.png" .
+-- >           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
+-- >               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+-- >                       printTextAt font 12 (V2 20 40) "A simple text test!"
+--
+-- <<docimages/text_example.png>>
+--
+-- You can use any texture, like a gradient while rendering text.
+--
 printTextAt :: Font     -- ^ Drawing font
             -> Int      -- ^ font Point size
             -> Point    -- ^ Baseline begining position

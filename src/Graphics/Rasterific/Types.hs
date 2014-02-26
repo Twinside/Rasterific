@@ -13,6 +13,8 @@ module Graphics.Rasterific.Types
     , CubicBezier( .. )
     , Primitive( .. )
     , Container
+    , PathCommand( .. )
+    , Path( .. )
 
       -- * Rasterization control types
     , Cap( .. )
@@ -23,6 +25,7 @@ module Graphics.Rasterific.Types
 
       -- * Internal type
     , EdgeSample( .. )
+    , pathToPrimitives
     ) where
 
 import Linear( V2( .. ) )
@@ -75,7 +78,7 @@ data Join
   deriving (Eq, Show)
 
 -- | Describe the behaviour of samplers and texturers
--- when they are "out of bound
+-- when they are out of the bounds of image and/or gradient.
 data SamplerRepeat
     -- | Will clamp (ie. repeat the last pixel) when
     -- out of bound
@@ -100,6 +103,13 @@ data EdgeSample = EdgeSample
   deriving Show
 
 -- | Describe a simple 2D line between two points.
+--
+-- > fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
+-- >                     , Line (V2 190 10) (V2 95 170)
+-- >                     , Line (V2 95 170) (V2 10 10)]
+--
+-- <<docimages/simple_line.png>>
+--
 data Line = Line
   { _lineX0 :: {-# UNPACK #-} !Point -- ^ Origin point
   , _lineX1 :: {-# UNPACK #-} !Point -- ^ End point
@@ -108,6 +118,13 @@ data Line = Line
 
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
+--
+-- > fill $ BezierPrim <$> [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
+-- >                       ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
+-- >                       ,Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
+--
+-- <<docimages/quadratic_bezier.png>>
+--
 data Bezier = Bezier
   { -- | Origin points, the spline will pass through it.
     _bezierX0 :: {-# UNPACK #-} !Point 
@@ -120,6 +137,13 @@ data Bezier = Bezier
 
 -- | Describe a cubic bezier spline, described
 -- using 4 points.
+--
+-- > stroke 4 JoinRound (CapRound, CapRound) $
+-- >    [CubicBezierPrim $ CubicBezier (V2 0 10) (V2 205 250)
+-- >                                   (V2 (-10) 250) (V2 160 35)]
+--
+-- <<docimages/cubic_bezier.png>>
+--
 data CubicBezier = CubicBezier 
   { -- | Origin point, the spline will pass through it.
     _cBezierX0 :: {-# UNPACK #-} !Point 
@@ -132,11 +156,72 @@ data CubicBezier = CubicBezier
   }
   deriving (Eq, Show)
 
+-- | This datatype gather all the renderable primitives,
+-- they are kept separated otherwise to allow specialization
+-- on some specific algorithms. You can mix the different
+-- primitives in a single call :
+-- 
+-- > fill
+-- >    [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
+-- >                                    (V2  5 100) (V2 50 140)
+-- >    , LinePrim $ Line (V2 50 140) (V2 120 80)
+-- >    , LinePrim $ Line (V2 120 80) (V2 50 20) ]
+--
+-- <<docimages/primitive_mixed.png>>
+--
 data Primitive
-  = LinePrim !Line
-  | BezierPrim !Bezier
-  | CubicBezierPrim !CubicBezier
+  = LinePrim !Line      -- ^ Primitive used for lines
+  | BezierPrim !Bezier  -- ^ Primitive used for quadratic beziers curves
+  | CubicBezierPrim !CubicBezier -- ^ Primitive used for cubic bezier curve
   deriving (Eq, Show)
 
 type Container a = [a]
+
+-- | Describe a path in a way similar to many graphical
+-- packages, using a "pen" position in memory and reusing
+-- it for the next "move"
+-- For example the example from Primitive could be rewritten:
+--
+-- > fill . pathToPrimitives $ Path (V2 50 20) True
+-- >    [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
+-- >    , PathLineTo (V2 120 80) ]
+--
+-- <<docimages/path_example.png>>
+    --
+data Path = Path 
+    { -- | Origin of the point, equivalent to the
+      -- first "move" command.
+      _pathOriginPoint :: Point
+      -- | Tell if we must close the path.
+    , _pathClose       :: Bool
+      -- | List of commands in the path
+    , _pathCommand     :: [PathCommand]
+    }
+    deriving (Eq, Show)
+
+-- | Actions to create a path
+data PathCommand
+    = -- | Draw a line from the current point to another point
+      PathLineTo Point
+      -- | Draw a quadratic bezier curve from the current point
+      -- through the control point to the end point.
+    | PathQuadraticBezierCurveTo Point Point
+
+      -- | Draw a cubic bezier curve using 2 control points.
+    | PathCubicBezierCurveTo Point Point Point
+    deriving (Eq, Show)
+
+-- | Transform a path description into a list of renderable
+-- primitives.
+pathToPrimitives :: Path -> [Primitive]
+pathToPrimitives (Path origin needClosing commands) = go origin commands
+  where
+    go prev [] | prev /= origin && needClosing = [LinePrim $ Line prev origin]
+    go _ [] = []
+    go prev (PathLineTo to : xs) =
+        LinePrim (Line prev to) : go to xs
+    go prev (PathQuadraticBezierCurveTo c1 to : xs) =
+        BezierPrim (Bezier prev c1 to) : go to xs
+    go prev (PathCubicBezierCurveTo c1 c2 to : xs) =
+        CubicBezierPrim (CubicBezier prev c1 c2 to) : go to xs
 

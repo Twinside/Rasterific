@@ -1,12 +1,13 @@
 
 import Control.Applicative( (<$>) )
 import Codec.Picture
+import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
-import Linear( V2( .. ), (^+^) )
+import Linear( (^+^) )
 
 logo :: Int -> Bool -> Vector -> [Primitive]
 logo size inv offset =
@@ -72,11 +73,43 @@ samplerTester (filename, sampler) =
                         (V2 80 100) (V2 120 110)) $
             fill $ rectangle (V2 10 10) 180 180)
 
+outFolder :: FilePath
+outFolder = "docimages"
+
+moduleExample :: IO ()
+moduleExample = do
+  let white = PixelRGBA8 255 255 255 255
+      drawColor = PixelRGBA8 0 0x86 0xc1 255
+      recColor = PixelRGBA8 0xFF 0x53 0x73 255
+      img = renderDrawing 400 200 white $
+         withTexture (uniformTexture drawColor) $ do
+            fill $ circle (V2 0 0) 30
+            stroke 4 JoinRound (CapRound, CapRound) $
+                   circle (V2 400 200) 40
+            withTexture (uniformTexture recColor) .
+                fill $ rectangle (V2 100 100) 200 100
+
+  writePng (outFolder </> "module_example.png") img
+
+
+
+textExample :: IO ()
+textExample = do
+  fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+  case fontErr of
+    Left err -> putStrLn err
+    Right font ->
+      writePng (outFolder </> "text_example.png") .
+          renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
+              . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+                      printTextAt font 12 (V2 20 40) "A simple text test!"
+
 main :: IO ()
 main = do
-    let outFolder = "docimages"
-        addFolder (p, v) = (outFolder </> p, v)
+    let addFolder (p, v) = (outFolder </> p, v)
     createDirectoryIfMissing True outFolder
+    moduleExample 
+    textExample
 
     mapM_ (capTester . addFolder)
         [ ("cap_straight.png", CapStraight 0)
@@ -159,3 +192,29 @@ main = do
         fill $ logo 80 False (V2 20 20) ++ 
                logo 40 True (V2 40 40)
 
+    produceDocImage (outFolder </> "cubic_bezier.png") $
+        stroke 5 JoinRound (CapRound, CapRound) $
+            [CubicBezierPrim $ CubicBezier (V2 0 10) (V2 205 250)
+                                           (V2 (-10) 250) (V2 160 35)]
+
+    produceDocImage (outFolder </> "quadratic_bezier.png") $
+        fill $ BezierPrim <$> [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
+                            ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
+                            ,Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
+
+    produceDocImage (outFolder </> "simple_line.png") $
+        fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
+                            , Line (V2 190 10) (V2 95 170)
+                            , Line (V2 95 170) (V2 10 10)]
+
+    produceDocImage (outFolder </> "primitive_mixed.png") $
+        fill
+            [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
+                                            (V2  5 100) (V2 50 140)
+            , LinePrim $ Line (V2 50 140) (V2 120 80)
+            , LinePrim $ Line (V2 120 80) (V2 50 20) ]
+
+    produceDocImage (outFolder </> "path_example.png") $
+       fill . pathToPrimitives $ Path (V2 50 20) True
+          [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
+          , PathLineTo (V2 120 80) ]

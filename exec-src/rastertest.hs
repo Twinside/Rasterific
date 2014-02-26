@@ -7,11 +7,9 @@ import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
 
-import Data.Binary( decodeFile )
-
+import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( V2( .. )
-             , (^+^)
+import Linear( (^+^)
              {-, (^*)-}
              )
 
@@ -91,7 +89,7 @@ circleTest texture prefix =
 
 cubicTest :: [Primitive]
 cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
-    [ V2 50 20 -- zig zag first part
+    [ V2 50 20 
     , V2 90 60
     , V2  5 100
     , V2 50 140
@@ -269,11 +267,14 @@ strokeCubicDashed stroker texture prefix =
 textAlignStringTest :: String -> String -> String -> IO ()
 textAlignStringTest fontName filename txt = do
     putStrLn $ "Rendering " ++ fontName
-    font <- decodeFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
-    writePng (outFolder </> filename) .
-        renderDrawing 300 70 white
-            . withTexture (uniformTexture black) $
-                    printTextAt font 12 (V2 20 40) txt
+    fontErr <- loadFontFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    case fontErr of
+      Left err -> putStrLn err
+      Right font ->
+        writePng (outFolder </> filename) .
+            renderDrawing 300 70 white
+                . withTexture (uniformTexture black) $
+                        printTextAt font 12 (V2 20 40) txt
 
 strokeTest :: Stroker -> Texture PixelRGBA8 -> String
            -> IO ()

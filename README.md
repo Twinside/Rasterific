@@ -3,6 +3,8 @@ Rasterific
 
 ![Rasterific logo](https://raw.github.com/Twinside/Rasterific/master/img/logo.png)
 
+[![Build Status](https://travis-ci.org/Twinside/Rasterific.png?branch=master)](https://travis-ci.org/Twinside/Rasterific)
+
 Rasterific is an Haskell rasterization engine (a vectorial renderer)
 implemented on top of [JuicyPixels](https://github.com/Twinside/Juicy.Pixels).
 Rasterific bases its text rendering on [FontyFruity](https://github.com/Twinside/FontyFruity).

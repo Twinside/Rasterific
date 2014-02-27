@@ -52,14 +52,7 @@ library
 
   ghc-options: -O2 -Wall
   ghc-prof-options: -Wall -prof -auto-all
-  
-  -- Modules included in this library but not exported.
-  -- other-modules:       
-  
-  -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:    
-  
-  -- Other library packages from which modules are imported.
+  default-language: Haskell2010
   build-depends: base        >= 4.6     && < 4.7
                , JuicyPixels >= 3.1.4   && < 3.2
                , linear      >= 1.3.1   && < 1.4
@@ -68,11 +61,7 @@ library
                , vector      >= 0.9
                , mtl         >= 2.1
   
-  -- Directories containing source files.
-  -- hs-source-dirs:      
   
-  -- Base language which the package is written in.
-  default-language:    Haskell2010
   
 Executable doc_builder
     default-language:    Haskell2010

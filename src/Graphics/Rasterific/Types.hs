@@ -15,6 +15,7 @@ module Graphics.Rasterific.Types
     , Container
     , PathCommand( .. )
     , Path( .. )
+    , Transformable( .. )
 
       -- * Rasterization control types
     , Cap( .. )
@@ -92,7 +93,6 @@ data SamplerRepeat
   | SamplerReflect
   deriving (Eq, Show)
 
-
 -- | Represent a raster line
 data EdgeSample = EdgeSample
   { _sampleX     :: {-# UNPACK #-} !Float -- ^ Horizontal position
@@ -101,6 +101,14 @@ data EdgeSample = EdgeSample
   , _sampleH     :: {-# UNPACK #-} !Float -- ^ Height
   }
   deriving Show
+
+-- | This typeclass is there to help transform the geometry,
+-- by applying a transformation on every point of a geometric
+-- element.
+class Transformable a where
+    -- | Apply a transformation function for every
+    --  point in the element.
+    transform :: (Point -> Point) -> a -> a
 
 -- | Describe a simple 2D line between two points.
 --
@@ -115,6 +123,10 @@ data Line = Line
   , _lineX1 :: {-# UNPACK #-} !Point -- ^ End point
   }
   deriving (Eq, Show)
+
+instance Transformable Line where
+    {-# INLINE transform #-}
+    transform f (Line a b) = Line (f a) $ f b
 
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
@@ -134,6 +146,10 @@ data Bezier = Bezier
   , _bezierX2 :: {-# UNPACK #-} !Point 
   }
   deriving (Eq, Show)
+
+instance Transformable Bezier where
+    {-# INLINE transform #-}
+    transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
 
 -- | Describe a cubic bezier spline, described
 -- using 4 points.
@@ -156,6 +172,11 @@ data CubicBezier = CubicBezier
   }
   deriving (Eq, Show)
 
+instance Transformable CubicBezier where
+    {-# INLINE transform #-}
+    transform f (CubicBezier a b c d) =
+        CubicBezier (f a) (f b) (f c) $ f d
+
 -- | This datatype gather all the renderable primitives,
 -- they are kept separated otherwise to allow specialization
 -- on some specific algorithms. You can mix the different
@@ -175,6 +196,12 @@ data Primitive
   | CubicBezierPrim !CubicBezier -- ^ Primitive used for cubic bezier curve
   deriving (Eq, Show)
 
+instance Transformable Primitive where
+    {-# INLINE transform #-}
+    transform f (LinePrim l) = LinePrim $ transform f l
+    transform f (BezierPrim b) = BezierPrim $ transform f b
+    transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
+
 type Container a = [a]
 
 -- | Describe a path in a way similar to many graphical
@@ -187,7 +214,7 @@ type Container a = [a]
 -- >    , PathLineTo (V2 120 80) ]
 --
 -- <<docimages/path_example.png>>
-    --
+--
 data Path = Path 
     { -- | Origin of the point, equivalent to the
       -- first "move" command.

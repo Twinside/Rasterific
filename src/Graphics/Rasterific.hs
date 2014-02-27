@@ -27,6 +27,12 @@
 -- 
 -- <<docimages/module_example.png>>
 --
+-- The coordinate system is the picture classic one, with the origin in
+-- the upper left corner; with the y axis growing to the bottom and the
+-- x axis growing to the right:
+--
+-- <<docimages/coordinate.png>>
+--
 module Graphics.Rasterific
     ( 
       -- * Rasterization command
@@ -56,6 +62,7 @@ module Graphics.Rasterific
     , Primitive( .. )
     , Path( .. )
     , PathCommand( .. )
+    , Transformable( .. )
 
       -- * Helpers
     , line
@@ -224,7 +231,8 @@ printTextAt font pointSize point string =
     liftF $ TextFill font pointSize point string ()
 
 -- | Function to call in order to start the image creation.
--- the upper left corner is the point (0, 0)
+-- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
+-- in other colorspace will probably produce weird results.
 renderDrawing
     :: forall px
      . ( Pixel px

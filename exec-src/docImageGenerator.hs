@@ -104,12 +104,39 @@ textExample = do
               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
                       printTextAt font 12 (V2 20 40) "A simple text test!"
 
+coordinateSystem :: IO ()
+coordinateSystem = do
+    fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+    case fontErr of
+        Left err -> putStrLn err
+        Right font -> 
+            writePng (outFolder </> "coordinate.png") 
+                . renderDrawing 200 200 white
+                $ create font
+  where
+    white = PixelRGBA8 255 255 255 255
+    black = PixelRGBA8   0   0   0 255
+    stroker = stroke 4 JoinRound (CapStraight 0, CapStraight 0)
+    filler = fill . pathToPrimitives
+    create font = withTexture (uniformTexture black) $ do
+        stroker $ line (V2 10 40) (V2 190 40)
+        stroker $ line (V2 40 10) (V2 40 190)
+        printTextAt font 12 (V2 4 17) "(0,0)"
+        printTextAt font 12 (V2 130 17) "(width, 0)"
+        printTextAt font 12 (V2 57 170) "(0, height)"
+        filler $ Path (V2 170 30) True
+            [PathLineTo (V2 195 40), PathLineTo (V2 170 50)]
+        filler $ Path (V2 30 170) True
+            [PathLineTo (V2 40 195), PathLineTo (V2 50 170)]
+
+
 main :: IO ()
 main = do
     let addFolder (p, v) = (outFolder </> p, v)
     createDirectoryIfMissing True outFolder
     moduleExample 
     textExample
+    coordinateSystem 
 
     mapM_ (capTester . addFolder)
         [ ("cap_straight.png", CapStraight 0)

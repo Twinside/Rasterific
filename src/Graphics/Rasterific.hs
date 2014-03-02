@@ -2,6 +2,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
 -- Creating an image is rather simple, here is a simple example
@@ -88,6 +90,7 @@ import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.ST( ST, runST )
 import Control.Monad.State( StateT, execStateT, get, lift )
+import Data.Monoid( Monoid( .. ) )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
                           , MutableImage( .. )
@@ -138,6 +141,13 @@ instance Functor (DrawCommand px) where
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =
         WithCliping sub com (f next)
+
+instance Monoid (Drawing px ()) where
+    mempty = return ()
+
+    mappend (Pure ()) b = b
+    mappend a (Pure ()) = a
+    mappend a b = a >> b
 
 -- | Define the texture applyied to all the children
 -- draw call.

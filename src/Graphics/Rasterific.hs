@@ -11,6 +11,7 @@
 --
 -- > import Codec.Picture( PixelRGBA8( .. ), writePng )
 -- > import Graphics.Rasterific
+-- > import Graphics.Rasterific.Texture
 -- > 
 -- > main :: IO ()
 -- > main = do
@@ -70,6 +71,9 @@ module Graphics.Rasterific
     , line
     , rectangle
     , circle
+    , ellipse
+    , polyline
+    , polygon
 
       -- ** Geometry Helpers
     , clip
@@ -216,6 +220,7 @@ stroke width join caping = fill . strokize width join caping
 -- > import Graphics.Text.TrueType( loadFontFile )
 -- > import Codec.Picture( PixelRGBA8( .. ), writePng )
 -- > import Graphics.Rasterific
+-- > import Graphics.Rasterific.Texture
 -- > 
 -- > main :: IO ()
 -- > main = do
@@ -462,11 +467,47 @@ composeCoverageSpanWithMask texture mask img coverage
 circle :: Point -- ^ Circle center in pixels
        -> Float -- ^ Circle radius in pixels
        -> [Primitive]
-circle center radius = CubicBezierPrim . scaleMove <$> cubicBezierCircle 
+circle center radius =
+    CubicBezierPrim . transform mv <$> cubicBezierCircle 
   where
     mv p = (p ^* radius) ^+^ center
-    scaleMove (CubicBezier p1 p2 p3 p4) =
-        CubicBezier (mv p1) (mv p2) (mv p3) (mv p4)
+
+-- | Generate a list of primitive representing an ellipse.
+--
+-- > fill $ ellipse (V2 100 100) 75 30
+--
+-- <<docimages/fill_ellipse.png>>
+--
+ellipse :: Point -> Float -> Float -> [Primitive]
+ellipse center rx ry =
+    CubicBezierPrim . transform mv <$> cubicBezierCircle
+  where
+    mv (V2 x y) = V2 (x * rx) (y * ry) ^+^ center
+
+-- | Generate a strokable line out of points list.
+-- Just an helper around `lineFromPath`.
+--
+-- > stroke 4 JoinRound (CapRound, CapRound) $
+-- >    polyline [V2 10 10, V2 100, 70, V2 190 190]
+--
+-- <<docimages/stroke_polyline.png>>
+--
+polyline :: [Point] -> [Primitive]
+polyline = map LinePrim . lineFromPath 
+
+-- | Generate a fillable polygon out of points list.
+-- Similar to the `polyline` function, but close the
+-- path.
+--
+-- > fill $ polygon [V2 30 30, V2 100 70, V2 80 170]
+--
+-- <<docimages/fill_polygon.png>>
+--
+polygon :: [Point] -> [Primitive]
+polygon [] = []
+polygon [_] = []
+polygon [_,_] = []
+polygon lst@(p:_) = polyline $ lst ++ [p]
 
 -- | Generate a list of primitive representing a
 -- rectangle

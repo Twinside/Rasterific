@@ -1,5 +1,13 @@
 -*-change-log-*-
 
+v0.2 March 2014
+ * Adding an ellipse helper.
+ * Adding a polyline helper.
+ * Adding a polygon helper.
+ * Adding monoid instance for Drawing.
+ * Fixing some stroking bug with cubic bezier curve.
+ * Fixing some documentation snippets.
+
 v0.1 February 2014
- * Initial version
+ * Initial version.
 

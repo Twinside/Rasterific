@@ -10,7 +10,7 @@ module Graphics.Rasterific.Line
 
 import Control.Applicative( Applicative, (<$>), pure )
 import Data.Monoid( Monoid, (<>), mempty )
-import Linear( V2( .. ), (^-^), norm )
+import Linear( V2( .. ), (^-^), norm, dot )
 
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
@@ -29,8 +29,11 @@ lineLength (Line a b) = norm (b ^-^ a)
 
 sanitizeLine :: Line -> Container Primitive
 sanitizeLine l@(Line p1 p2)
-  | p1 == p2 = mempty
+  | squareLength <= 0.1 = mempty
   | otherwise = pure $ LinePrim l
+     where 
+       delta = p1 ^-^ p2
+       squareLength = delta `dot` delta
 
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)

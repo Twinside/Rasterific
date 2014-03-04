@@ -159,6 +159,9 @@ main = do
     produceDocImage (outFolder </> "fill_circle.png") $
         fill $ circle (V2 100 100) 75 
 
+    produceDocImage (outFolder </> "fill_ellipse.png") $
+        fill $ ellipse (V2 100 100) 75 30
+
     produceDocImage (outFolder </> "stroke_circle.png") $
         stroke 5 JoinRound (CapRound, CapRound) $ circle (V2 100 100) 75 
 
@@ -245,3 +248,11 @@ main = do
        fill . pathToPrimitives $ Path (V2 50 20) True
           [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
           , PathLineTo (V2 120 80) ]
+
+    produceDocImage (outFolder </> "stroke_polyline.png") $
+        stroke 4 JoinRound (CapRound, CapRound) $
+            polyline [V2 10 10, V2 100 70, V2 190 190]
+
+    produceDocImage (outFolder </> "fill_polygon.png") $
+        fill $ polygon [V2 30 30, V2 100 70, V2 80 170]
+

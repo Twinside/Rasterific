@@ -30,6 +30,7 @@ import Linear( V1( .. )
 import Data.Monoid( Monoid, mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -269,6 +270,7 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
+  | a == b = sanitizeBezier $ Bezier a c d
   | norm (a ^-^ b) > 0.0001 &&
         norm (b ^-^ c) > 0.0001 &&
         norm (c ^-^ d) > 0.0001 =

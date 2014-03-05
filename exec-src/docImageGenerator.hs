@@ -256,3 +256,10 @@ main = do
     produceDocImage (outFolder </> "fill_polygon.png") $
         fill $ polygon [V2 30 30, V2 100 70, V2 80 170]
 
+    produceDocImage  (outFolder </> "fill_roundedRectangle.png") $
+        fill $ roundedRectangle (V2 10 10) 150 150 20 10
+
+    produceDocImage  (outFolder </> "stroke_roundedRectangle.png") $
+        stroke 4 JoinRound (CapRound, CapRound) $
+            roundedRectangle (V2 10 10) 150 150 20 10
+

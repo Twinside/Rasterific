@@ -129,7 +129,7 @@ type DrawContext s px a =
 ------------------------------------------------
 
 -- | Monad used to record the drawing actions.
-type Drawing px a = Free (DrawCommand px) a
+type Drawing px = Free (DrawCommand px)
 
 data DrawCommand px next
     = Fill [Primitive] next

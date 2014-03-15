@@ -29,6 +29,7 @@ module Graphics.Rasterific.Types
     , pathToPrimitives
     ) where
 
+import Data.List( foldl' )
 import Linear( V2( .. ) )
 
 -- | Represent a vector
@@ -110,6 +111,10 @@ class Transformable a where
     --  point in the element.
     transform :: (Point -> Point) -> a -> a
 
+    -- | Fold an accumulator on all the points of
+    -- the primitive.
+    foldPoints :: (b -> Point -> b) -> b -> a -> b
+
 -- | Describe a simple 2D line between two points.
 --
 -- > fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
@@ -127,6 +132,9 @@ data Line = Line
 instance Transformable Line where
     {-# INLINE transform #-}
     transform f (Line a b) = Line (f a) $ f b
+
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Line a b) = f (f acc b) a
 
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
@@ -150,6 +158,10 @@ data Bezier = Bezier
 instance Transformable Bezier where
     {-# INLINE transform #-}
     transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
+
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Bezier a b c) = 
+        foldl' f acc [a, b, c]
 
 -- | Describe a cubic bezier spline, described
 -- using 4 points.
@@ -177,6 +189,10 @@ instance Transformable CubicBezier where
     transform f (CubicBezier a b c d) =
         CubicBezier (f a) (f b) (f c) $ f d
 
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (CubicBezier a b c d) = 
+        foldl' f acc [a, b, c, d]
+
 -- | This datatype gather all the renderable primitives,
 -- they are kept separated otherwise to allow specialization
 -- on some specific algorithms. You can mix the different
@@ -201,6 +217,12 @@ instance Transformable Primitive where
     transform f (LinePrim l) = LinePrim $ transform f l
     transform f (BezierPrim b) = BezierPrim $ transform f b
     transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
+
+    {-# INLINE foldPoints #-}
+    foldPoints f acc = go
+      where go (LinePrim l) = foldPoints f acc l
+            go (BezierPrim b) = foldPoints f acc b
+            go (CubicBezierPrim c) = foldPoints f acc c
 
 type Container a = [a]
 

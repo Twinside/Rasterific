@@ -115,7 +115,7 @@ lineFromTo a b = LinePrim (Line a b)
 miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
-  | u `dot` w > l / max 1 l =
+  | uDotW > l / max 1 l && uDotW > 0 =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
@@ -132,9 +132,11 @@ miterJoin offset l point u v
         c = point ^+^ v ^* offset
         w = (a `normal` c) `ifZero` u
 
+        uDotW =  u `dot` w
+
         -- Calculate the maximum distance on the
         -- u axis
-        p = offset / (u `dot` w)
+        p = offset / uDotW
         -- middle point for "straight joining"
         m = point + w ^* p
 
@@ -161,8 +163,12 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
         offseter = offsetPrimitives offset
         (firstPoint, _) = firstPointAndNormal firstShape
 
+        isNearby p1 p2 = squareDist < 0.5
+          where vec = p1 ^-^ p2
+                squareDist = vec `dot` vec
+
         go prev []
-           | firstPoint == lastPoint prev = joiner prev firstShape <> offseter prev
+           | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
            | otherwise = cap offset caping prev <> offseter prev
         go prev (x:xs) =
              joiner prev x <> offseter prev <> go x xs

@@ -307,6 +307,43 @@ debugStroke =
     strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
 
 
+crash :: Texture PixelRGBA8 -> IO ()
+crash texture = do
+    writePng (outFolder </> "crash00.png") $
+        renderDrawing 600 600 background $
+            withTexture texture $ fill geom
+  where
+    geom = concat
+        [line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
+        ,line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
+        ,line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
+        ,line (V2 27.272728 572.7273) (V2 572.72723 572.7273)
+
+        ,line (V2 481.81818 481.81818) (V2 118.18182 481.81818)
+        ,line (V2 118.181816 481.81818) (V2 118.181816 118.18182)
+        ,line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
+        ,line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
+        ]
+strokeCrash :: IO ()
+strokeCrash = do
+ let drawColor = PixelRGBA8 0 0x86 0xc1 255
+     img = renderDrawing 600 600 white $
+        withTexture (uniformTexture drawColor) $ do
+           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+            [LinePrim (Line (V2 572.7273 572.7273) (V2 572.7273 27.272766))
+            ,LinePrim (Line (V2 572.7273 27.272728) (V2 27.272766 27.272728))
+            ,LinePrim (Line (V2 27.272728 27.272728) (V2 27.272728 572.72723))
+            ,LinePrim (Line (V2 27.272728 572.7273) (V2 572.72723 572.7273))
+            ]
+           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+            [LinePrim (Line (V2 481.81818 481.81818) (V2 118.18182 481.81818))
+            ,LinePrim (Line (V2 118.181816 481.81818) (V2 118.181816 118.18182))
+            ,LinePrim (Line (V2 118.181816 118.181816) (V2 481.81818 118.181816))
+            ,LinePrim (Line (V2 481.81818 118.181816) (V2 481.81818 481.81818))
+            ]
+
+ writePng (outFolder </> "stroke_crash.png") img
+
 main :: IO ()
 main = do
   let uniform = uniformTexture blue
@@ -324,8 +361,10 @@ main = do
         radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
 
   createDirectoryIfMissing True outFolder
+  strokeCrash
   logoTest uniform ""
   logoTest biGradient "gradient_"
+  crash uniform
 
   bigBox uniform ""
   bigBox biGradient "gradient_"

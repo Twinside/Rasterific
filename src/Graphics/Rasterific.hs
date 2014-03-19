@@ -44,6 +44,7 @@ module Graphics.Rasterific
     , withClipping
     , stroke
     , dashedStroke
+    , dashedStrokeWithOffset
     , printTextAt
 
     , strokeDebug
@@ -325,8 +326,27 @@ dashedStroke
     -> (Cap, Cap)  -- ^ Start and end capping.
     -> [Primitive] -- ^ List of elements to render
     -> Drawing px ()
-dashedStroke dashing width join caping =
-    mapM_ fill . dashedStrokize dashing width join caping
+dashedStroke = dashedStrokeWithOffset 0.0
+
+-- | With stroke geometry with a given stroke width, using
+-- a dash pattern. The offset is there to specify the starting
+-- point into the pattern, the value can be negative.
+--
+-- > dashedStrokeWithOffset 3 [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0)
+-- >        [line (V2 0 100) (V2 200 100)]
+--
+-- <<docimages/dashed_stroke_with_offset.png>>
+--
+dashedStrokeWithOffset
+    :: Float       -- ^ Starting offset
+    -> DashPattern -- ^ Dashing pattern to use for stroking
+    -> Float       -- ^ Stroke width
+    -> Join        -- ^ Which kind of join will be used
+    -> (Cap, Cap)  -- ^ Start and end capping.
+    -> [Primitive] -- ^ List of elements to render
+    -> Drawing px ()
+dashedStrokeWithOffset offset dashing width join caping =
+    mapM_ fill . dashedStrokize offset dashing width join caping
 
 -- | Internal debug function
 strokeDebug :: ( Pixel px, Modulable (PixelBaseComponent px))

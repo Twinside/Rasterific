@@ -225,17 +225,28 @@ splitPrimitiveUntil at = go at
         (beforeStop, afterStop) =
             breakPrimitiveAt x $ left / primLength
 
-
-dashize :: DashPattern -> [Primitive] -> [[Primitive]]
-dashize pattern = taker infinitePattern
-                . concatMap flattenPrimitive
-                . concatMap sanitize
+dropPattern :: Float -> DashPattern -> DashPattern
+dropPattern = go
   where
-    infinitePattern = cycle pattern
+    go _ [] = []
+    go offset (x:xs)
+        | x < 0 = (x:xs) -- sanitizing
+        | offset < x = x - offset : xs
+        | otherwise {- offset >= x -} = go (offset - x) xs
+
+dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
+dashize offset pattern =
+    taker infinitePattern . concatMap flattenPrimitive . concatMap sanitize
+  where
+    realOffset | offset >= 0 = offset
+               | otherwise = offset + sum pattern
+
+    infinitePattern =
+        dropPattern realOffset . cycle $ filter (> 0) pattern
 
     taker _ [] = []
     taker [] _ = [] -- Impossible by construction, pattern is infinite
-    taker (atValue:atRest) stream  = toKeep : droper atRest next
+    taker (atValue:atRest) stream = toKeep : droper atRest next
       where (toKeep, next) = splitPrimitiveUntil atValue stream
 
     droper _ [] = []
@@ -243,8 +254,9 @@ dashize pattern = taker infinitePattern
     droper (atValue:atRest) stream = taker atRest next
       where (_toKeep, next) = splitPrimitiveUntil atValue stream
 
-dashedStrokize :: DashPattern -> StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
+dashedStrokize :: Float -> DashPattern -> StrokeWidth
+               -> Join -> (Cap, Cap) -> [Primitive]
                -> [[Primitive]]
-dashedStrokize dashPattern width join capping beziers =
-    strokize width join capping <$> dashize dashPattern beziers
+dashedStrokize offset dashPattern width join capping beziers =
+    strokize width join capping <$> dashize offset dashPattern beziers
 

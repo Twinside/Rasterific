@@ -169,6 +169,10 @@ main = do
         dashedStroke [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
             line (V2 0 100) (V2 200 100)
 
+    produceDocImage (outFolder </> "dashed_stroke_with_offset.png") $
+        dashedStrokeWithOffset 3 [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
+            line (V2 0 100) (V2 200 100)
+
     produceDocImage (outFolder </> "fill_rect.png") $
         fill $ rectangle (V2 30 30) 150 100
 

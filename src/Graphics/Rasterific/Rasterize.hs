@@ -34,7 +34,10 @@ decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) = decomposeCubicBeziers c
 
-rasterize :: [Primitive] -> [CoverageSpan]
-rasterize = combineEdgeSamples . sortBy xy . concatMap decompose
+rasterize :: FillMethod -> [Primitive] -> [CoverageSpan]
+rasterize method = 
+  case method of
+    FillWinding -> combineEdgeSamples . sortBy xy . concatMap decompose
+    FillEvenOdd -> combineEdgeSamples . sortBy xy . concatMap decompose
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
 

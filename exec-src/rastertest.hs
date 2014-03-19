@@ -306,6 +306,20 @@ debugStroke :: Stroker
 debugStroke =
     strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
 
+evenOddTest :: Texture PixelRGBA8 -> IO ()
+evenOddTest texture =
+    writePng (outFolder </> "even_odd.png")
+        .  renderDrawing 400 400 white
+        . withTexture texture
+        . fillWithMethod FillEvenOdd
+        $ pathToPrimitives command
+    where command =
+              Path (V2 250 75) True
+                [ PathLineTo (V2 323 301)
+                , PathLineTo (V2 131 161)
+                , PathLineTo (V2 369 161)
+                , PathLineTo (V2 177 301)
+                ]
 
 crash :: Texture PixelRGBA8 -> IO ()
 crash texture = do
@@ -362,6 +376,7 @@ main = do
 
   createDirectoryIfMissing True outFolder
   strokeCrash
+  evenOddTest uniform
   logoTest uniform ""
   logoTest biGradient "gradient_"
   crash uniform

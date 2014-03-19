@@ -40,6 +40,7 @@ module Graphics.Rasterific
     ( 
       -- * Rasterization command
       fill
+    , fillWithMethod
     , withTexture
     , withClipping
     , stroke
@@ -87,6 +88,7 @@ module Graphics.Rasterific
     , Join( .. )
     , Cap( .. )
     , SamplerRepeat( .. )
+    , FillMethod( .. )
     , DashPattern
 
     ) where
@@ -133,7 +135,7 @@ type DrawContext s px a =
 type Drawing px = Free (DrawCommand px)
 
 data DrawCommand px next
-    = Fill [Primitive] next
+    = Fill FillMethod [Primitive] next
     | TextFill Font PointSize Point String next
     | SetTexture (Texture px) 
                  (Drawing px ()) next
@@ -143,7 +145,7 @@ data DrawCommand px next
 instance Functor (DrawCommand px) where
     fmap f (TextFill font size pos str next) =
         TextFill font size pos str $ f next
-    fmap f (Fill prims next) = Fill prims $ f next
+    fmap f (Fill method  prims next) = Fill method prims $ f next
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =
         WithCliping sub com (f next)
@@ -181,7 +183,11 @@ withTexture texture subActions =
 -- <<docimages/fill_circle.png>>
 --
 fill :: [Primitive] -> Drawing px ()
-fill prims = liftF $ Fill prims ()
+fill prims = liftF $ Fill FillWinding prims ()
+
+fillWithMethod :: FillMethod -> [Primitive] -> Drawing px ()
+fillWithMethod method prims =
+    liftF $ Fill method prims ()
 
 -- | Draw some geometry using a clipping path.
 --
@@ -282,18 +288,24 @@ renderDrawing width height background drawing = runST $
        -> Drawing px ()
        -> DrawContext s px ()
     go _ _ (Pure ()) = return ()
-    go Nothing texture (Free (Fill prims next)) =
-        fillWithTexture texture prims >> go Nothing texture next
-    go mo@(Just moduler) texture (Free (Fill prims next)) =
-        fillWithTextureAndMask texture moduler prims >> go mo texture next
-    go moduler texture (Free (SetTexture tx sub next)) =
-        go moduler tx sub >> go moduler texture next
-    go moduler texture (Free (TextFill font size (V2 x y) str next)) =
-        forM_ drawCalls (go moduler texture) >> go moduler texture next
+    go Nothing texture (Free (Fill method prims next)) = do
+        fillWithTexture method texture prims
+        go Nothing texture next
+    go mo@(Just moduler) texture (Free (Fill method prims next)) = do
+        fillWithTextureAndMask method texture moduler prims
+        go mo texture next
+    go moduler texture (Free (SetTexture tx sub next)) = do
+        go moduler tx sub
+        go moduler texture next
+    go moduler texture (Free (TextFill font size (V2 x y) str next)) = do
+        forM_ drawCalls (go moduler texture)
+        go moduler texture next
       where
-        drawCalls = beziersOfChar <$> getStringCurveAtPoint 90 (x, y) [(font, size, str)]
+        drawCalls =
+            beziersOfChar <$> getStringCurveAtPoint 90 (x, y)
+                                    [(font, size, str)]
 
-        beziersOfChar curves = liftF $ Fill bezierCurves ()
+        beziersOfChar curves = liftF $ Fill FillWinding bezierCurves ()
           where
             bezierCurves = concat
               [map BezierPrim . bezierFromPath . map (uncurry V2)
@@ -378,29 +390,31 @@ clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
 --
 -- The primitive should be connected.
 fillWithTexture :: (Pixel px, Modulable (PixelBaseComponent px))
-                => Texture px  -- ^ Color/Texture used for the filling
+                => FillMethod
+                -> Texture px  -- ^ Color/Texture used for the filling
                 -> [Primitive] -- ^ Primitives to fill
                 -> DrawContext s px ()
-fillWithTexture texture els = do
+fillWithTexture fillMethod texture els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize $ els >>= clip mini maxi
+        spans = rasterize fillMethod $ els >>= clip mini maxi
     lift $ mapM_ (composeCoverageSpan texture img) spans
 
 fillWithTextureAndMask
     :: ( Pixel px
       , Pixel (PixelBaseComponent px)
       , Modulable (PixelBaseComponent px))
-    => Texture px  -- ^ Color/Texture used for the filling
+    => FillMethod
+    -> Texture px  -- ^ Color/Texture used for the filling
     -> Texture (PixelBaseComponent px)
     -> [Primitive] -- ^ Primitives to fill
     -> DrawContext s px ()
-fillWithTextureAndMask texture mask els = do
+fillWithTextureAndMask fillMethod texture mask els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize $ els >>= clip mini maxi
+        spans = rasterize fillMethod $ els >>= clip mini maxi
     lift $ mapM_ (composeCoverageSpanWithMask texture mask img) spans
 
 composeCoverageSpan :: forall s px .

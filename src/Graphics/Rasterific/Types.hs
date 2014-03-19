@@ -20,6 +20,7 @@ module Graphics.Rasterific.Types
       -- * Rasterization control types
     , Cap( .. )
     , Join( .. )
+    , FillMethod( .. )
     , SamplerRepeat( .. )
     , DashPattern
     , StrokeWidth
@@ -77,6 +78,11 @@ data Join
     --  * Miter join with 5 : <<docimages/join_miter_5.png>>
     --
   | JoinMiter Float 
+  deriving (Eq, Show)
+
+data FillMethod
+  = FillWinding
+  | FillEvenOdd
   deriving (Eq, Show)
 
 -- | Describe the behaviour of samplers and texturers

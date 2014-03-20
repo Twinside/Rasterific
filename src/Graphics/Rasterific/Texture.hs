@@ -196,7 +196,7 @@ radialGradientWithFocusTexture gradient center radius focusScreen repeating =
         | otherwise = V2 (r * cos a) (r * sin a)
            where a = atan2 origFocusY origFocusX
                  r = radius * 0.99
-    trivial = sqrt $ radiusSquared - focusX * focusY
+    trivial = sqrt $ radiusSquared - origFocusX * origFocusX
 
     solutionOf (V2 x y) | x == focusX =
         V2 focusX (if y > focusY then trivial else negate trivial)

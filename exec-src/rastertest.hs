@@ -9,8 +9,9 @@ import Graphics.Rasterific.Texture
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( (^+^)
-             {-, (^*)-}
+import Linear( (^-^)
+             , (^+^)
+             , (^*)
              )
 
 type Stroker =
@@ -41,14 +42,14 @@ logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, brightblue, yellow, red, white :: PixelRGBA8
+background, blue, black, yellow, red, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
 black = PixelRGBA8 0 0 0 255
 {-grey = PixelRGBA8 128 128 128 255-}
 yellow = PixelRGBA8 255 255 0 255
-brightblue = PixelRGBA8 0 255 255 255
+{-brightblue = PixelRGBA8 0 255 255 255-}
 white = PixelRGBA8 255 255 255 255
 
 biColor, triColor :: Gradient PixelRGBA8
@@ -302,16 +303,14 @@ strokeTest stroker texture prefix =
           ]
         img = renderDrawing 500 500 background drawing
 
-debugStroke :: Stroker
-debugStroke =
-    strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
-
 evenOddTest :: Texture PixelRGBA8 -> IO ()
 evenOddTest texture =
     writePng (outFolder </> "even_odd.png")
-        .  renderDrawing 400 400 white
+        .  renderDrawing 100 100 white
         . withTexture texture
         . fillWithMethod FillEvenOdd
+        . fmap (transform (^* 0.25))
+        . fmap (transform (^-^ V2 120 54))
         $ pathToPrimitives command
     where command =
               Path (V2 250 75) True
@@ -372,7 +371,11 @@ main = do
       radTriGradient =
         radialGradientTexture triColor (V2 250 250) 200
       radFocusTriGradient =
-        radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
+        radialGradientWithFocusTexture
+            triColor (V2 200 200) 70 (V2 250 200)
+      radFocusTriGradient2 =
+        radialGradientWithFocusTexture
+            triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
   strokeCrash
@@ -388,6 +391,7 @@ main = do
   bigBox radBiGradient "rad_gradient_"
   bigBox radTriGradient "rad_trigradient_"
   bigBox radFocusTriGradient "rad_focus_trigradient_"
+  bigBox radFocusTriGradient2 "rad_focus_trigradient_2_"
 
   circleTest uniform ""
   strokeTestCliping stroke ""
@@ -397,22 +401,17 @@ main = do
   strokeTest stroke uniform ""
   strokeTest stroke bigBiGradient "gradient_"
   strokeTest stroke radTriGradient "rad_gradient_"
-  strokeTest debugStroke uniform "debug_"
+  strokeLogo stroke ""
 
   strokeQuadraticIntersection stroke uniform ""
   strokeQuadraticIntersection stroke triGradient "gradient_"
   strokeQuadraticIntersection stroke radBiGradient "rad_gradient_"
-  strokeQuadraticIntersection debugStroke uniform "debug_"
 
   strokeTest2 stroke ""
-  strokeTest2 debugStroke "debug_"
-
-  strokeLogo debugStroke "debug_"
 
   strokeCubic stroke uniform ""
   strokeCubic stroke bigBiGradient "gradient_"
   strokeCubic stroke radTriGradient "rad_gradient_"
-  strokeCubic debugStroke uniform "debug_"
 
   strokeCubicDashed dashedStroke uniform ""
 

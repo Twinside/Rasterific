@@ -12,7 +12,7 @@
 -- > import Codec.Picture( PixelRGBA8( .. ), writePng )
 -- > import Graphics.Rasterific
 -- > import Graphics.Rasterific.Texture
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >   let white = PixelRGBA8 255 255 255 255
@@ -27,7 +27,7 @@
 -- >                    fill $ rectangle (V2 100 100) 200 100
 -- >
 -- >   writePng "yourimage.png" img
--- 
+--
 -- <<docimages/module_example.png>>
 --
 -- The coordinate system is the picture classic one, with the origin in
@@ -37,7 +37,7 @@
 -- <<docimages/coordinate.png>>
 --
 module Graphics.Rasterific
-    ( 
+    (
       -- * Rasterization command
       fill
     , fillWithMethod
@@ -48,7 +48,6 @@ module Graphics.Rasterific
     , dashedStrokeWithOffset
     , printTextAt
 
-    , strokeDebug
     , renderDrawing
     , pathToPrimitives
 
@@ -91,6 +90,9 @@ module Graphics.Rasterific
     , FillMethod( .. )
     , DashPattern
 
+      -- * Debugging helper
+    , dumpDrawing
+
     ) where
 
 import Control.Applicative( (<$>) )
@@ -101,6 +103,7 @@ import Control.Monad.State( StateT, execStateT, get, lift )
 import Data.Monoid( Monoid( .. ) )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
+                          , Pixel8
                           , MutableImage( .. )
                           , createMutableImage
                           , unsafeFreezeImage )
@@ -136,11 +139,48 @@ type Drawing px = Free (DrawCommand px)
 
 data DrawCommand px next
     = Fill FillMethod [Primitive] next
+    | Stroke Float Join (Cap, Cap) [Primitive] next
+    | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
     | TextFill Font PointSize Point String next
-    | SetTexture (Texture px) 
+    | SetTexture (Texture px)
                  (Drawing px ()) next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
                   (Drawing px ()) next
+
+-- | This function will spit out drawing instructions to
+-- help debugging.
+--
+-- The outputted code looks like Haskell, but there is no
+-- guarantee that it is compilable.
+dumpDrawing :: (Show px) => Drawing px () -> String
+dumpDrawing (Pure ()) = "return ()"
+dumpDrawing (Free (Fill _ prims next)) =
+    "fill (" ++ show prims ++ ") >>=\n" ++ dumpDrawing next
+dumpDrawing (Free (TextFill _ _ _ text next)) =
+    "-- Text : " ++ text ++ "\n" ++ dumpDrawing next
+dumpDrawing (Free (SetTexture _tx drawing next)) =
+    "withTexture ({- texture -}) (" ++
+            dumpDrawing drawing ++ ") >>=\n" ++ dumpDrawing next
+dumpDrawing (Free (DashedStroke o pat w j cap prims next)) =
+    "dashedStrokeWithOffset "
+              ++ show o ++ " "
+              ++ show pat ++ " "
+              ++ show w ++ " "
+              ++ show j ++ " "
+              ++ show cap ++ " "
+              ++ show prims ++ " >>=\n" ++ dumpDrawing next
+dumpDrawing (Free (Stroke w j cap prims next)) =
+    "stroke " ++ show w ++ " "
+              ++ show j ++ " "
+              ++ show cap ++ " "
+              ++ show prims ++ " >>=\n" ++ dumpDrawing next
+dumpDrawing (Free (WithCliping clipping draw next)) =
+    "withClipping (" ++ dumpDrawing (withTexture clipTexture clipping)
+                     ++ ")\n" ++
+            "         (" ++ dumpDrawing draw++ ")\n >>= " ++
+            dumpDrawing next
+        where clipTexture = uniformTexture (0xFF :: Pixel8)
+
 
 instance Functor (DrawCommand px) where
     fmap f (TextFill font size pos str next) =
@@ -149,6 +189,10 @@ instance Functor (DrawCommand px) where
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =
         WithCliping sub com (f next)
+    fmap f (Stroke w j caps prims next) =
+        Stroke w j caps prims (f next)
+    fmap f (DashedStroke st pat w j caps prims next) =
+        DashedStroke st pat w j caps prims (f next)
 
 instance Monoid (Drawing px ()) where
     mempty = return ()
@@ -178,7 +222,7 @@ withTexture texture subActions =
 --
 -- The primitive should be connected.
 --
--- > fill $ circle (V2 100 100) 75 
+-- > fill $ circle (V2 100 100) 75
 --
 -- <<docimages/fill_circle.png>>
 --
@@ -193,7 +237,7 @@ fillWithMethod method prims =
 --
 -- > withClipping (fill $ circle (V2 100 100) 75) $
 -- >     mapM_ (stroke 7 JoinRound (CapRound, CapRound))
--- >       [line (V2 0 yf) (V2 200 (yf + 10)) 
+-- >       [line (V2 0 yf) (V2 200 (yf + 10))
 -- >                      | y <- [5 :: Int, 17 .. 200]
 -- >                      , let yf = fromIntegral y ]
 --
@@ -218,7 +262,8 @@ stroke :: Float       -- ^ Stroke width
        -> (Cap, Cap)  -- ^ Start and end capping.
        -> [Primitive] -- ^ List of elements to render
        -> Drawing px ()
-stroke width join caping = fill . strokize width join caping
+stroke width join caping prims =
+    liftF $ Stroke width join caping prims ()
 
 -- | Draw a string at a given position.
 -- Text printing imply loading a font, there is no default
@@ -229,7 +274,7 @@ stroke width join caping = fill . strokize width join caping
 -- > import Codec.Picture( PixelRGBA8( .. ), writePng )
 -- > import Graphics.Rasterific
 -- > import Graphics.Rasterific.Texture
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >   fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
@@ -279,9 +324,9 @@ renderDrawing width height background drawing = runST $
         uniformTexture $ colorMap (const clipBackground) background
 
     clipRender =
-      renderDrawing width height clipBackground 
+      renderDrawing width height clipBackground
             . withTexture (uniformTexture clipForeground)
-        
+
 
     go :: Maybe (Texture (PixelBaseComponent px))
        -> Texture px
@@ -294,9 +339,19 @@ renderDrawing width height background drawing = runST $
     go mo@(Just moduler) texture (Free (Fill method prims next)) = do
         fillWithTextureAndMask method texture moduler prims
         go mo texture next
+
+    go moduler texture (Free (Stroke w j cap prims next)) =
+        go moduler texture . Free $ Fill FillWinding prim' next
+            where prim' = strokize w j cap prims
     go moduler texture (Free (SetTexture tx sub next)) = do
         go moduler tx sub
         go moduler texture next
+    go moduler texture (Free (DashedStroke o d w j cap prims next)) = do
+        let recurse sub =
+                go moduler texture . liftF $ Fill FillWinding sub ()
+        mapM_ recurse $ dashedStrokize o d w j cap prims
+        go moduler texture next
+
     go moduler texture (Free (TextFill font size (V2 x y) str next)) = do
         forM_ drawCalls (go moduler texture)
         go moduler texture next
@@ -357,23 +412,8 @@ dashedStrokeWithOffset
     -> (Cap, Cap)  -- ^ Start and end capping.
     -> [Primitive] -- ^ List of elements to render
     -> Drawing px ()
-dashedStrokeWithOffset offset dashing width join caping =
-    mapM_ fill . dashedStrokize offset dashing width join caping
-
--- | Internal debug function
-strokeDebug :: ( Pixel px, Modulable (PixelBaseComponent px))
-            => Texture px -> Texture px
-            -> Float -> Join -> (Cap, Cap)
-            -> [Primitive] -> Drawing px ()
-strokeDebug debugPair debugImpair width join caping elems = do
-  fill stroked
-  forM_ (zip debugColor stroked) subStroke
-    where stroked = strokize width join caping elems
-          -- | Infinite list repeating color pattern
-          debugColor = debugPair : debugImpair : debugColor
-          subStroke (color, el) =
-              withTexture color $ stroke 2 (JoinMiter 0)
-                    (CapStraight 0, CapStraight 0) [el]
+dashedStrokeWithOffset offset dashing width join caping prims =
+    liftF $ DashedStroke offset dashing width join caping prims ()
 
 -- | Clip the geometry to a rectangle.
 clip :: Point     -- ^ Minimum point (corner upper left)
@@ -424,7 +464,7 @@ composeCoverageSpan :: forall s px .
                     -> CoverageSpan
                     -> ST s ()
 {-# INLINE composeCoverageSpan #-}
-composeCoverageSpan texture img coverage 
+composeCoverageSpan texture img coverage
   | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
@@ -448,11 +488,11 @@ composeCoverageSpan texture img coverage
               (cov, icov) = coverageModulate initialCov opacity
           unsafeWritePixel imgData idx
             $ compositionAlpha cov icov oldPixel px
-            
+
           go (count + 1) (x + 1) $ idx + compCount
 
 composeCoverageSpanWithMask
-    :: forall s px 
+    :: forall s px
      . ( Pixel px
        , Pixel (PixelBaseComponent px)
        , Modulable (PixelBaseComponent px) )
@@ -462,7 +502,7 @@ composeCoverageSpanWithMask
     -> CoverageSpan
     -> ST s ()
 {-# INLINE composeCoverageSpanWithMask #-}
-composeCoverageSpanWithMask texture mask img coverage 
+composeCoverageSpanWithMask texture mask img coverage
   | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex
   where compCount = componentCount (undefined :: px)
@@ -495,7 +535,7 @@ composeCoverageSpanWithMask texture mask img coverage
 
 -- | Generate a list of primitive representing a circle.
 --
--- > fill $ circle (V2 100 100) 75 
+-- > fill $ circle (V2 100 100) 75
 --
 -- <<docimages/fill_circle.png>>
 --
@@ -503,7 +543,7 @@ circle :: Point -- ^ Circle center in pixels
        -> Float -- ^ Circle radius in pixels
        -> [Primitive]
 circle center radius =
-    CubicBezierPrim . transform mv <$> cubicBezierCircle 
+    CubicBezierPrim . transform mv <$> cubicBezierCircle
   where
     mv p = (p ^* radius) ^+^ center
 
@@ -528,7 +568,7 @@ ellipse center rx ry =
 -- <<docimages/stroke_polyline.png>>
 --
 polyline :: [Point] -> [Primitive]
-polyline = map LinePrim . lineFromPath 
+polyline = map LinePrim . lineFromPath
 
 -- | Generate a fillable polygon out of points list.
 -- Similar to the `polyline` function, but close the
@@ -556,7 +596,7 @@ rectangle :: Point -- ^ Corner upper left
           -> Float -- ^ Height in pixel
           -> [Primitive]
 rectangle p@(V2 px py) w h =
-  LinePrim <$> lineFromPath 
+  LinePrim <$> lineFromPath
     [ p, V2 (px + w) py, V2 (px + w) (py + h), V2 px (py + h), p ]
 
 -- | Generate a list of primitive representing a rectangle

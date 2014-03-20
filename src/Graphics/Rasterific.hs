@@ -165,14 +165,14 @@ dumpDrawing (Free (DashedStroke o pat w j cap prims next)) =
     "dashedStrokeWithOffset "
               ++ show o ++ " "
               ++ show pat ++ " "
-              ++ show w ++ " "
-              ++ show j ++ " "
+              ++ show w ++ " ("
+              ++ show j ++ ") "
               ++ show cap ++ " "
               ++ show prims ++ " >>=\n" ++ dumpDrawing next
 dumpDrawing (Free (Stroke w j cap prims next)) =
     "stroke " ++ show w ++ " "
-              ++ show j ++ " "
-              ++ show cap ++ " "
+              ++ show j ++ " ("
+              ++ show cap ++ ") "
               ++ show prims ++ " >>=\n" ++ dumpDrawing next
 dumpDrawing (Free (WithCliping clipping draw next)) =
     "withClipping (" ++ dumpDrawing (withTexture clipTexture clipping)

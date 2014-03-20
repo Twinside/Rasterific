@@ -357,6 +357,22 @@ strokeCrash = do
 
  writePng (outFolder </> "stroke_crash.png") img
 
+dashTest :: IO ()
+dashTest = writePng (outFolder </> "dashed_wheel.png")
+         . renderDrawing 550 550 white
+         $ withTexture (uniformTexture black) drawing
+  where
+    drawing =
+        dashedStrokeWithOffset 0.0 [4.0,4.0] 10.0
+            (JoinMiter 0.0)
+            {-JoinRound-}
+            (CapStraight 0.0,CapStraight 0.0) 
+            {-(CapRound,CapRound) -}
+            [CubicBezierPrim
+                (CubicBezier (V2 525.0 275.0) (V2 525.0 136.92882)
+                             (V2 413.0712 25.0) (V2 275.0 25.0))
+            ]
+
 main :: IO ()
 main = do
   let uniform = uniformTexture blue
@@ -378,6 +394,7 @@ main = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  dashTest
   strokeCrash
   evenOddTest uniform
   logoTest uniform ""

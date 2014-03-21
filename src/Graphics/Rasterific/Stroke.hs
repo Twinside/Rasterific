@@ -163,10 +163,6 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
         offseter = offsetPrimitives offset
         (firstPoint, _) = firstPointAndNormal firstShape
 
-        isNearby p1 p2 = squareDist < 0.5
-          where vec = p1 ^-^ p2
-                squareDist = vec `dot` vec
-
         go prev []
            | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
            | otherwise = cap offset caping prev <> offseter prev

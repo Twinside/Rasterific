@@ -364,10 +364,7 @@ dashTest = writePng (outFolder </> "dashed_wheel.png")
   where
     drawing =
         dashedStrokeWithOffset 0.0 [4.0,4.0] 10.0
-            (JoinMiter 0.0)
-            {-JoinRound-}
-            (CapStraight 0.0,CapStraight 0.0) 
-            {-(CapRound,CapRound) -}
+            (JoinMiter 0.0) (CapStraight 0.0,CapStraight 0.0) 
             [CubicBezierPrim
                 (CubicBezier (V2 525.0 275.0) (V2 525.0 136.92882)
                              (V2 413.0712 25.0) (V2 275.0 25.0))
@@ -395,6 +392,7 @@ main = do
 
   createDirectoryIfMissing True outFolder
   dashTest
+
   strokeCrash
   evenOddTest uniform
   logoTest uniform ""
@@ -438,4 +436,5 @@ main = do
   textAlignStringTest "CONSOLA" "alignedConsola.png" testText
   textAlignStringTest "arial" "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
+  -- -}
 

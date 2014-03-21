@@ -270,16 +270,16 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
-  | a == b = sanitizeBezier $ Bezier a c d
-  | norm (a ^-^ b) > 0.0001 &&
-        norm (b ^-^ c) > 0.0001 &&
-        norm (c ^-^ d) > 0.0001 =
+  | a `isNearby` b = sanitizeBezier $ Bezier a c d
+  | b `isDistingableFrom` c &&
+    c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
-  | ac /= b && bd /= c =
+  | ac `isDistingableFrom` b && 
+     bd `isDistingableFrom` c =
       pure . CubicBezierPrim $ CubicBezier a ac bd d
-  | ac /= b =
+  | ac `isDistingableFrom` b =
       pure . CubicBezierPrim $ CubicBezier a ac c d
-  | bd /= c =
+  | bd `isDistingableFrom` c =
       pure . CubicBezierPrim $ CubicBezier a b bd d
   | otherwise = mempty
     where ac = a `midPoint` c

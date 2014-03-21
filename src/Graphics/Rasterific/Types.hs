@@ -57,11 +57,11 @@ data Cap
     --
     --  * cap straight with param 1 : <<docimages/cap_straight_1.png>>
     --
-  = CapStraight Float 
+  = CapStraight Float
 
     -- | Create a rounded caping on the stroke.
     -- <<docimages/cap_round.png>>
-  | CapRound          
+  | CapRound
   deriving (Eq, Show)
 
 -- | Describe how to display the join of broken lines
@@ -69,7 +69,7 @@ data Cap
 data Join
     -- | Make a curved join.
     -- <<docimages/join_round.png>>
-  = JoinRound       
+  = JoinRound
     -- | Make a mitter join. Value must be positive or null.
     -- Seems to make sense in [0;1] only
     --
@@ -77,7 +77,7 @@ data Join
     --
     --  * Miter join with 5 : <<docimages/join_miter_5.png>>
     --
-  | JoinMiter Float 
+  | JoinMiter Float
   deriving (Eq, Show)
 
 data FillMethod
@@ -133,7 +133,12 @@ data Line = Line
   { _lineX0 :: {-# UNPACK #-} !Point -- ^ Origin point
   , _lineX1 :: {-# UNPACK #-} !Point -- ^ End point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show Line where
+  show (Line a b) =
+      "Line (" ++ show a ++ ") ("
+               ++ show b ++ ")"
 
 instance Transformable Line where
     {-# INLINE transform #-}
@@ -153,20 +158,26 @@ instance Transformable Line where
 --
 data Bezier = Bezier
   { -- | Origin points, the spline will pass through it.
-    _bezierX0 :: {-# UNPACK #-} !Point 
+    _bezierX0 :: {-# UNPACK #-} !Point
     -- | Control point, the spline won't pass on it.
-  , _bezierX1 :: {-# UNPACK #-} !Point 
+  , _bezierX1 :: {-# UNPACK #-} !Point
     -- | End point, the spline will pass through it.
-  , _bezierX2 :: {-# UNPACK #-} !Point 
+  , _bezierX2 :: {-# UNPACK #-} !Point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show Bezier where
+    show (Bezier a b c) =
+        "Bezier (" ++ show a ++ ") ("
+                   ++ show b ++ ") ("
+                   ++ show c ++ ")"
 
 instance Transformable Bezier where
     {-# INLINE transform #-}
     transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
 
     {-# INLINE foldPoints #-}
-    foldPoints f acc (Bezier a b c) = 
+    foldPoints f acc (Bezier a b c) =
         foldl' f acc [a, b, c]
 
 -- | Describe a cubic bezier spline, described
@@ -178,17 +189,24 @@ instance Transformable Bezier where
 --
 -- <<docimages/cubic_bezier.png>>
 --
-data CubicBezier = CubicBezier 
+data CubicBezier = CubicBezier
   { -- | Origin point, the spline will pass through it.
-    _cBezierX0 :: {-# UNPACK #-} !Point 
+    _cBezierX0 :: {-# UNPACK #-} !Point
     -- | First control point of the cubic bezier curve.
-  , _cBezierX1 :: {-# UNPACK #-} !Point 
+  , _cBezierX1 :: {-# UNPACK #-} !Point
     -- | Second control point of the cubic bezier curve.
   , _cBezierX2 :: {-# UNPACK #-} !Point
     -- | End point of the cubic bezier curve
   , _cBezierX3 :: {-# UNPACK #-} !Point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show CubicBezier where
+  show (CubicBezier a b c d) =
+     "CubicBezier (" ++ show a ++ ") ("
+                ++ show b ++ ") ("
+                ++ show c ++ ") ("
+                ++ show d ++ ")"
 
 instance Transformable CubicBezier where
     {-# INLINE transform #-}
@@ -196,14 +214,14 @@ instance Transformable CubicBezier where
         CubicBezier (f a) (f b) (f c) $ f d
 
     {-# INLINE foldPoints #-}
-    foldPoints f acc (CubicBezier a b c d) = 
+    foldPoints f acc (CubicBezier a b c d) =
         foldl' f acc [a, b, c, d]
 
 -- | This datatype gather all the renderable primitives,
 -- they are kept separated otherwise to allow specialization
 -- on some specific algorithms. You can mix the different
 -- primitives in a single call :
--- 
+--
 -- > fill
 -- >    [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
 -- >                                    (V2  5 100) (V2 50 140)
@@ -243,7 +261,7 @@ type Container a = [a]
 --
 -- <<docimages/path_example.png>>
 --
-data Path = Path 
+data Path = Path
     { -- | Origin of the point, equivalent to the
       -- first "move" command.
       _pathOriginPoint :: Point

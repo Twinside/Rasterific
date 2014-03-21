@@ -8,8 +8,6 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 
-import Debug.Trace
-
 data CoverageSpan = CoverageSpan
     { _coverageX      :: !Float
     , _coverageY      :: !Float
@@ -45,7 +43,6 @@ combineEdgeSamplesEvenOdd = append . mapAccumL go (0, 0, 0, 0) -- . (\a -> trace
              ((x', y', a', h'), [CoverageSpan x y (min 1 $ abs a) 1])
                where p1 = CoverageSpan x y (combine a) 1
                      p2 = CoverageSpan (x + 1) y (combine h) (x' - x - 1)
-                        
 
 decompose :: Primitive -> [EdgeSample]
 decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2

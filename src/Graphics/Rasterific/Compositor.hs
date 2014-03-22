@@ -26,6 +26,7 @@ class Ord a => Modulable a where
   clampCoverage :: Float -> (a, a)
   modulate :: a -> a -> a
   alphaOver :: a -> a -> a -> a -> a
+  alphaCompose :: a -> a -> a -> a -> a
   coverageModulate :: a -> a -> (a, a)
 
 instance Modulable Word8 where
@@ -44,10 +45,17 @@ instance Modulable Word8 where
       v = fromIntegral c * fromIntegral a :: Word32
       clamped = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
 
-  alphaOver c ic b a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+  alphaCompose coverage inverseCoverage backgroundAlpha _ =
+      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+        where fi :: Word8 -> Word32
+              fi = fromIntegral
+              v = fi coverage * 255 + fi backgroundAlpha * fi inverseCoverage
+
+  alphaOver coverage inverseCoverage background painted =
+      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
     where fi :: Word8 -> Word32
           fi = fromIntegral
-          v = fi c * fi a + fi b * fi ic + 128
+          v = fi coverage * fi painted + fi background * fi inverseCoverage + 128
 
 
 toWord8 :: Float -> Int
@@ -62,5 +70,6 @@ compositionAlpha :: (Pixel px, Modulable (PixelBaseComponent px))
 compositionAlpha c ic 
     | c == emptyValue = const
     | c == fullValue = \_ n -> n
-    | otherwise = mixWith (\_ -> alphaOver c ic)
+    | otherwise = mixWithAlpha (\_ -> alphaOver c ic)
+                               (alphaCompose c ic)
 

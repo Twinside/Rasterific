@@ -155,7 +155,7 @@ data DrawCommand px next
 dumpDrawing :: (Show px) => Drawing px () -> String
 dumpDrawing (Pure ()) = "return ()"
 dumpDrawing (Free (Fill _ prims next)) =
-    "fill (" ++ show prims ++ ") >>=\n" ++ dumpDrawing next
+    "fill " ++ show prims ++ " >>=\n" ++ dumpDrawing next
 dumpDrawing (Free (TextFill _ _ _ text next)) =
     "-- Text : " ++ text ++ "\n" ++ dumpDrawing next
 dumpDrawing (Free (SetTexture _tx drawing next)) =
@@ -170,9 +170,9 @@ dumpDrawing (Free (DashedStroke o pat w j cap prims next)) =
               ++ show cap ++ " "
               ++ show prims ++ " >>=\n" ++ dumpDrawing next
 dumpDrawing (Free (Stroke w j cap prims next)) =
-    "stroke " ++ show w ++ " "
-              ++ show j ++ " ("
-              ++ show cap ++ ") "
+    "stroke " ++ show w ++ " ("
+              ++ show j ++ ") "
+              ++ show cap ++ " "
               ++ show prims ++ " >>=\n" ++ dumpDrawing next
 dumpDrawing (Free (WithCliping clipping draw next)) =
     "withClipping (" ++ dumpDrawing (withTexture clipTexture clipping)

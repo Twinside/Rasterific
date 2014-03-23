@@ -35,21 +35,20 @@ instance Modulable Word8 where
   clampCoverage f = (fromIntegral c, fromIntegral $ 255 - c)
      where c = toWord8 f
 
-  modulate c a = fromIntegral $ v `unsafeShiftR` 8
+  modulate c a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
     where fi :: Word8 -> Word32
           fi = fromIntegral
-          v = fi c * fi a
+          v = fi c * fi a + 128
 
   coverageModulate c a = (clamped, fullValue - clamped)
-    where
-      v = fromIntegral c * fromIntegral a :: Word32
-      clamped = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+    where clamped = modulate a c
 
   alphaCompose coverage inverseCoverage backgroundAlpha _ =
       fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
         where fi :: Word8 -> Word32
               fi = fromIntegral
-              v = fi coverage * 255 + fi backgroundAlpha * fi inverseCoverage
+              v = fi coverage * 255
+                + fi backgroundAlpha * fi inverseCoverage + 128
 
   alphaOver coverage inverseCoverage background painted =
       fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8

@@ -168,7 +168,7 @@ strokeTestCliping stroker prefix =
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             ]
-          withTexture (uniformTexture $ PixelRGBA8 255 128 100 64)
+          withTexture (uniformTexture $ PixelRGBA8 255 128 100 128)
                     . fill $ circle (V2 150 150) 40
 
         img = renderDrawing 500 500 background drawing
@@ -370,6 +370,30 @@ dashTest = writePng (outFolder </> "dashed_wheel.png")
                              (V2 413.0712 25.0) (V2 275.0 25.0))
             ]
 
+weirdCircle :: IO ()
+weirdCircle = writePng (outFolder </> "bad_circle.png")
+            . renderDrawing 400 200 white
+            $ withTexture (uniformTexture black) drawing
+  where
+    drawing =
+        fill [CubicBezierPrim $ CubicBezier (V2 375.0 125.0)
+                                            (V2 375.0 55.96441)
+                                            (V2 319.03558 0.0)
+                                            (V2 250.0 0.0)
+             ,CubicBezierPrim $ CubicBezier (V2 250.0 (-1.4210855e-14))
+                                            (V2 180.96442 (-1.8438066e-14))
+                                            (V2 125.0 55.964405)
+                                            (V2 125.0 125.0)
+             ,CubicBezierPrim $ CubicBezier (V2 125.0 125.0)
+                                            (V2 125.0 194.03558)
+                                            (V2 180.9644 250.0)
+                                            (V2 250.0 250.0)
+             ,CubicBezierPrim $ CubicBezier (V2 250.0 250.0)
+                                            (V2 319.03558 250.0)
+                                            (V2 375.0 194.0356)
+                                            (V2 375.0 125.0)
+             ]
+
 main :: IO ()
 main = do
   let uniform = uniformTexture blue
@@ -391,6 +415,7 @@ main = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  weirdCircle
   dashTest
 
   strokeCrash

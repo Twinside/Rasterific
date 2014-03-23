@@ -204,7 +204,7 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
 
         edgeSeparator = vabs (abbcbccd ^-^ mini) ^<^ vabs (abbcbccd ^-^ maxi)
         edge = vpartition edgeSeparator mini maxi
-        m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbc
+        m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbcbccd
 
 -- | Will subdivide the bezier from 0 to coeff and coeff to 1
 cubicBezierBreakAt :: CubicBezier -> Float
@@ -270,8 +270,8 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
-  | a `isNearby` b = sanitizeBezier $ Bezier a c d
-  | b `isDistingableFrom` c &&
+  | b `isNearby` c = sanitizeBezier $ Bezier a c d
+  | a `isDistingableFrom` b &&
     c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
   | ac `isDistingableFrom` b && 

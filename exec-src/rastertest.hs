@@ -3,9 +3,11 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
+import Data.Monoid( (<>) )
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Transformations
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
@@ -304,21 +306,24 @@ strokeTest stroker texture prefix =
         img = renderDrawing 500 500 background drawing
 
 evenOddTest :: Texture PixelRGBA8 -> IO ()
-evenOddTest texture =
-    writePng (outFolder </> "even_odd.png")
-        .  renderDrawing 100 100 white
+evenOddTest texture = mapM_ tester [1 :: Int .. 20] where
+  command =
+    Path (V2 250 75) True
+      [ PathLineTo (V2 323 301)
+      , PathLineTo (V2 131 161)
+      , PathLineTo (V2 369 161)
+      , PathLineTo (V2 177 301)
+      ]
+  tester i =
+    writePng (outFolder </> ("even_odd" ++ show i ++ ".png"))
+        .  renderDrawing 300 300 white
         . withTexture texture
         . fillWithMethod FillEvenOdd
-        . fmap (transform (^* 0.25))
-        . fmap (transform (^-^ V2 120 54))
+        . fmap (transform . applyTransformation $
+                            scale 0.6 0.6
+                            <> translate (V2 (-60) (-34))
+                            <> rotateCenter (fromIntegral i / 6) (V2 (200) (200)))
         $ pathToPrimitives command
-    where command =
-              Path (V2 250 75) True
-                [ PathLineTo (V2 323 301)
-                , PathLineTo (V2 131 161)
-                , PathLineTo (V2 369 161)
-                , PathLineTo (V2 177 301)
-                ]
 
 crash :: Texture PixelRGBA8 -> IO ()
 crash texture = do

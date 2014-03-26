@@ -1,9 +1,11 @@
 
 import Control.Applicative( (<$>) )
+import Data.Monoid( (<>) )
 import Codec.Picture
 import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Transformations
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
@@ -129,6 +131,25 @@ coordinateSystem = do
         filler $ Path (V2 30 170) True
             [PathLineTo (V2 40 195), PathLineTo (V2 50 170)]
 
+fillingSample :: FillMethod -> Drawing px ()
+fillingSample fillMethod = fillWithMethod fillMethod geometry where
+  geometry = transform (applyTransformation $ scale 0.35 0.4
+                                           <> translate (V2 (-80) (-180)))
+           $ concatMap pathToPrimitives
+     [ Path (V2 484 499) True
+         [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+         , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
+         ]
+     , Path (V2 136 377) True
+         [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+         , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
+         ]
+     , Path (V2 340 265) True
+         [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+         , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+         , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
+         ]
+     ]
 
 main :: IO ()
 main = do
@@ -267,3 +288,24 @@ main = do
         stroke 4 JoinRound (CapRound, CapRound) $
             roundedRectangle (V2 10 10) 150 150 20 10
 
+    produceDocImage (outFolder </> "fill_evenodd.png") $
+        fillingSample FillEvenOdd
+
+    produceDocImage (outFolder </> "fill_winding.png") $
+        fillingSample FillWinding
+
+    produceDocImage (outFolder </> "transform_rotate.png") $
+        fill . transform (applyTransformation $ rotate 0.2)
+             $ rectangle (V2 40 40) 120 120
+
+    produceDocImage (outFolder </> "transform_rotate_center.png") $
+        fill . transform (applyTransformation $ rotateCenter 0.2 (V2 200 200))
+             $ rectangle (V2 40 40) 120 120
+
+    produceDocImage (outFolder </> "transform_translate.png") $
+        fill . transform (applyTransformation $ translate (V2 100 100))
+             $ rectangle (V2 40 40) 40 40
+
+    produceDocImage (outFolder </> "transform_scale.png") $
+        fill . transform (applyTransformation $ scale 2 2)
+             $ rectangle (V2 40 40) 40 40

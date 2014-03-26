@@ -16,6 +16,7 @@ module Graphics.Rasterific.Types
     , PathCommand( .. )
     , Path( .. )
     , Transformable( .. )
+    , PointFoldable( .. )
 
       -- * Rasterization control types
     , Cap( .. )
@@ -30,7 +31,7 @@ module Graphics.Rasterific.Types
     , pathToPrimitives
     ) where
 
-import Data.List( foldl' )
+import Data.Foldable( Foldable, foldl' )
 import Linear( V2( .. ) )
 
 -- | Represent a vector
@@ -80,8 +81,51 @@ data Join
   | JoinMiter Float
   deriving (Eq, Show)
 
+-- | Tell how to fill complex shapes when there is self 
+-- intersections. If the filling mode is not specified,
+-- then it's the `FillWinding` method which is used.
+--
+-- The examples used are produced with the following
+-- function:
+--
+--
+-- > fillingSample :: FillMethod -> Drawing px ()
+-- > fillingSample fillMethod = fillWithMethod fillMethod geometry where
+-- >   geometry = transform (applyTransformation $ scale 0.35 0.4
+-- >                                            <> translate (V2 (-80) (-180)))
+-- >            $ concatMap pathToPrimitives
+-- >      [ Path (V2 484 499) True
+-- >          [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+-- >          , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
+-- >          ]
+-- >      , Path (V2 136 377) True
+-- >          [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+-- >          , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
+-- >          ]
+-- >      , Path (V2 340 265) True
+-- >          [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+-- >          , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+-- >          , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
+-- >          ]
+-- >      ]
 data FillMethod
+  -- | Also known as nonzero rule.
+  -- To determine if a point falls inside the curve, you draw 
+  -- an imaginary line through that point. Next you will count
+  -- how many times that line crosses the curve before it reaches
+  -- that point. For every clockwise rotation, you subtract 1 and
+  -- for every counter-clockwise rotation you add 1.
+  --
+  -- <<docimages/fill_winding.png>>
   = FillWinding
+
+  -- | This rule determines the insideness of a point on 
+  -- the canvas by drawing a ray from that point to infinity
+  -- in any direction and counting the number of path segments
+  -- from the given shape that the ray crosses. If this number
+  -- is odd, the point is inside; if even, the point is outside.
+  --
+  -- <<docimages/fill_evenodd.png>>
   | FillEvenOdd
   deriving (Eq, Show)
 
@@ -117,6 +161,9 @@ class Transformable a where
     --  point in the element.
     transform :: (Point -> Point) -> a -> a
 
+-- | Typeclass helper gathering all the points of a given
+-- geometry.
+class PointFoldable a where
     -- | Fold an accumulator on all the points of
     -- the primitive.
     foldPoints :: (b -> Point -> b) -> b -> a -> b
@@ -144,6 +191,7 @@ instance Transformable Line where
     {-# INLINE transform #-}
     transform f (Line a b) = Line (f a) $ f b
 
+instance PointFoldable Line where
     {-# INLINE foldPoints #-}
     foldPoints f acc (Line a b) = f (f acc b) a
 
@@ -176,6 +224,7 @@ instance Transformable Bezier where
     {-# INLINE transform #-}
     transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
 
+instance PointFoldable Bezier where
     {-# INLINE foldPoints #-}
     foldPoints f acc (Bezier a b c) =
         foldl' f acc [a, b, c]
@@ -213,6 +262,7 @@ instance Transformable CubicBezier where
     transform f (CubicBezier a b c d) =
         CubicBezier (f a) (f b) (f c) $ f d
 
+instance PointFoldable CubicBezier where
     {-# INLINE foldPoints #-}
     foldPoints f acc (CubicBezier a b c d) =
         foldl' f acc [a, b, c, d]
@@ -242,11 +292,20 @@ instance Transformable Primitive where
     transform f (BezierPrim b) = BezierPrim $ transform f b
     transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
 
+instance PointFoldable Primitive where
     {-# INLINE foldPoints #-}
     foldPoints f acc = go
       where go (LinePrim l) = foldPoints f acc l
             go (BezierPrim b) = foldPoints f acc b
             go (CubicBezierPrim c) = foldPoints f acc c
+
+instance (Functor f, Transformable a)
+      => Transformable (f a) where
+    transform f = fmap (transform f)
+
+instance (Foldable f, PointFoldable a)
+      => PointFoldable (f a) where
+    foldPoints f = foldl' (foldPoints f)
 
 type Container a = [a]
 

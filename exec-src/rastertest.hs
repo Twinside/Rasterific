@@ -308,39 +308,18 @@ complexEvenOddTest texture = mapM_ tester [(filling, ix)
                                                            ,(FillWinding, "winding")]
                                               , ix <- [1 :: Int .. 3]] where
   command =
-     [ Path (V2 484.97764 499.94427) True
-         [ PathCubicBezierCurveTo 
-                 (V2 681.9884 452.54814)
-                 (V2 639.866 312.6751)
-                 (V2 541.509 314.6393)
-         , PathCubicBezierCurveTo 
-                 (V2 327.63602 337.88059)
-                 (V2 224.5921 562.58687)
-                 (V2 484.97764 499.94427)
+     [ Path (V2 484 499) True
+         [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+         , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
          ]
-     , Path (V2 136.6553 377.497) True
-         [ PathCubicBezierCurveTo 
-             (V2 244.05921 253.07837)
-             (V2 424.91559 420.94243)
-             (V2 357.60559 489.43443)
-         , PathCubicBezierCurveTo 
-             (V2 302.38859 582.16243)
-             (V2 47.026191 481.32499)
-             (V2 136.6553 377.497)
+     , Path (V2 136 377) True
+         [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+         , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
          ]
-     , Path (V2 340.065 265.5316) True
-         [ PathCubicBezierCurveTo 
-             (V2 64.9214 371.604)
-             (V2 128.47684 748.84391)
-             (V2 343.996 536.606)
-         , PathCubicBezierCurveTo 
-             (V2 668.59972 216.94433)
-             (V2 17.389264 273.09147)
-             (V2 367.579 575.893)
-         , PathCubicBezierCurveTo 
-             (V2 589.66 727.144)
-             (V2 615.209 159.4588)
-             (V2 340.065 265.5316)
+     , Path (V2 340 265) True
+         [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+         , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+         , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
          ]
      ]
 

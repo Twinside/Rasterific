@@ -67,6 +67,7 @@ module Graphics.Rasterific
     , Path( .. )
     , PathCommand( .. )
     , Transformable( .. )
+    , PointFoldable( .. )
 
       -- * Helpers
     , line
@@ -229,6 +230,9 @@ withTexture texture subActions =
 fill :: [Primitive] -> Drawing px ()
 fill prims = liftF $ Fill FillWinding prims ()
 
+-- | This function let you choose how to fill the primitives
+-- in case of self intersection. See `FillMethod` documentation
+-- for more information.
 fillWithMethod :: FillMethod -> [Primitive] -> Drawing px ()
 fillWithMethod method prims =
     liftF $ Fill method prims ()

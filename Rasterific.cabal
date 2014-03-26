@@ -40,6 +40,7 @@ library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
                  , Graphics.Rasterific.Texture
+                 , Graphics.Rasterific.Transformations
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.QuadraticBezier

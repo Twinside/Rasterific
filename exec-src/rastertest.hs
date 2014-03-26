@@ -11,10 +11,7 @@ import Graphics.Rasterific.Transformations
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( (^-^)
-             , (^+^)
-             , (^*)
-             )
+import Linear( (^+^) )
 
 type Stroker =
     Float -> Join -> (Cap, Cap) -> [Primitive]
@@ -305,8 +302,59 @@ strokeTest stroker texture prefix =
           ]
         img = renderDrawing 500 500 background drawing
 
+complexEvenOddTest :: Texture PixelRGBA8 -> IO ()
+complexEvenOddTest texture = mapM_ tester [(filling, ix)
+                                              | filling <- [(FillEvenOdd, "evenodd")
+                                                           ,(FillWinding, "winding")]
+                                              , ix <- [1 :: Int .. 3]] where
+  command =
+     [ Path (V2 484.97764 499.94427) True
+         [ PathCubicBezierCurveTo 
+                 (V2 681.9884 452.54814)
+                 (V2 639.866 312.6751)
+                 (V2 541.509 314.6393)
+         , PathCubicBezierCurveTo 
+                 (V2 327.63602 337.88059)
+                 (V2 224.5921 562.58687)
+                 (V2 484.97764 499.94427)
+         ]
+     , Path (V2 136.6553 377.497) True
+         [ PathCubicBezierCurveTo 
+             (V2 244.05921 253.07837)
+             (V2 424.91559 420.94243)
+             (V2 357.60559 489.43443)
+         , PathCubicBezierCurveTo 
+             (V2 302.38859 582.16243)
+             (V2 47.026191 481.32499)
+             (V2 136.6553 377.497)
+         ]
+     , Path (V2 340.065 265.5316) True
+         [ PathCubicBezierCurveTo 
+             (V2 64.9214 371.604)
+             (V2 128.47684 748.84391)
+             (V2 343.996 536.606)
+         , PathCubicBezierCurveTo 
+             (V2 668.59972 216.94433)
+             (V2 17.389264 273.09147)
+             (V2 367.579 575.893)
+         , PathCubicBezierCurveTo 
+             (V2 589.66 727.144)
+             (V2 615.209 159.4588)
+             (V2 340.065 265.5316)
+         ]
+     ]
+
+  tester ((method, name), i) =
+    writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ ".png"))
+        .  renderDrawing 700 700 white
+        . withTexture texture
+        . fillWithMethod method
+        . fmap (transform . applyTransformation $
+                            rotateCenter (fromIntegral i / 6) (V2 (350) (350)))
+        $ concatMap pathToPrimitives command
+
 evenOddTest :: Texture PixelRGBA8 -> IO ()
-evenOddTest texture = mapM_ tester [1 :: Int .. 20] where
+evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
   command =
     Path (V2 250 75) True
       [ PathLineTo (V2 323 301)
@@ -320,9 +368,8 @@ evenOddTest texture = mapM_ tester [1 :: Int .. 20] where
         . withTexture texture
         . fillWithMethod FillEvenOdd
         . fmap (transform . applyTransformation $
-                            scale 0.6 0.6
-                            <> translate (V2 (-60) (-34))
-                            <> rotateCenter (fromIntegral i / 6) (V2 (200) (200)))
+                            translate (V2 (-80) (-40))
+                            <> rotateCenter (fromIntegral i / 6) (V2 (250) (200)))
         $ pathToPrimitives command
 
 crash :: Texture PixelRGBA8 -> IO ()
@@ -420,11 +467,13 @@ main = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  evenOddTest uniform
+  complexEvenOddTest uniform
+
   weirdCircle
   dashTest
 
   strokeCrash
-  evenOddTest uniform
   logoTest uniform ""
   logoTest biGradient "gradient_"
   crash uniform

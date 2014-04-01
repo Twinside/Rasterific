@@ -168,6 +168,15 @@ class PointFoldable a where
     -- the primitive.
     foldPoints :: (b -> Point -> b) -> b -> a -> b
 
+
+instance Transformable Point where
+    {-# INLINE transform #-}
+    transform f p = f p
+
+instance PointFoldable Point where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc p = f acc p
+
 -- | Describe a simple 2D line between two points.
 --
 -- > fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
@@ -331,6 +340,16 @@ data Path = Path
     }
     deriving (Eq, Show)
 
+instance Transformable Path where
+    {-# INLINE transform #-}
+    transform f (Path orig close rest) =
+        Path (f orig) close (transform f rest)
+
+instance PointFoldable Path where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Path o _ rest) =
+        foldPoints f (f acc o) rest
+
 -- | Actions to create a path
 data PathCommand
     = -- | Draw a line from the current point to another point
@@ -342,6 +361,20 @@ data PathCommand
       -- | Draw a cubic bezier curve using 2 control points.
     | PathCubicBezierCurveTo Point Point Point
     deriving (Eq, Show)
+
+instance Transformable PathCommand where
+    transform f (PathLineTo p) = PathLineTo $ f p
+    transform f (PathQuadraticBezierCurveTo p1 p2) =
+        PathQuadraticBezierCurveTo (f p1) $ f p2
+    transform f (PathCubicBezierCurveTo p1 p2 p3) =
+        PathCubicBezierCurveTo (f p1) (f p2) $ f p3
+
+instance PointFoldable PathCommand where
+    foldPoints f acc (PathLineTo p) = f acc p
+    foldPoints f acc (PathQuadraticBezierCurveTo p1 p2) =
+        f (f acc p1) p2
+    foldPoints f acc (PathCubicBezierCurveTo p1 p2 p3) =
+        foldl' f acc [p1, p2, p3]
 
 -- | Transform a path description into a list of renderable
 -- primitives.

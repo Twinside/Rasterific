@@ -20,7 +20,7 @@ type Compositor px =
 
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.
-class Ord a => Modulable a where
+class (Ord a, Num a) => Modulable a where
   emptyValue :: a
   fullValue  :: a
   clampCoverage :: Float -> (a, a)

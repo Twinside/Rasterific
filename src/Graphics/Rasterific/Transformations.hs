@@ -11,6 +11,7 @@ module Graphics.Rasterific.Transformations
     , scale
     , rotate
     , rotateCenter
+    , inverseTransformation
     ) where
 
 import Data.Monoid( Monoid( .. ), (<>) )
@@ -36,10 +37,10 @@ data Transformation = Transformation
 
 transformCombine :: Transformation -> Transformation -> Transformation
 transformCombine (Transformation a c e
-                            b d f)
+                                 b d f)
 
                  (Transformation a' c' e'
-                            b' d' f') =
+                                 b' d' f') =
     Transformation (a * a' + c * b' {- below b' is zero -})
               (a * c' + c * d' {- below d' is zero -})
               (a * e' + c * f' + e {- below f' is one -})
@@ -69,7 +70,7 @@ applyTransformation (Transformation a c e
 -- <<docimages/transform_rotate.png>>
 --
 rotate :: Float  -- ^ Rotation angle in radian.
-	   -> Transformation
+       -> Transformation
 rotate angle = Transformation ca (-sa) 0
                               sa   ca  0
   where ca = cos angle
@@ -84,8 +85,8 @@ rotate angle = Transformation ca (-sa) 0
 -- <<docimages/transform_rotate_center.png>>
 --
 rotateCenter :: Float -- ^ Rotation angle in radian
-		     -> Point -- ^ Rotation center
-		     -> Transformation
+             -> Point -- ^ Rotation center
+             -> Transformation
 rotateCenter angle p =
     translate p <> rotate angle <> translate (negate p)
 
@@ -114,3 +115,16 @@ translate (V2 x y) =
     Transformation 1 0 x
                    0 1 y
 
+-- | Inverse a transformation (if possible)
+inverseTransformation :: Transformation -> Transformation
+inverseTransformation (Transformation a c e
+                                      b d f) =
+    Transformation a' c' e' b' d' f'
+  where det = a * d - b * c
+        a' = d / det
+        c' = (- c) / det
+        e' = (c * f - e * d) / det
+
+        b' = (- b) / det
+        d' = a / det
+        f' = (e * b - a * f) / det

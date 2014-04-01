@@ -2,6 +2,7 @@
 import Control.Applicative( (<$>) )
 import Data.Monoid( (<>) )
 import Codec.Picture
+import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
@@ -309,3 +310,38 @@ main = do
     produceDocImage (outFolder </> "transform_scale.png") $
         fill . transform (applyTransformation $ scale 2 2)
              $ rectangle (V2 40 40) 40 40
+
+    Right (ImageRGB8 img) <- readImage "avatar.png"
+    let textureImage = promoteImage img
+    produceDocImage (outFolder </> "sampled_texture_repeat.png") $
+        withTexture (withSampler SamplerRepeat $
+                        sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "image_simple.png") $
+        drawImage textureImage 0 (V2 30 30)
+
+    produceDocImage (outFolder </> "image_resize.png") $
+        drawImageAtSize textureImage 2 (V2 30 30) 128 128
+
+    produceDocImage (outFolder </> "sampled_texture_reflect.png") $
+        withTexture (withSampler SamplerReflect $
+                        sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_pad.png") $
+        withTexture (sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_rotate.png") $
+        withTexture (withSampler SamplerRepeat $
+                    transformTexture (rotateCenter 1 (V2 0 0))
+                    $ sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_scaled.png") $
+        withTexture (withSampler SamplerRepeat $
+                    transformTexture (rotateCenter 1 (V2 0 0) <> 
+                                      scale 0.5 0.25)
+                    $ sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200

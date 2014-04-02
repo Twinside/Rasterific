@@ -456,6 +456,8 @@ dashedStrokeWithOffset
     -> (Cap, Cap)  -- ^ Start and end capping.
     -> [Primitive] -- ^ List of elements to render
     -> Drawing px ()
+dashedStrokeWithOffset _ [] width join caping prims =
+    stroke width join caping prims
 dashedStrokeWithOffset offset dashing width join caping prims =
     liftF $ DashedStroke offset dashing width join caping prims ()
 

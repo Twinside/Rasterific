@@ -12,6 +12,8 @@ import Graphics.Rasterific.Transformations
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 import Linear( (^+^) )
+import Arbitrary
+import System.Environment
 
 type Stroker =
     Float -> Join -> (Cap, Cap) -> [Primitive]
@@ -302,8 +304,8 @@ strokeTest stroker texture prefix =
           ]
         img = renderDrawing 500 500 background drawing
 
-complexEvenOddTest :: Texture PixelRGBA8 -> IO ()
-complexEvenOddTest texture = mapM_ tester [(filling, ix)
+complexEvenOddTest :: Int -> Texture PixelRGBA8 -> IO ()
+complexEvenOddTest size texture = mapM_ tester [(filling, ix)
                                               | filling <- [(FillEvenOdd, "evenodd")
                                                            ,(FillWinding, "winding")]
                                               , ix <- [1 :: Int .. 3]] where
@@ -324,8 +326,8 @@ complexEvenOddTest texture = mapM_ tester [(filling, ix)
      ]
 
   tester ((method, name), i) =
-    writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ ".png"))
-        .  renderDrawing 700 700 white
+    writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ "_" ++ show size ++ "px.png"))
+        .  renderDrawing size size white
         . withTexture texture
         . fillWithMethod method
         . fmap (transform . applyTransformation $
@@ -343,7 +345,7 @@ evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
       ]
   tester i =
     writePng (outFolder </> ("even_odd" ++ show i ++ ".png"))
-        .  renderDrawing 300 300 white
+        . renderDrawing 300 300 white
         . withTexture texture
         . fillWithMethod FillEvenOdd
         . fmap (transform . applyTransformation $
@@ -425,8 +427,8 @@ weirdCircle = writePng (outFolder </> "bad_circle.png")
                                             (V2 375.0 125.0)
              ]
 
-main :: IO ()
-main = do
+testSuite :: IO ()
+testSuite = do
   let uniform = uniformTexture blue
       biGradient =
         linearGradientTexture biColor (V2 10 10) (V2 90 90)
@@ -447,7 +449,8 @@ main = do
 
   createDirectoryIfMissing True outFolder
   evenOddTest uniform
-  complexEvenOddTest uniform
+  complexEvenOddTest 700 uniform
+  complexEvenOddTest 350 uniform
 
   weirdCircle
   dashTest
@@ -495,4 +498,11 @@ main = do
   textAlignStringTest "arial" "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
   -- -}
+
+main :: IO ()
+main = do
+    args <- getArgs
+    case args of
+         "random":_ -> randomTests
+         _ -> testSuite
 

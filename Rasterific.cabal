@@ -94,4 +94,6 @@ Executable test
                  , vector
                  , FontyFruity
                  , binary
+                 , QuickCheck >= 2.7
+                 , deepseq
 

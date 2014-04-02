@@ -127,7 +127,7 @@ data FillMethod
   --
   -- <<docimages/fill_evenodd.png>>
   | FillEvenOdd
-  deriving (Eq, Show)
+  deriving (Eq, Enum, Show)
 
 -- | Describe the behaviour of samplers and texturers
 -- when they are out of the bounds of image and/or gradient.
@@ -142,7 +142,7 @@ data SamplerRepeat
     -- | Will loop inverting axises
     -- <<docimages/sampler_reflect.png>>
   | SamplerReflect
-  deriving (Eq, Show)
+  deriving (Eq, Enum, Show)
 
 -- | Represent a raster line
 data EdgeSample = EdgeSample

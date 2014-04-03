@@ -1,6 +1,6 @@
 -*-change-log-*-
 
-v0.2 March 2014
+v0.2 April 2014
  * Adding an ellipse helper.
  * Adding a polyline helper.
  * Adding a polygon helper.
@@ -15,6 +15,9 @@ v0.2 March 2014
    it in two.
  * Added a dumping function for the constructed
    drawing.
+ * Adding an image texture with bilinear filtering.
+ * Adding an image helper.
+ * Made some modest performance enhancements.
 
 v0.1 February 2014
  * Initial version.

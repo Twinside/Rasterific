@@ -13,7 +13,13 @@ import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 import Linear( (^+^) )
 import Arbitrary
-import System.Environment
+import System.Environment( getArgs )
+import Criterion.Config( defaultConfig )
+import Criterion.Main( parseArgs
+                     , defaultOptions
+                     , defaultMainWith
+                     , bench
+                     )
 
 type Stroker =
     Float -> Join -> (Cap, Cap) -> [Primitive]
@@ -499,10 +505,18 @@ testSuite = do
         "Just a simple test, gogo !!! Yay ; quoi ?"
   -- -}
 
+benchTest :: [String] -> IO ()
+benchTest args = do
+  (config, _) <-
+      parseArgs defaultConfig defaultOptions args
+  defaultMainWith config (return ())
+        [bench "testsuite" testSuite]
+
 main :: IO ()
 main = do
     args <- getArgs
     case args of
          "random":_ -> randomTests
+         "bench":rest -> benchTest rest
          _ -> testSuite
 

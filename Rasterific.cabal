@@ -79,6 +79,19 @@ Executable doc_builder
                  , vector
                  , FontyFruity
 
+Executable sample
+    default-language:    Haskell2010
+    Main-Is: sample.hs
+    ghc-options: -Wall -O2
+    ghc-prof-options: -rtsopts -Wall -prof -auto-all
+    Hs-Source-Dirs: exec-src
+    Build-Depends: base >= 4.6
+                 , Rasterific
+                 , JuicyPixels
+                 , linear      >= 1.3.1
+                 , vector
+                 , FontyFruity
+
 Executable test
     default-language:    Haskell2010
     Main-Is: rastertest.hs
@@ -96,4 +109,6 @@ Executable test
                  , binary
                  , QuickCheck >= 2.7
                  , deepseq
+                 , criterion >= 0.8 && < 0.9
+                 , statistics >= 0.10 && < 0.11
 

@@ -108,6 +108,7 @@ import Data.Monoid( Monoid( .. ), (<>) )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
                           , Pixel8
+                          , PixelRGBA8
                           , MutableImage( .. )
                           , createMutableImage
                           , unsafeFreezeImage )
@@ -509,7 +510,18 @@ composeCoverageSpan :: forall s px .
                     -> MutableImage s px
                     -> CoverageSpan
                     -> ST s ()
-{-# INLINE composeCoverageSpan #-}
+{-# SPECIALIZE
+    composeCoverageSpan
+        :: forall s. 
+           Texture PixelRGBA8
+        -> MutableImage s PixelRGBA8
+        -> CoverageSpan -> ST s () #-}
+{-# SPECIALIZE
+    composeCoverageSpan
+        :: forall s. 
+           Texture Pixel8
+        -> MutableImage s Pixel8
+        -> CoverageSpan -> ST s () #-}
 composeCoverageSpan texture img coverage
   | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
   | otherwise = go 0 initialX initIndex

@@ -66,6 +66,7 @@ compositionDestination c _ _ a = colorMap (modulate c) $ a
 
 compositionAlpha :: (Pixel px, Modulable (PixelBaseComponent px))
                  => Compositor px
+{-# INLINE compositionAlpha #-}
 compositionAlpha c ic 
     | c == emptyValue = const
     | c == fullValue = \_ n -> n

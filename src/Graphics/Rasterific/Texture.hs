@@ -34,6 +34,8 @@ import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. )
                           , Image( .. )
+                          , Pixel8
+                          , PixelRGBA8
                           )
 import Graphics.Rasterific.Types( Point, SamplerRepeat( .. ) )
 import Graphics.Rasterific.Transformations
@@ -115,6 +117,8 @@ reflectGradient s =
    
 gradientColorAt :: (Pixel px, Modulable (PixelBaseComponent px))
                 => GradientArray px -> Float -> px
+{-# SPECIALIZE
+ 	gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 gradientColorAt grad at
     | at <= 0 = snd $ V.head grad
     | at >= 1.0 = snd $ V.last grad
@@ -131,6 +135,9 @@ gradientColorAt grad at
 
 gradientColorAtRepeat :: (Pixel px, Modulable (PixelBaseComponent px))
                       => SamplerRepeat -> GradientArray px -> Float -> px
+{-# SPECIALIZE INLINE
+	gradientColorAtRepeat ::
+		SamplerRepeat -> GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 gradientColorAtRepeat SamplerPad grad = gradientColorAt grad
 gradientColorAtRepeat SamplerRepeat grad =
     gradientColorAt grad . repeatGradient
@@ -153,6 +160,10 @@ linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       -> Point       -- ^ Linear gradient start point.
                       -> Point       -- ^ Linear gradient end point.
                       -> Texture px
+{-# SPECIALIZE
+	linearGradientTexture
+		:: Gradient PixelRGBA8 -> Point -> Point
+        -> Texture PixelRGBA8 #-}
 linearGradientTexture gradient start end repeating =
     \x y -> colorAt $ ((V2 x y) `dot` d) - s00
   where
@@ -169,6 +180,10 @@ linearGradientTexture gradient start end repeating =
 sampledImageTexture :: forall px.
                        ( Pixel px, Modulable (PixelBaseComponent px))
                     => Image px -> Texture px
+{-# SPECIALIZE
+ 	sampledImageTexture :: Image Pixel8 -> Texture Pixel8 #-}
+{-# SPECIALIZE
+ 	sampledImageTexture :: Image PixelRGBA8 -> Texture PixelRGBA8 #-}
 sampledImageTexture img sampling x y =
   (at px  py `interpX` at pxn py)
              `interpY`
@@ -213,6 +228,10 @@ sampledImageTexture img sampling x y =
 -- This texture use the "nearest" filtering, AKA no
 -- filtering at all.
 imageTexture :: forall px. (Pixel px) => Image px -> Texture px
+{-# SPECIALIZE
+	imageTexture :: Image PixelRGBA8 -> Texture PixelRGBA8 #-}
+{-# SPECIALIZE
+	imageTexture :: Image Pixel8 -> Texture Pixel8 #-}
 imageTexture img _ x y =
     unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
   where

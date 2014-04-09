@@ -92,7 +92,8 @@ Executable sample
                  , vector
                  , FontyFruity
 
-Executable test
+Test-Suite test
+    type: exitcode-stdio-1.0
     default-language:    Haskell2010
     Main-Is: rastertest.hs
     ghc-options: -Wall -O2

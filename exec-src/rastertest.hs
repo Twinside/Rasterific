@@ -3,15 +3,23 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
+import Data.Monoid( (<>) )
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Transformations
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( (^+^)
-             {-, (^*)-}
-             )
+import Linear( (^+^) )
+import Arbitrary
+import System.Environment( getArgs )
+import Criterion.Config( defaultConfig )
+import Criterion.Main( parseArgs
+                     , defaultOptions
+                     , defaultMainWith
+                     , bench
+                     )
 
 type Stroker =
     Float -> Join -> (Cap, Cap) -> [Primitive]
@@ -41,14 +49,14 @@ logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, brightblue, yellow, red, white :: PixelRGBA8
+background, blue, black, yellow, red, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
 black = PixelRGBA8 0 0 0 255
 {-grey = PixelRGBA8 128 128 128 255-}
 yellow = PixelRGBA8 255 255 0 255
-brightblue = PixelRGBA8 0 255 255 255
+{-brightblue = PixelRGBA8 0 255 255 255-}
 white = PixelRGBA8 255 255 255 255
 
 biColor, triColor :: Gradient PixelRGBA8
@@ -167,7 +175,7 @@ strokeTestCliping stroker prefix =
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             ]
-          withTexture (uniformTexture $ PixelRGBA8 255 128 100 64)
+          withTexture (uniformTexture $ PixelRGBA8 255 128 100 128)
                     . fill $ circle (V2 150 150) 40
 
         img = renderDrawing 500 500 background drawing
@@ -302,13 +310,131 @@ strokeTest stroker texture prefix =
           ]
         img = renderDrawing 500 500 background drawing
 
-debugStroke :: Stroker
-debugStroke =
-    strokeDebug (uniformTexture brightblue) (uniformTexture yellow)
+complexEvenOddTest :: Int -> Texture PixelRGBA8 -> IO ()
+complexEvenOddTest size texture = mapM_ tester [(filling, ix)
+                                              | filling <- [(FillEvenOdd, "evenodd")
+                                                           ,(FillWinding, "winding")]
+                                              , ix <- [1 :: Int .. 3]] where
+  command =
+     [ Path (V2 484 499) True
+         [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+         , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
+         ]
+     , Path (V2 136 377) True
+         [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+         , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
+         ]
+     , Path (V2 340 265) True
+         [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+         , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+         , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
+         ]
+     ]
 
+  tester ((method, name), i) =
+    writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ "_" ++ show size ++ "px.png"))
+        .  renderDrawing size size white
+        . withTexture texture
+        . fillWithMethod method
+        . fmap (transform . applyTransformation $
+                            rotateCenter (fromIntegral i / 6) (V2 (350) (350)))
+        $ concatMap pathToPrimitives command
 
-main :: IO ()
-main = do
+evenOddTest :: Texture PixelRGBA8 -> IO ()
+evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
+  command =
+    Path (V2 250 75) True
+      [ PathLineTo (V2 323 301)
+      , PathLineTo (V2 131 161)
+      , PathLineTo (V2 369 161)
+      , PathLineTo (V2 177 301)
+      ]
+  tester i =
+    writePng (outFolder </> ("even_odd" ++ show i ++ ".png"))
+        . renderDrawing 300 300 white
+        . withTexture texture
+        . fillWithMethod FillEvenOdd
+        . fmap (transform . applyTransformation $
+                            translate (V2 (-80) (-40))
+                            <> rotateCenter (fromIntegral i / 6) (V2 (250) (200)))
+        $ pathToPrimitives command
+
+crash :: Texture PixelRGBA8 -> IO ()
+crash texture = do
+    writePng (outFolder </> "crash00.png") $
+        renderDrawing 600 600 background $
+            withTexture texture $ fill geom
+  where
+    geom = concat
+        [line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
+        ,line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
+        ,line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
+        ,line (V2 27.272728 572.7273) (V2 572.72723 572.7273)
+
+        ,line (V2 481.81818 481.81818) (V2 118.18182 481.81818)
+        ,line (V2 118.181816 481.81818) (V2 118.181816 118.18182)
+        ,line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
+        ,line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
+        ]
+strokeCrash :: IO ()
+strokeCrash = do
+ let drawColor = PixelRGBA8 0 0x86 0xc1 255
+     img = renderDrawing 600 600 white $
+        withTexture (uniformTexture drawColor) $ do
+           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+            [LinePrim (Line (V2 572.7273 572.7273) (V2 572.7273 27.272766))
+            ,LinePrim (Line (V2 572.7273 27.272728) (V2 27.272766 27.272728))
+            ,LinePrim (Line (V2 27.272728 27.272728) (V2 27.272728 572.72723))
+            ,LinePrim (Line (V2 27.272728 572.7273) (V2 572.72723 572.7273))
+            ]
+           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+            [LinePrim (Line (V2 481.81818 481.81818) (V2 118.18182 481.81818))
+            ,LinePrim (Line (V2 118.181816 481.81818) (V2 118.181816 118.18182))
+            ,LinePrim (Line (V2 118.181816 118.181816) (V2 481.81818 118.181816))
+            ,LinePrim (Line (V2 481.81818 118.181816) (V2 481.81818 481.81818))
+            ]
+
+ writePng (outFolder </> "stroke_crash.png") img
+
+dashTest :: IO ()
+dashTest = writePng (outFolder </> "dashed_wheel.png")
+         . renderDrawing 550 550 white
+         $ withTexture (uniformTexture black) drawing
+  where
+    drawing =
+        dashedStrokeWithOffset 0.0 [4.0,4.0] 10.0
+            (JoinMiter 0.0) (CapStraight 0.0,CapStraight 0.0) 
+            [CubicBezierPrim
+                (CubicBezier (V2 525.0 275.0) (V2 525.0 136.92882)
+                             (V2 413.0712 25.0) (V2 275.0 25.0))
+            ]
+
+weirdCircle :: IO ()
+weirdCircle = writePng (outFolder </> "bad_circle.png")
+            . renderDrawing 400 200 white
+            $ withTexture (uniformTexture black) drawing
+  where
+    drawing =
+        fill [CubicBezierPrim $ CubicBezier (V2 375.0 125.0)
+                                            (V2 375.0 55.96441)
+                                            (V2 319.03558 0.0)
+                                            (V2 250.0 0.0)
+             ,CubicBezierPrim $ CubicBezier (V2 250.0 (-1.4210855e-14))
+                                            (V2 180.96442 (-1.8438066e-14))
+                                            (V2 125.0 55.964405)
+                                            (V2 125.0 125.0)
+             ,CubicBezierPrim $ CubicBezier (V2 125.0 125.0)
+                                            (V2 125.0 194.03558)
+                                            (V2 180.9644 250.0)
+                                            (V2 250.0 250.0)
+             ,CubicBezierPrim $ CubicBezier (V2 250.0 250.0)
+                                            (V2 319.03558 250.0)
+                                            (V2 375.0 194.0356)
+                                            (V2 375.0 125.0)
+             ]
+
+testSuite :: IO ()
+testSuite = do
   let uniform = uniformTexture blue
       biGradient =
         linearGradientTexture biColor (V2 10 10) (V2 90 90)
@@ -321,11 +447,24 @@ main = do
       radTriGradient =
         radialGradientTexture triColor (V2 250 250) 200
       radFocusTriGradient =
-        radialGradientWithFocusTexture triColor (V2 200 200) 70 (V2 230 200)
+        radialGradientWithFocusTexture
+            triColor (V2 200 200) 70 (V2 250 200)
+      radFocusTriGradient2 =
+        radialGradientWithFocusTexture
+            triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  evenOddTest uniform
+  complexEvenOddTest 700 uniform
+  complexEvenOddTest 350 uniform
+
+  weirdCircle
+  dashTest
+
+  strokeCrash
   logoTest uniform ""
   logoTest biGradient "gradient_"
+  crash uniform
 
   bigBox uniform ""
   bigBox biGradient "gradient_"
@@ -334,6 +473,7 @@ main = do
   bigBox radBiGradient "rad_gradient_"
   bigBox radTriGradient "rad_trigradient_"
   bigBox radFocusTriGradient "rad_focus_trigradient_"
+  bigBox radFocusTriGradient2 "rad_focus_trigradient_2_"
 
   circleTest uniform ""
   strokeTestCliping stroke ""
@@ -343,22 +483,17 @@ main = do
   strokeTest stroke uniform ""
   strokeTest stroke bigBiGradient "gradient_"
   strokeTest stroke radTriGradient "rad_gradient_"
-  strokeTest debugStroke uniform "debug_"
+  strokeLogo stroke ""
 
   strokeQuadraticIntersection stroke uniform ""
   strokeQuadraticIntersection stroke triGradient "gradient_"
   strokeQuadraticIntersection stroke radBiGradient "rad_gradient_"
-  strokeQuadraticIntersection debugStroke uniform "debug_"
 
   strokeTest2 stroke ""
-  strokeTest2 debugStroke "debug_"
-
-  strokeLogo debugStroke "debug_"
 
   strokeCubic stroke uniform ""
   strokeCubic stroke bigBiGradient "gradient_"
   strokeCubic stroke radTriGradient "rad_gradient_"
-  strokeCubic debugStroke uniform "debug_"
 
   strokeCubicDashed dashedStroke uniform ""
 
@@ -368,4 +503,20 @@ main = do
   textAlignStringTest "CONSOLA" "alignedConsola.png" testText
   textAlignStringTest "arial" "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
+  -- -}
+
+benchTest :: [String] -> IO ()
+benchTest args = do
+  (config, _) <-
+      parseArgs defaultConfig defaultOptions args
+  defaultMainWith config (return ())
+        [bench "testsuite" testSuite]
+
+main :: IO ()
+main = do
+    args <- getArgs
+    case args of
+         "random":_ -> randomTests
+         "bench":rest -> benchTest rest
+         _ -> testSuite
 

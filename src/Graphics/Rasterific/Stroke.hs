@@ -115,7 +115,7 @@ lineFromTo a b = LinePrim (Line a b)
 miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
-  | u `dot` w >= l / max 1 l =
+  | uDotW > l / max 1 l && uDotW > 0 =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
@@ -132,9 +132,11 @@ miterJoin offset l point u v
         c = point ^+^ v ^* offset
         w = (a `normal` c) `ifZero` u
 
+        uDotW =  u `dot` w
+
         -- Calculate the maximum distance on the
         -- u axis
-        p = offset / (u `dot` w)
+        p = offset / uDotW
         -- middle point for "straight joining"
         m = point + w ^* p
 
@@ -162,7 +164,7 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
         (firstPoint, _) = firstPointAndNormal firstShape
 
         go prev []
-           | firstPoint == lastPoint prev = joiner prev firstShape <> offseter prev
+           | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
            | otherwise = cap offset caping prev <> offseter prev
         go prev (x:xs) =
              joiner prev x <> offseter prev <> go x xs
@@ -219,17 +221,28 @@ splitPrimitiveUntil at = go at
         (beforeStop, afterStop) =
             breakPrimitiveAt x $ left / primLength
 
-
-dashize :: DashPattern -> [Primitive] -> [[Primitive]]
-dashize pattern = taker infinitePattern
-                . concatMap flattenPrimitive
-                . concatMap sanitize
+dropPattern :: Float -> DashPattern -> DashPattern
+dropPattern = go
   where
-    infinitePattern = cycle pattern
+    go _ [] = []
+    go offset (x:xs)
+        | x < 0 = (x:xs) -- sanitizing
+        | offset < x = x - offset : xs
+        | otherwise {- offset >= x -} = go (offset - x) xs
+
+dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
+dashize offset pattern =
+    taker infinitePattern . concatMap flattenPrimitive . concatMap sanitize
+  where
+    realOffset | offset >= 0 = offset
+               | otherwise = offset + sum pattern
+
+    infinitePattern =
+        dropPattern realOffset . cycle $ filter (> 0) pattern
 
     taker _ [] = []
     taker [] _ = [] -- Impossible by construction, pattern is infinite
-    taker (atValue:atRest) stream  = toKeep : droper atRest next
+    taker (atValue:atRest) stream = toKeep : droper atRest next
       where (toKeep, next) = splitPrimitiveUntil atValue stream
 
     droper _ [] = []
@@ -237,8 +250,9 @@ dashize pattern = taker infinitePattern
     droper (atValue:atRest) stream = taker atRest next
       where (_toKeep, next) = splitPrimitiveUntil atValue stream
 
-dashedStrokize :: DashPattern -> StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
+dashedStrokize :: Float -> DashPattern -> StrokeWidth
+               -> Join -> (Cap, Cap) -> [Primitive]
                -> [[Primitive]]
-dashedStrokize dashPattern width join capping beziers =
-    strokize width join capping <$> dashize dashPattern beziers
+dashedStrokize offset dashPattern width join capping beziers =
+    strokize width join capping <$> dashize offset dashPattern beziers
 

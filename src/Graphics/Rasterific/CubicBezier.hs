@@ -30,6 +30,7 @@ import Linear( V1( .. )
 import Data.Monoid( Monoid, mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -203,7 +204,7 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
 
         edgeSeparator = vabs (abbcbccd ^-^ mini) ^<^ vabs (abbcbccd ^-^ maxi)
         edge = vpartition edgeSeparator mini maxi
-        m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbc
+        m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbcbccd
 
 -- | Will subdivide the bezier from 0 to coeff and coeff to 1
 cubicBezierBreakAt :: CubicBezier -> Float
@@ -269,15 +270,16 @@ decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
-  | norm (a ^-^ b) > 0.0001 &&
-        norm (b ^-^ c) > 0.0001 &&
-        norm (c ^-^ d) > 0.0001 =
+  | b `isNearby` c = sanitizeBezier $ Bezier a c d
+  | a `isDistingableFrom` b &&
+    c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
-  | ac /= b && bd /= c =
+  | ac `isDistingableFrom` b && 
+     bd `isDistingableFrom` c =
       pure . CubicBezierPrim $ CubicBezier a ac bd d
-  | ac /= b =
+  | ac `isDistingableFrom` b =
       pure . CubicBezierPrim $ CubicBezier a ac c d
-  | bd /= c =
+  | bd `isDistingableFrom` c =
       pure . CubicBezierPrim $ CubicBezier a b bd d
   | otherwise = mempty
     where ac = a `midPoint` c

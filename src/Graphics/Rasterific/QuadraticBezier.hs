@@ -172,11 +172,11 @@ sanitizeBezier bezier@(Bezier a b c)
         sanitizeBezier (Bezier abbc (abbc `midPoint` c) c)
 
    -- b is far enough of b and c, (it's not a point)
-   | norm (a ^-^ b) > 0.0001 && norm (b ^-^ c) > 0.0001 =
+   | a `isDistingableFrom` b && b `isDistingableFrom` c =
        pure . BezierPrim $ bezier
 
    -- if b is to nearby a or c, take the midpoint as new reference.
-   | ac /= b = sanitizeBezier (Bezier a ac c)
+   | ac `isDistingableFrom` b = sanitizeBezier (Bezier a ac c)
    | otherwise = mempty
   where u = a `normal` b
         v = b `normal` c

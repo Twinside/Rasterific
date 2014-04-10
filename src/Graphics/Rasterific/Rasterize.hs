@@ -3,38 +3,45 @@ module Graphics.Rasterific.Rasterize
     , rasterize
     ) where
 
+import Data.Fixed( mod' )
 import Data.List( mapAccumL, sortBy )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 
 data CoverageSpan = CoverageSpan
-    { _coverageX      :: !Float
-    , _coverageY      :: !Float
-    , _coverageVal    :: !Float
-    , _coverageLength :: !Float
+    { _coverageX      :: {-# UNPACK #-} !Float
+    , _coverageY      :: {-# UNPACK #-} !Float
+    , _coverageVal    :: {-# UNPACK #-} !Float
+    , _coverageLength :: {-# UNPACK #-} !Float
     }
     deriving Show
 
-combineEdgeSamples :: [EdgeSample] -> [CoverageSpan]
-combineEdgeSamples = append . mapAccumL go (0, 0, 0, 0)
+combineEdgeSamples :: (Float -> Float) -> [EdgeSample] -> [CoverageSpan]
+{-# INLINE combineEdgeSamples #-}
+combineEdgeSamples prepareCoverage = append . mapAccumL go (0, 0, 0, 0)
   where append ((x, y, a, _), lst) =
-            concat lst ++ [CoverageSpan x y (min 1 $ abs a) 1]
+            concat lst ++ [CoverageSpan x y (prepareCoverage a) 1]
 
         go (x, y, a, h) (EdgeSample x' y' a' h')
           | y == y' && x == x' = ((x', y', a + a', h + h'), [])
           | y == y' = ((x', y', h + a', h + h'), [p1, p2])
           | otherwise =
-             ((x', y', a', h'), [CoverageSpan x y (min 1 $ abs a) 1])
-               where p1 = CoverageSpan x y (min 1 $ abs a) 1
-                     p2 = CoverageSpan (x + 1) y (min 1 $ abs h) (x' - x - 1)
+             ((x', y', a', h'), [CoverageSpan x y (prepareCoverage a) 1])
+               where p1 = CoverageSpan x y (prepareCoverage a) 1
+                     p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
 decompose :: Primitive -> [EdgeSample]
 decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) = decomposeCubicBeziers c
 
-rasterize :: [Primitive] -> [CoverageSpan]
-rasterize = combineEdgeSamples . sortBy xy . concatMap decompose
+rasterize :: FillMethod -> [Primitive] -> [CoverageSpan]
+rasterize method = 
+  case method of
+    FillWinding -> combineEdgeSamples combineWinding . sortBy xy . concatMap decompose
+    FillEvenOdd -> combineEdgeSamples combineEvenOdd . sortBy xy . concatMap decompose
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
+        combineWinding = min 1 . abs
+        combineEvenOdd cov = abs $ abs (cov - 1) `mod'` 2 - 1
 

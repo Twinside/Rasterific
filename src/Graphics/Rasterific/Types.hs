@@ -16,10 +16,12 @@ module Graphics.Rasterific.Types
     , PathCommand( .. )
     , Path( .. )
     , Transformable( .. )
+    , PointFoldable( .. )
 
       -- * Rasterization control types
     , Cap( .. )
     , Join( .. )
+    , FillMethod( .. )
     , SamplerRepeat( .. )
     , DashPattern
     , StrokeWidth
@@ -29,6 +31,7 @@ module Graphics.Rasterific.Types
     , pathToPrimitives
     ) where
 
+import Data.Foldable( Foldable, foldl' )
 import Linear( V2( .. ) )
 
 -- | Represent a vector
@@ -55,11 +58,11 @@ data Cap
     --
     --  * cap straight with param 1 : <<docimages/cap_straight_1.png>>
     --
-  = CapStraight Float 
+  = CapStraight Float
 
     -- | Create a rounded caping on the stroke.
     -- <<docimages/cap_round.png>>
-  | CapRound          
+  | CapRound
   deriving (Eq, Show)
 
 -- | Describe how to display the join of broken lines
@@ -67,7 +70,7 @@ data Cap
 data Join
     -- | Make a curved join.
     -- <<docimages/join_round.png>>
-  = JoinRound       
+  = JoinRound
     -- | Make a mitter join. Value must be positive or null.
     -- Seems to make sense in [0;1] only
     --
@@ -75,8 +78,56 @@ data Join
     --
     --  * Miter join with 5 : <<docimages/join_miter_5.png>>
     --
-  | JoinMiter Float 
+  | JoinMiter Float
   deriving (Eq, Show)
+
+-- | Tell how to fill complex shapes when there is self 
+-- intersections. If the filling mode is not specified,
+-- then it's the `FillWinding` method which is used.
+--
+-- The examples used are produced with the following
+-- function:
+--
+--
+-- > fillingSample :: FillMethod -> Drawing px ()
+-- > fillingSample fillMethod = fillWithMethod fillMethod geometry where
+-- >   geometry = transform (applyTransformation $ scale 0.35 0.4
+-- >                                            <> translate (V2 (-80) (-180)))
+-- >            $ concatMap pathToPrimitives
+-- >      [ Path (V2 484 499) True
+-- >          [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+-- >          , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
+-- >          ]
+-- >      , Path (V2 136 377) True
+-- >          [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+-- >          , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
+-- >          ]
+-- >      , Path (V2 340 265) True
+-- >          [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+-- >          , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+-- >          , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
+-- >          ]
+-- >      ]
+data FillMethod
+  -- | Also known as nonzero rule.
+  -- To determine if a point falls inside the curve, you draw 
+  -- an imaginary line through that point. Next you will count
+  -- how many times that line crosses the curve before it reaches
+  -- that point. For every clockwise rotation, you subtract 1 and
+  -- for every counter-clockwise rotation you add 1.
+  --
+  -- <<docimages/fill_winding.png>>
+  = FillWinding
+
+  -- | This rule determines the insideness of a point on 
+  -- the canvas by drawing a ray from that point to infinity
+  -- in any direction and counting the number of path segments
+  -- from the given shape that the ray crosses. If this number
+  -- is odd, the point is inside; if even, the point is outside.
+  --
+  -- <<docimages/fill_evenodd.png>>
+  | FillEvenOdd
+  deriving (Eq, Enum, Show)
 
 -- | Describe the behaviour of samplers and texturers
 -- when they are out of the bounds of image and/or gradient.
@@ -91,7 +142,7 @@ data SamplerRepeat
     -- | Will loop inverting axises
     -- <<docimages/sampler_reflect.png>>
   | SamplerReflect
-  deriving (Eq, Show)
+  deriving (Eq, Enum, Show)
 
 -- | Represent a raster line
 data EdgeSample = EdgeSample
@@ -110,6 +161,22 @@ class Transformable a where
     --  point in the element.
     transform :: (Point -> Point) -> a -> a
 
+-- | Typeclass helper gathering all the points of a given
+-- geometry.
+class PointFoldable a where
+    -- | Fold an accumulator on all the points of
+    -- the primitive.
+    foldPoints :: (b -> Point -> b) -> b -> a -> b
+
+
+instance Transformable Point where
+    {-# INLINE transform #-}
+    transform f p = f p
+
+instance PointFoldable Point where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc p = f acc p
+
 -- | Describe a simple 2D line between two points.
 --
 -- > fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
@@ -122,11 +189,20 @@ data Line = Line
   { _lineX0 :: {-# UNPACK #-} !Point -- ^ Origin point
   , _lineX1 :: {-# UNPACK #-} !Point -- ^ End point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show Line where
+  show (Line a b) =
+      "Line (" ++ show a ++ ") ("
+               ++ show b ++ ")"
 
 instance Transformable Line where
     {-# INLINE transform #-}
     transform f (Line a b) = Line (f a) $ f b
+
+instance PointFoldable Line where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Line a b) = f (f acc b) a
 
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
@@ -139,17 +215,28 @@ instance Transformable Line where
 --
 data Bezier = Bezier
   { -- | Origin points, the spline will pass through it.
-    _bezierX0 :: {-# UNPACK #-} !Point 
+    _bezierX0 :: {-# UNPACK #-} !Point
     -- | Control point, the spline won't pass on it.
-  , _bezierX1 :: {-# UNPACK #-} !Point 
+  , _bezierX1 :: {-# UNPACK #-} !Point
     -- | End point, the spline will pass through it.
-  , _bezierX2 :: {-# UNPACK #-} !Point 
+  , _bezierX2 :: {-# UNPACK #-} !Point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show Bezier where
+    show (Bezier a b c) =
+        "Bezier (" ++ show a ++ ") ("
+                   ++ show b ++ ") ("
+                   ++ show c ++ ")"
 
 instance Transformable Bezier where
     {-# INLINE transform #-}
     transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
+
+instance PointFoldable Bezier where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Bezier a b c) =
+        foldl' f acc [a, b, c]
 
 -- | Describe a cubic bezier spline, described
 -- using 4 points.
@@ -160,28 +247,40 @@ instance Transformable Bezier where
 --
 -- <<docimages/cubic_bezier.png>>
 --
-data CubicBezier = CubicBezier 
+data CubicBezier = CubicBezier
   { -- | Origin point, the spline will pass through it.
-    _cBezierX0 :: {-# UNPACK #-} !Point 
+    _cBezierX0 :: {-# UNPACK #-} !Point
     -- | First control point of the cubic bezier curve.
-  , _cBezierX1 :: {-# UNPACK #-} !Point 
+  , _cBezierX1 :: {-# UNPACK #-} !Point
     -- | Second control point of the cubic bezier curve.
   , _cBezierX2 :: {-# UNPACK #-} !Point
     -- | End point of the cubic bezier curve
   , _cBezierX3 :: {-# UNPACK #-} !Point
   }
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show CubicBezier where
+  show (CubicBezier a b c d) =
+     "CubicBezier (" ++ show a ++ ") ("
+                ++ show b ++ ") ("
+                ++ show c ++ ") ("
+                ++ show d ++ ")"
 
 instance Transformable CubicBezier where
     {-# INLINE transform #-}
     transform f (CubicBezier a b c d) =
         CubicBezier (f a) (f b) (f c) $ f d
 
+instance PointFoldable CubicBezier where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (CubicBezier a b c d) =
+        foldl' f acc [a, b, c, d]
+
 -- | This datatype gather all the renderable primitives,
 -- they are kept separated otherwise to allow specialization
 -- on some specific algorithms. You can mix the different
 -- primitives in a single call :
--- 
+--
 -- > fill
 -- >    [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
 -- >                                    (V2  5 100) (V2 50 140)
@@ -202,6 +301,21 @@ instance Transformable Primitive where
     transform f (BezierPrim b) = BezierPrim $ transform f b
     transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
 
+instance PointFoldable Primitive where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc = go
+      where go (LinePrim l) = foldPoints f acc l
+            go (BezierPrim b) = foldPoints f acc b
+            go (CubicBezierPrim c) = foldPoints f acc c
+
+instance (Functor f, Transformable a)
+      => Transformable (f a) where
+    transform f = fmap (transform f)
+
+instance (Foldable f, PointFoldable a)
+      => PointFoldable (f a) where
+    foldPoints f = foldl' (foldPoints f)
+
 type Container a = [a]
 
 -- | Describe a path in a way similar to many graphical
@@ -215,7 +329,7 @@ type Container a = [a]
 --
 -- <<docimages/path_example.png>>
 --
-data Path = Path 
+data Path = Path
     { -- | Origin of the point, equivalent to the
       -- first "move" command.
       _pathOriginPoint :: Point
@@ -225,6 +339,16 @@ data Path = Path
     , _pathCommand     :: [PathCommand]
     }
     deriving (Eq, Show)
+
+instance Transformable Path where
+    {-# INLINE transform #-}
+    transform f (Path orig close rest) =
+        Path (f orig) close (transform f rest)
+
+instance PointFoldable Path where
+    {-# INLINE foldPoints #-}
+    foldPoints f acc (Path o _ rest) =
+        foldPoints f (f acc o) rest
 
 -- | Actions to create a path
 data PathCommand
@@ -237,6 +361,20 @@ data PathCommand
       -- | Draw a cubic bezier curve using 2 control points.
     | PathCubicBezierCurveTo Point Point Point
     deriving (Eq, Show)
+
+instance Transformable PathCommand where
+    transform f (PathLineTo p) = PathLineTo $ f p
+    transform f (PathQuadraticBezierCurveTo p1 p2) =
+        PathQuadraticBezierCurveTo (f p1) $ f p2
+    transform f (PathCubicBezierCurveTo p1 p2 p3) =
+        PathCubicBezierCurveTo (f p1) (f p2) $ f p3
+
+instance PointFoldable PathCommand where
+    foldPoints f acc (PathLineTo p) = f acc p
+    foldPoints f acc (PathQuadraticBezierCurveTo p1 p2) =
+        f (f acc p1) p2
+    foldPoints f acc (PathCubicBezierCurveTo p1 p2 p3) =
+        foldl' f acc [p1, p2, p3]
 
 -- | Transform a path description into a list of renderable
 -- primitives.

@@ -29,7 +29,7 @@ lineLength (Line a b) = norm (b ^-^ a)
 
 sanitizeLine :: Line -> Container Primitive
 sanitizeLine l@(Line p1 p2)
-  | p1 == p2 = mempty
+  | p1 `isNearby` p2 = mempty
   | otherwise = pure $ LinePrim l
 
 lineBreakAt :: Line -> Float -> (Line, Line)

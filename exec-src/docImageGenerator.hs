@@ -1,9 +1,12 @@
 
 import Control.Applicative( (<$>) )
+import Data.Monoid( (<>) )
 import Codec.Picture
+import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Transformations
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
@@ -129,6 +132,25 @@ coordinateSystem = do
         filler $ Path (V2 30 170) True
             [PathLineTo (V2 40 195), PathLineTo (V2 50 170)]
 
+fillingSample :: FillMethod -> Drawing px ()
+fillingSample fillMethod = fillWithMethod fillMethod geometry where
+  geometry = transform (applyTransformation $ scale 0.35 0.4
+                                           <> translate (V2 (-80) (-180)))
+           $ concatMap pathToPrimitives
+     [ Path (V2 484 499) True
+         [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
+         , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
+         ]
+     , Path (V2 136 377) True
+         [ PathCubicBezierCurveTo (V2 244 253) (V2 424 420) (V2 357 489)
+         , PathCubicBezierCurveTo (V2 302 582) (V2 47 481) (V2 136 377)
+         ]
+     , Path (V2 340 265) True
+         [ PathCubicBezierCurveTo (V2 64 371) (V2 128 748) (V2 343 536)
+         , PathCubicBezierCurveTo (V2 668 216) (V2 17 273) (V2 367 575)
+         , PathCubicBezierCurveTo (V2 589 727) (V2 615 159) (V2 340 265)
+         ]
+     ]
 
 main :: IO ()
 main = do
@@ -159,11 +181,18 @@ main = do
     produceDocImage (outFolder </> "fill_circle.png") $
         fill $ circle (V2 100 100) 75 
 
+    produceDocImage (outFolder </> "fill_ellipse.png") $
+        fill $ ellipse (V2 100 100) 75 30
+
     produceDocImage (outFolder </> "stroke_circle.png") $
         stroke 5 JoinRound (CapRound, CapRound) $ circle (V2 100 100) 75 
 
     produceDocImage (outFolder </> "dashed_stroke.png") $
         dashedStroke [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
+            line (V2 0 100) (V2 200 100)
+
+    produceDocImage (outFolder </> "dashed_stroke_with_offset.png") $
+        dashedStrokeWithOffset 3 [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
             line (V2 0 100) (V2 200 100)
 
     produceDocImage (outFolder </> "fill_rect.png") $
@@ -245,3 +274,74 @@ main = do
        fill . pathToPrimitives $ Path (V2 50 20) True
           [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
           , PathLineTo (V2 120 80) ]
+
+    produceDocImage (outFolder </> "stroke_polyline.png") $
+        stroke 4 JoinRound (CapRound, CapRound) $
+            polyline [V2 10 10, V2 100 70, V2 190 190]
+
+    produceDocImage (outFolder </> "fill_polygon.png") $
+        fill $ polygon [V2 30 30, V2 100 70, V2 80 170]
+
+    produceDocImage  (outFolder </> "fill_roundedRectangle.png") $
+        fill $ roundedRectangle (V2 10 10) 150 150 20 10
+
+    produceDocImage  (outFolder </> "stroke_roundedRectangle.png") $
+        stroke 4 JoinRound (CapRound, CapRound) $
+            roundedRectangle (V2 10 10) 150 150 20 10
+
+    produceDocImage (outFolder </> "fill_evenodd.png") $
+        fillingSample FillEvenOdd
+
+    produceDocImage (outFolder </> "fill_winding.png") $
+        fillingSample FillWinding
+
+    produceDocImage (outFolder </> "transform_rotate.png") $
+        fill . transform (applyTransformation $ rotate 0.2)
+             $ rectangle (V2 40 40) 120 120
+
+    produceDocImage (outFolder </> "transform_rotate_center.png") $
+        fill . transform (applyTransformation $ rotateCenter 0.2 (V2 200 200))
+             $ rectangle (V2 40 40) 120 120
+
+    produceDocImage (outFolder </> "transform_translate.png") $
+        fill . transform (applyTransformation $ translate (V2 100 100))
+             $ rectangle (V2 40 40) 40 40
+
+    produceDocImage (outFolder </> "transform_scale.png") $
+        fill . transform (applyTransformation $ scale 2 2)
+             $ rectangle (V2 40 40) 40 40
+
+    Right (ImageRGB8 img) <- readImage "avatar.png"
+    let textureImage = promoteImage img
+    produceDocImage (outFolder </> "sampled_texture_repeat.png") $
+        withTexture (withSampler SamplerRepeat $
+                        sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "image_simple.png") $
+        drawImage textureImage 0 (V2 30 30)
+
+    produceDocImage (outFolder </> "image_resize.png") $
+        drawImageAtSize textureImage 2 (V2 30 30) 128 128
+
+    produceDocImage (outFolder </> "sampled_texture_reflect.png") $
+        withTexture (withSampler SamplerReflect $
+                        sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_pad.png") $
+        withTexture (sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_rotate.png") $
+        withTexture (withSampler SamplerRepeat $
+                    transformTexture (rotateCenter 1 (V2 0 0))
+                    $ sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "sampled_texture_scaled.png") $
+        withTexture (withSampler SamplerRepeat $
+                    transformTexture (rotateCenter 1 (V2 0 0) <> 
+                                      scale 0.5 0.25)
+                    $ sampledImageTexture textureImage) $
+            fill $ rectangle (V2 0 0) 200 200

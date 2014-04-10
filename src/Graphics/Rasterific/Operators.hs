@@ -22,6 +22,8 @@ module Graphics.Rasterific.Operators
     , vpartition 
     , normal
     , ifZero
+    , isNearby
+    , isDistingableFrom
     ) where
 
 import Control.Applicative( Applicative
@@ -37,6 +39,7 @@ import Linear( V2( .. )
              , (^+^)
              {-, (^/)-}
              , (^*)
+             , dot
              , normalize
              )
 
@@ -143,4 +146,18 @@ ifZero :: (Epsilon v) => v -> v -> v
 {-# INLINE ifZero #-}
 ifZero u v | nearZero u = v
            | otherwise = u
+
+-- | Tell if two points are nearly indistinguishable.
+-- If indistinguishable, we can treat them as the same
+-- point.
+isNearby :: Point -> Point -> Bool
+{-# INLINE isNearby #-}
+isNearby p1 p2 = squareDist < 0.0001
+  where vec = p1 ^-^ p2
+        squareDist = vec `dot` vec
+
+-- | simply `not (a `isNearby` b)`
+isDistingableFrom :: Point -> Point -> Bool
+{-# INLINE isDistingableFrom #-}
+isDistingableFrom a b = not $ isNearby a b
 

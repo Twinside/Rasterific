@@ -10,12 +10,16 @@ module Graphics.Rasterific.Texture
     , Gradient
     , withSampler
     , uniformTexture
+      -- * Texture kind
     , linearGradientTexture
     , radialGradientTexture
     , radialGradientWithFocusTexture
     , imageTexture
     , sampledImageTexture
+
+      -- * Texture manipulation
     , modulateTexture
+    , transformTexture 
     ) where
 
 import Data.Fixed( mod' )
@@ -30,10 +34,13 @@ import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. )
                           , Image( .. )
+                          , Pixel8
+                          , PixelRGBA8
                           )
 import Graphics.Rasterific.Types( Point, SamplerRepeat( .. ) )
+import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Compositor
-    ( Modulable( clampCoverage, modulate ), compositionAlpha )
+    ( Modulable( clampCoverage, modulate, alphaOver ), compositionAlpha )
 
 -- | A texture is just a function which given pixel coordinate
 -- give back a pixel.
@@ -42,8 +49,47 @@ import Graphics.Rasterific.Compositor
 type Texture px = SamplerRepeat -> Float -> Float -> px
 
 -- | Set the repeat pattern of the texture (if any).
+-- With padding:
+--
+-- > withTexture (sampledImageTexture textureImage) $
+-- >   fill $ rectangle (V2 0 0) 200 200
+--
+-- <<docimages/sampled_texture_pad.png>>
+--
+-- With repeat:
+--
+-- > withTexture (withSampler SamplerRepeat $
+-- >                 sampledImageTexture textureImage) $
+-- >     fill $ rectangle (V2 0 0) 200 200
+--
+-- <<docimages/sampled_texture_repeat.png>>
+--
+-- With reflect:
+--
+-- > withTexture (withSampler SamplerReflect $
+-- >                 sampledImageTexture textureImage) $
+-- >     fill $ rectangle (V2 0 0) 200 200
+--
+-- <<docimages/sampled_texture_reflect.png>>
+--
 withSampler :: SamplerRepeat -> Texture px -> Texture px
 withSampler repeating texture _ = texture repeating
+
+-- | Transform the coordinates used for texture before applying
+-- it, allow interesting transformations.
+--
+-- > withTexture (withSampler SamplerRepeat $
+-- >             transformTexture (rotateCenter 1 (V2 0 0) <> 
+-- >                               scale 0.5 0.25)
+-- >             $ sampledImageTexture textureImage) $
+-- >     fill $ rectangle (V2 0 0) 200 200
+--
+-- <<docimages/sampled_texture_scaled.png>>
+--
+transformTexture :: Transformation -> Texture px -> Texture px
+transformTexture trans tx samp x y = tx samp x' y'
+  where
+    (V2 x' y') = applyTransformation trans (V2 x y)
 
 -- | The uniform texture is the simplest texture of all:
 -- an uniform color.
@@ -71,6 +117,8 @@ reflectGradient s =
    
 gradientColorAt :: (Pixel px, Modulable (PixelBaseComponent px))
                 => GradientArray px -> Float -> px
+{-# SPECIALIZE
+ 	gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 gradientColorAt grad at
     | at <= 0 = snd $ V.head grad
     | at >= 1.0 = snd $ V.last grad
@@ -87,6 +135,9 @@ gradientColorAt grad at
 
 gradientColorAtRepeat :: (Pixel px, Modulable (PixelBaseComponent px))
                       => SamplerRepeat -> GradientArray px -> Float -> px
+{-# SPECIALIZE INLINE
+	gradientColorAtRepeat ::
+		SamplerRepeat -> GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 gradientColorAtRepeat SamplerPad grad = gradientColorAt grad
 gradientColorAtRepeat SamplerRepeat grad =
     gradientColorAt grad . repeatGradient
@@ -109,6 +160,10 @@ linearGradientTexture :: (Pixel px, Modulable (PixelBaseComponent px))
                       -> Point       -- ^ Linear gradient start point.
                       -> Point       -- ^ Linear gradient end point.
                       -> Texture px
+{-# SPECIALIZE
+	linearGradientTexture
+		:: Gradient PixelRGBA8 -> Point -> Point
+        -> Texture PixelRGBA8 #-}
 linearGradientTexture gradient start end repeating =
     \x y -> colorAt $ ((V2 x y) `dot` d) - s00
   where
@@ -119,7 +174,64 @@ linearGradientTexture gradient start end repeating =
     s00 = start `dot` d
 
 -- | Use another image as a texture for the filling.
+-- Contrary to `imageTexture`, this function perform a bilinear
+-- filtering on the texture.
+--
+sampledImageTexture :: forall px.
+                       ( Pixel px, Modulable (PixelBaseComponent px))
+                    => Image px -> Texture px
+{-# SPECIALIZE
+ 	sampledImageTexture :: Image Pixel8 -> Texture Pixel8 #-}
+{-# SPECIALIZE
+ 	sampledImageTexture :: Image PixelRGBA8 -> Texture PixelRGBA8 #-}
+sampledImageTexture img sampling x y =
+  (at px  py `interpX` at pxn py)
+             `interpY`
+  (at px pyn `interpX` at pxn pyn)
+  where
+   coordSampler SamplerPad maxi v =
+      min (maxi - 1) . max 0 $ floor v
+   coordSampler SamplerReflect maxi v =
+      floor $ abs (abs (v - maxif - 1) `mod'` (2 * maxif) - maxif - 1)
+        where maxif = fromIntegral maxi
+   coordSampler SamplerRepeat maxi v = floor v `mod` maxi
+
+   w = fromIntegral $ imageWidth img
+   h = fromIntegral $ imageHeight img
+
+   clampedX = coordSampler sampling w
+   clampedY = coordSampler sampling h
+
+   px = clampedX x
+   pxn = clampedX $ x + 1
+   py = clampedY y
+   pyn = clampedY $ y + 1
+
+   dx, dy :: Float
+   dx = x - fromIntegral (floor x :: Int)
+   dy = y - fromIntegral (floor y :: Int)
+
+   at :: Int -> Int -> px
+   at xx yy =
+        unsafePixelAt rawData $ (yy * w + xx) * compCount
+
+   (covX, icovX) = clampCoverage dx
+   (covY, icovY) = clampCoverage dy
+
+   interpX = mixWith (const $ alphaOver covX icovX)
+   interpY = mixWith (const $ alphaOver covY icovY)
+
+   compCount = componentCount (undefined :: px)
+   rawData = imageData img
+
+-- | Use another image as a texture for the filling.
+-- This texture use the "nearest" filtering, AKA no
+-- filtering at all.
 imageTexture :: forall px. (Pixel px) => Image px -> Texture px
+{-# SPECIALIZE
+	imageTexture :: Image PixelRGBA8 -> Texture PixelRGBA8 #-}
+{-# SPECIALIZE
+	imageTexture :: Image Pixel8 -> Texture Pixel8 #-}
 imageTexture img _ x y =
     unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
   where
@@ -129,18 +241,6 @@ imageTexture img _ x y =
    w = imageWidth img
    h = imageHeight img
    rawData = imageData img
-
--- | Use another image as a texture for the filling,
--- but allow repeating and reflecting alongside with
--- padding.
-sampledImageTexture :: (Pixel px) => Image px -> Texture px
-sampledImageTexture img SamplerPad = imageTexture img SamplerPad
-sampledImageTexture img SamplerReflect = imageTexture img SamplerPad
-sampledImageTexture img SamplerRepeat = \x y -> texture (x `mod'` w) (y `mod'` h)
-  where
-   texture = imageTexture img SamplerPad
-   w = fromIntegral $ imageWidth img
-   h = fromIntegral $ imageHeight img
 
 -- | Radial gradient texture
 --
@@ -196,7 +296,7 @@ radialGradientWithFocusTexture gradient center radius focusScreen repeating =
         | otherwise = V2 (r * cos a) (r * sin a)
            where a = atan2 origFocusY origFocusX
                  r = radius * 0.99
-    trivial = sqrt $ radiusSquared - focusX * focusY
+    trivial = sqrt $ radiusSquared - origFocusX * origFocusX
 
     solutionOf (V2 x y) | x == focusX =
         V2 focusX (if y > focusY then trivial else negate trivial)

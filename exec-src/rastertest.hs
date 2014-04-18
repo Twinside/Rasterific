@@ -433,6 +433,19 @@ weirdCircle = writePng (outFolder </> "bad_circle.png")
                                             (V2 375.0 125.0)
              ]
 
+transparentGradient :: IO ()
+transparentGradient =
+    writePng (outFolder </> "transparent_gradient.png") $ renderDrawing 400 200 white img
+  where white = PixelRGBA8 255 255 255 255
+        img = withTexture (withSampler SamplerPad
+                          (linearGradientTexture gradDef
+                          (V2 40 40) (V2 130 130))) $
+                          fill $ circle (V2 100 100) 100
+        gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+                  ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+                  ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
+  
+
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -465,6 +478,7 @@ testSuite = do
   logoTest uniform ""
   logoTest biGradient "gradient_"
   crash uniform
+  transparentGradient 
 
   bigBox uniform ""
   bigBox biGradient "gradient_"

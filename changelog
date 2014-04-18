@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.2.1 ?? 2014
+ * Fixing transparency in gradients.
+
 v0.2 April 2014
  * Adding an ellipse helper.
  * Adding a polyline helper.

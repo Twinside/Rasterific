@@ -39,8 +39,7 @@ import Codec.Picture.Types( Pixel( .. )
                           )
 import Graphics.Rasterific.Types( Point, SamplerRepeat( .. ) )
 import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.Compositor
-    ( Modulable( clampCoverage, modulate, alphaOver ), compositionAlpha )
+import Graphics.Rasterific.Compositor( Modulable( clampCoverage, modulate, alphaOver ) )
 
 -- | A texture is just a function which given pixel coordinate
 -- give back a pixel.
@@ -127,7 +126,7 @@ gradientColorAt grad at
     maxi = V.length grad
     go (prevCoeff, prevValue) ix
       | ix >= maxi = snd $ V.last grad
-      | at < coeff = compositionAlpha cov icov prevValue px
+      | at < coeff = mixWith (\_ -> alphaOver cov icov) prevValue px
       | otherwise = go value $ ix + 1
       where value@(coeff, px) = grad `V.unsafeIndex` ix
             zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)

@@ -21,12 +21,25 @@ type Compositor px =
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.
 class (Ord a, Num a) => Modulable a where
+  -- | Empty value representing total transparency for the given type.
   emptyValue :: a
+  -- | Full value representing total opacity for a given type.
   fullValue  :: a
+  -- | Given a Float in [0; 1], return the coverage in [emptyValue; fullValue]
+  -- The second value is the inverse coverage
   clampCoverage :: Float -> (a, a)
+
+  -- | Modulate two elements, staying in the [emptyValue; fullValue] range.
   modulate :: a -> a -> a
-  alphaOver :: a -> a -> a -> a -> a
+
+  alphaOver :: a -- ^ coverage
+            -> a -- ^ inverse coverage
+            -> a -- ^ background
+            -> a -- ^ foreground
+            -> a
   alphaCompose :: a -> a -> a -> a -> a
+
+  -- | Like modulate but also return the inverse coverage.
   coverageModulate :: a -> a -> (a, a)
 
 instance Modulable Word8 where

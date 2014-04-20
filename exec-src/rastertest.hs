@@ -436,8 +436,7 @@ weirdCircle = writePng (outFolder </> "bad_circle.png")
 transparentGradient :: IO ()
 transparentGradient =
     writePng (outFolder </> "transparent_gradient.png") $ renderDrawing 400 200 white img
-  where white = PixelRGBA8 255 255 255 255
-        img = withTexture (withSampler SamplerPad
+  where img = withTexture (withSampler SamplerPad
                           (linearGradientTexture gradDef
                           (V2 40 40) (V2 130 130))) $
                           fill $ circle (V2 100 100) 100
@@ -445,6 +444,24 @@ transparentGradient =
                   ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                   ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
   
+gradientRadial :: IO ()
+gradientRadial =
+    writePng (outFolder </> "rad_opacity.png") $
+        renderDrawing 500 500 back img
+  where back = PixelRGBA8 255 255 255 255
+        img = withTexture (withSampler SamplerRepeat
+                          (radialGradientTexture gradDef
+                          (V2 250 250) 100)) $
+                          fill $ rectangle (V2 0 0) 500 500
+        gradDef = 
+            [(0  , PixelRGBA8 255 165 0 102)
+            ,(0.5, PixelRGBA8 255 165 0 102)
+            ,(0.5, PixelRGBA8 255 165 0 102)
+            ,(0.525, PixelRGBA8 255 165 0 255)
+            ,(0.675, PixelRGBA8 128 128 128 64)
+            ,(0.75, PixelRGBA8 0 128 128 255)
+            ,(1, PixelRGBA8 0 128 128 255)
+            ]
 
 testSuite :: IO ()
 testSuite = do
@@ -479,6 +496,7 @@ testSuite = do
   logoTest biGradient "gradient_"
   crash uniform
   transparentGradient 
+  gradientRadial 
 
   bigBox uniform ""
   bigBox biGradient "gradient_"

@@ -444,12 +444,11 @@ transparentGradient =
                   ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
                   ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
   
-gradientRadial :: IO ()
-gradientRadial =
-    writePng (outFolder </> "rad_opacity.png") $
+gradientRadial :: String -> PixelRGBA8 -> IO ()
+gradientRadial name back =
+    writePng (outFolder </> ("rad_opacity" ++ name ++ ".png")) $
         renderDrawing 500 500 back img
-  where back = PixelRGBA8 255 255 255 255
-        img = withTexture (withSampler SamplerRepeat
+  where img = withTexture (withSampler SamplerRepeat
                           (radialGradientTexture gradDef
                           (V2 250 250) 100)) $
                           fill $ rectangle (V2 0 0) 500 500
@@ -496,7 +495,14 @@ testSuite = do
   logoTest biGradient "gradient_"
   crash uniform
   transparentGradient 
-  gradientRadial 
+  gradientRadial "white_opaque" white
+  gradientRadial "black_opaque" black
+  gradientRadial "white_transparent" (PixelRGBA8 255 255 255 0)
+  gradientRadial "white_semi" (PixelRGBA8 255 255 255 128)
+  gradientRadial "black_transparent" (PixelRGBA8 0 0 0 0)
+  gradientRadial "gray_opaque" (PixelRGBA8 128 128 128 255)
+  gradientRadial "gray_transparent" (PixelRGBA8 128 128 128 0)
+  gradientRadial "gray_semi" (PixelRGBA8 128 128 128 128)
 
   bigBox uniform ""
   bigBox biGradient "gradient_"

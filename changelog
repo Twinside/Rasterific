@@ -1,5 +1,10 @@
 -*-change-log-*-
 
+v0.2.1 April 2014
+ * Fixing transparency in gradients.
+ * Fixing alpha composition on top of translucent
+   background.
+
 v0.2 April 2014
  * Adding an ellipse helper.
  * Adding a polyline helper.

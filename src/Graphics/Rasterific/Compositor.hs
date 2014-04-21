@@ -21,13 +21,42 @@ type Compositor px =
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.
 class (Ord a, Num a) => Modulable a where
+  -- | Empty value representing total transparency for the given type.
   emptyValue :: a
+  -- | Full value representing total opacity for a given type.
   fullValue  :: a
+  -- | Given a Float in [0; 1], return the coverage in [emptyValue; fullValue]
+  -- The second value is the inverse coverage
   clampCoverage :: Float -> (a, a)
+
+  -- | Modulate two elements, staying in the [emptyValue; fullValue] range.
   modulate :: a -> a -> a
-  alphaOver :: a -> a -> a -> a -> a
+
+  -- | Implement a division between two elements.
+  modiv :: a -> a -> a
+
+  alphaOver :: a -- ^ coverage
+            -> a -- ^ inverse coverage
+            -> a -- ^ background
+            -> a -- ^ foreground
+            -> a
   alphaCompose :: a -> a -> a -> a -> a
+
+  -- | Like modulate but also return the inverse coverage.
   coverageModulate :: a -> a -> (a, a)
+  coverageModulate c a = (clamped, fullValue - clamped)
+    where clamped = modulate a c
+
+instance Modulable Float where
+  emptyValue = 0
+  fullValue = 1
+  clampCoverage f = (f, 1 - f)
+  modulate = (*)
+  modiv = (/)
+  alphaCompose coverage inverseCoverage backAlpha _ =
+      coverage + backAlpha * inverseCoverage
+  alphaOver coverage inverseCoverage background painted =
+      coverage * painted + background * inverseCoverage
 
 instance Modulable Word8 where
   emptyValue = 0
@@ -40,8 +69,10 @@ instance Modulable Word8 where
           fi = fromIntegral
           v = fi c * fi a + 128
 
-  coverageModulate c a = (clamped, fullValue - clamped)
-    where clamped = modulate a c
+  modiv c 0 = c
+  modiv c a = fromIntegral . min 255 $ (fi c * 255) `div` fi a
+    where fi :: Word8 -> Word32
+          fi = fromIntegral
 
   alphaCompose coverage inverseCoverage backgroundAlpha _ =
       fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
@@ -67,9 +98,15 @@ compositionDestination c _ _ a = colorMap (modulate c) $ a
 compositionAlpha :: (Pixel px, Modulable (PixelBaseComponent px))
                  => Compositor px
 {-# INLINE compositionAlpha #-}
-compositionAlpha c ic 
+compositionAlpha c ic
     | c == emptyValue = const
     | c == fullValue = \_ n -> n
-    | otherwise = mixWithAlpha (\_ -> alphaOver c ic)
-                               (alphaCompose c ic)
+    | otherwise = \bottom top ->
+        let bottomOpacity = pixelOpacity bottom
+            alphaOut = alphaCompose c ic bottomOpacity (pixelOpacity top)
+            colorComposer _ back fore =
+                (alphaOver c ic (back `modulate` bottomOpacity) fore)
+                    `modiv` alphaOut
+        in
+        mixWithAlpha colorComposer (\_ _ -> alphaOut) bottom top
 

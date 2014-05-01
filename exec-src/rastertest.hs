@@ -20,6 +20,7 @@ import Criterion.Main( parseArgs
                      , defaultMainWith
                      , bench
                      )
+import qualified Sample as Sample
 
 type Stroker =
     Float -> Join -> (Cap, Cap) -> [Primitive]
@@ -548,7 +549,8 @@ benchTest args = do
   (config, _) <-
       parseArgs defaultConfig defaultOptions args
   defaultMainWith config (return ())
-        [bench "testsuite" testSuite]
+        [bench "testsuite" testSuite,
+         bench "Triangles" Sample.triangles]
 
 main :: IO ()
 main = do
@@ -556,5 +558,6 @@ main = do
     case args of
          "random":_ -> randomTests
          "bench":rest -> benchTest rest
+         "prof":_ -> Sample.triangles
          _ -> testSuite
 

@@ -181,11 +181,12 @@ sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 
 strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
-         -> [Primitive]
+         -> Container Primitive
 strokize width join (capStart, capEnd) beziers =
     offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
-  where sanitized = foldMap sanitize beziers
+  where 
+        sanitized = foldMap (listOfContainer . sanitize) $ beziers
         offseter = offsetAndJoin (width / 2) join
 
 flattenPrimitive :: Primitive -> Container Primitive
@@ -232,7 +233,9 @@ dropPattern = go
 
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
 dashize offset pattern =
-    taker infinitePattern . concatMap flattenPrimitive . concatMap sanitize
+    taker infinitePattern . listOfContainer 
+                          . foldMap flattenPrimitive
+                          . foldMap sanitize
   where
     realOffset | offset >= 0 = offset
                | otherwise = offset + sum pattern
@@ -254,5 +257,6 @@ dashedStrokize :: Float -> DashPattern -> StrokeWidth
                -> Join -> (Cap, Cap) -> [Primitive]
                -> [[Primitive]]
 dashedStrokize offset dashPattern width join capping beziers =
-    strokize width join capping <$> dashize offset dashPattern beziers
+    listOfContainer . strokize width join capping
+        <$> dashize offset dashPattern beziers
 

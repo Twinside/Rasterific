@@ -99,6 +99,7 @@ module Graphics.Rasterific
 
     ) where
 
+import qualified Data.Foldable as F
 import Control.Applicative( (<$>) )
 import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
@@ -387,7 +388,7 @@ renderDrawing width height background drawing = runST $
 
     go ctxt (Free (Stroke w j cap prims next)) =
         go ctxt . Free $ Fill FillWinding prim' next
-            where prim' = strokize w j cap prims
+            where prim' = listOfContainer $ strokize w j cap prims
     go ctxt (Free (SetTexture tx sub next)) = do
         go (ctxt { currentTexture = tx }) sub
         go ctxt next
@@ -467,7 +468,7 @@ dashedStrokeWithOffset offset dashing width join caping prims =
 clip :: Point     -- ^ Minimum point (corner upper left)
      -> Point     -- ^ Maximum point (corner bottom right)
      -> Primitive -- ^ Primitive to be clipped
-     -> [Primitive]
+     -> Container Primitive
 clip mini maxi (LinePrim l) = clipLine mini maxi l
 clip mini maxi (BezierPrim b) = clipBezier mini maxi b
 clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
@@ -486,8 +487,8 @@ fillWithTexture fillMethod texture els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod $ els >>= clip mini maxi
-    lift $ mapM_ (composeCoverageSpan texture img) spans
+        spans = rasterize fillMethod . listOfContainer $ F.foldMap (clip mini maxi) els 
+    lift $ F.mapM_ (composeCoverageSpan texture img) spans
 
 fillWithTextureAndMask
     :: ( Pixel px
@@ -502,7 +503,7 @@ fillWithTextureAndMask fillMethod texture mask els = do
     img@(MutableImage width height _) <- get
     let mini = V2 0 0
         maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod $ els >>= clip mini maxi
+        spans = rasterize fillMethod . listOfContainer $ F.foldMap (clip mini maxi) els
     lift $ mapM_ (composeCoverageSpanWithMask texture mask img) spans
 
 composeCoverageSpan :: forall s px .

@@ -13,6 +13,8 @@ module Graphics.Rasterific.Types
     , CubicBezier( .. )
     , Primitive( .. )
     , Container
+    , containerOfList
+    , listOfContainer
     , PathCommand( .. )
     , Path( .. )
     , Transformable( .. )
@@ -31,6 +33,7 @@ module Graphics.Rasterific.Types
     , pathToPrimitives
     ) where
 
+import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable, foldl' )
 import Linear( V2( .. ) )
 
@@ -316,7 +319,13 @@ instance (Foldable f, PointFoldable a)
       => PointFoldable (f a) where
     foldPoints f = foldl' (foldPoints f)
 
-type Container a = [a]
+type Container a = DList a
+
+containerOfList :: [a] -> Container a
+containerOfList = fromList
+
+listOfContainer :: Container a -> [a]
+listOfContainer = toList
 
 -- | Describe a path in a way similar to many graphical
 -- packages, using a "pen" position in memory and reusing

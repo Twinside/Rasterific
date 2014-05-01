@@ -4,6 +4,7 @@ module Graphics.Rasterific.Rasterize
     ) where
 
 import Data.Fixed( mod' )
+import Data.Foldable( foldMap )
 import Data.List( mapAccumL, sortBy )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
@@ -31,7 +32,7 @@ combineEdgeSamples prepareCoverage = append . mapAccumL go (0, 0, 0, 0)
                where p1 = CoverageSpan x y (prepareCoverage a) 1
                      p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
-decompose :: Primitive -> [EdgeSample]
+decompose :: Primitive -> Container EdgeSample
 decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) = decomposeCubicBeziers c
@@ -39,8 +40,14 @@ decompose (CubicBezierPrim c) = decomposeCubicBeziers c
 rasterize :: FillMethod -> [Primitive] -> [CoverageSpan]
 rasterize method = 
   case method of
-    FillWinding -> combineEdgeSamples combineWinding . sortBy xy . concatMap decompose
-    FillEvenOdd -> combineEdgeSamples combineEvenOdd . sortBy xy . concatMap decompose
+    FillWinding -> combineEdgeSamples combineWinding 
+                        . sortBy xy
+                        . listOfContainer
+                        . foldMap decompose
+    FillEvenOdd -> combineEdgeSamples combineEvenOdd
+                        . sortBy xy
+                        . listOfContainer
+                        . foldMap decompose
   where xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
         combineWinding = min 1 . abs
         combineEvenOdd cov = abs $ abs (cov - 1) `mod'` 2 - 1

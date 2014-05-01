@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
@@ -221,52 +222,50 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     abbcbccd = lerpPoint abbc bccd val
 
 decomposeCubicBeziers :: CubicBezier -> Container EdgeSample
-decomposeCubicBeziers (CubicBezier a@(V2 ax ay) b c d@(V2 dx dy))
-    | insideX && insideY =
-        pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
-    | otherwise =
-        recurse (CubicBezier a ab abbc m) <>
-            recurse (CubicBezier m bccd cd d)
-  where recurse = decomposeCubicBeziers
-        floorA = vfloor a
-        floorD = vfloor d
-        V2 px py  = fromIntegral <$> vmin floorA floorD
-        V1 w = (px + 1 -) <$>  (V1 dx `midPoint` V1 ax)
-        h = dy - ay
+decomposeCubicBeziers (CubicBezier aR bR cR dR) = go aR bR cR dR where
+  go a@(V2 ax ay) _b _c d@(V2 dx dy) | insideX && insideY =
+    pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
+    where
+      !floorA = vfloor a
+      !floorD = vfloor d
+      !(V2 px py)  = fromIntegral <$> vmin floorA floorD
+      !(V1 w) = (px + 1 -) <$>  (V1 dx `midPoint` V1 ax)
+      !h = dy - ay
+      !(V2 insideX insideY) =
+          floorA ^==^ floorD ^||^ vceil a ^==^ vceil d
 
-        V2 insideX insideY =
-            floorA ^==^ floorD ^||^ vceil a ^==^ vceil d
+  go a b c d = go a ab abbc m <> go m bccd cd d
+    where 
+      --                     BC
+      --         B X----------X---------X C
+      --          /      ___/   \___     \
+      --         /   __X------X------X_   \
+      --        /___/ ABBC       BCCD  \___\
+      --    AB X/                          \X CD
+      --      /                              \
+      --     /                                \
+      --    /                                  \
+      -- A X                                    X D
+      !ab = a `midPoint` b
+      !bc = b `midPoint` c
+      !cd = c `midPoint` d
+      !abbc = ab `midPoint` bc
+      !bccd = bc `midPoint` cd
 
-        --                     BC
-        --         B X----------X---------X C
-        --          /      ___/   \___     \
-        --         /   __X------X------X_   \
-        --        /___/ ABBC       BCCD  \___\
-        --    AB X/                          \X CD
-        --      /                              \
-        --     /                                \
-        --    /                                  \
-        -- A X                                    X D
-        ab = a `midPoint` b
-        bc = b `midPoint` c
-        cd = c `midPoint` d
-        abbc = ab `midPoint` bc
-        bccd = bc `midPoint` cd
+      !abbcbccd = abbc `midPoint` bccd
 
-        abbcbccd = abbc `midPoint` bccd
+      mini = fromIntegral <$> vfloor abbcbccd
+      maxi = fromIntegral <$> vceil abbcbccd
+      !nearmin = vabs (abbcbccd ^-^ mini) ^< 0.1
+      !nearmax = vabs (abbcbccd ^-^ maxi) ^< 0.1
 
-        mini = fromIntegral <$> vfloor abbcbccd
-        maxi = fromIntegral <$> vceil abbcbccd
-        nearmin = vabs (abbcbccd ^-^ mini) ^< 0.1
-        nearmax = vabs (abbcbccd ^-^ maxi) ^< 0.1
+      minMaxing mi nearmi ma nearma p
+        | nearmi = mi
+        | nearma = ma
+        | otherwise = p
 
-        minMaxing mi nearmi ma nearma p
-          | nearmi = mi
-          | nearma = ma
-          | otherwise = p
-
-        m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax
-                      <*> abbcbccd
+      !m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax
+                     <*> abbcbccd
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)

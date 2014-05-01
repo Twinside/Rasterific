@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.3 2014
+ * Switching main free monad type to the church encoded one.
+ * Various speed optimisations
+
 v0.2.1 April 2014
  * Fixing transparency in gradients.
  * Fixing alpha composition on top of translucent

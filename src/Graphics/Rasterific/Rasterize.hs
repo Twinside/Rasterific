@@ -9,6 +9,7 @@ import Data.List( mapAccumL, sortBy )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.Line
 
 data CoverageSpan = CoverageSpan
     { _coverageX      :: {-# UNPACK #-} !Float
@@ -33,7 +34,7 @@ combineEdgeSamples prepareCoverage = append . mapAccumL go (0, 0, 0, 0)
                      p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
 decompose :: Primitive -> Container EdgeSample
-decompose (LinePrim (Line x1 x2)) = decomposeBeziers $ straightLine x1 x2
+decompose (LinePrim l) = decomposeLine l
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) = decomposeCubicBeziers c
 

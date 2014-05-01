@@ -150,8 +150,7 @@ joinPrimitives offset join prim1 prim2  =
         (_, v) = firstPointAndNormal prim2
 
 offsetPrimitives :: Float -> Primitive -> Container Primitive
-offsetPrimitives offset (LinePrim (Line x1 x2)) =
-    offsetPrimitives offset . BezierPrim $ straightLine x1 x2
+offsetPrimitives offset (LinePrim l) = offsetLine offset l
 offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
 offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 

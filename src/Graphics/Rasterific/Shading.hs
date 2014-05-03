@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Graphics.Rasterific.Shading
     ( Texture( .. )
     , Gradient
@@ -35,6 +36,8 @@ import Graphics.Rasterific.Types( Point
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Compositor( Modulable( .. )
+                                     , ModulablePixel
+                                     , RenderablePixel
                                      , compositionAlpha )
 
 type ShaderFunction px = Float -> Float -> px
@@ -92,8 +95,7 @@ type CoverageFiller s px =
 type Filler s =
     TextureSpaceInfo -> ST s ()
 
-solidColor :: forall s px.
-              (Pixel px, Modulable (PixelBaseComponent px))
+solidColor :: forall s px . ModulablePixel px
            => px -> MutableImage s px -> Filler s
 {-# SPECIALIZE solidColor :: PixelRGBA8 -> MutableImage s PixelRGBA8
                           -> Filler s #-}
@@ -135,10 +137,7 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
 
-shaderFiller :: forall s px
-              . ( Pixel px
-                , Modulable (PixelBaseComponent px)
-                )
+shaderFiller :: forall s px . ModulablePixel px
              => ShaderFunction px -> MutableImage s px
              -> Filler s
 {-# SPECIALIZE shaderFiller :: ShaderFunction PixelRGBA8
@@ -210,13 +209,7 @@ withTrans (Just v) shader = \x y ->
 -- | The intent of shader texture is to provide ease of implementation
 -- If possible providing a custom filler will be more efficient,
 -- like already done for the solid colors.
-shaderOfTexture :: forall px
-                 . ( Modulable (PixelBaseComponent px)
-                   , Pixel (PixelBaseComponent px)
-                   , Pixel px
-                   , PixelBaseComponent (PixelBaseComponent px)
-                            ~ (PixelBaseComponent px)
-                   )
+shaderOfTexture :: forall px . RenderablePixel px
                 => Maybe Transformation -> SamplerRepeat -> Texture px
                 -> ShaderFunction px
 shaderOfTexture _ _ (SolidTexture px) = \_ _ -> px
@@ -247,12 +240,7 @@ shaderOfTexture trans sampling (ModulateTexture texture modulation) =
 -- | This function will interpret the texture description, helping
 -- prepare and optimize the real calculation
 transformTextureToFiller
-    :: ( Pixel px
-       , Pixel (PixelBaseComponent px)
-       , Modulable (PixelBaseComponent px)
-       , PixelBaseComponent (PixelBaseComponent px)
-            ~ PixelBaseComponent px
-       )
+    :: RenderablePixel px
     => Texture px -> CoverageFiller s px
 transformTextureToFiller texture = go Nothing SamplerPad texture
   where
@@ -284,7 +272,7 @@ reflectGradient :: Float -> Float
 reflectGradient s =
     abs (abs (s - 1) `mod'` 2 - 1)
    
-gradientColorAt :: (Pixel px, Modulable (PixelBaseComponent px))
+gradientColorAt :: ModulablePixel px
                 => GradientArray px -> Float -> px
 {-# SPECIALIZE
  	gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
@@ -302,7 +290,7 @@ gradientColorAt grad at
             zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
             (cov, icov) = clampCoverage zeroToOne
 
-gradientColorAtRepeat :: (Pixel px, Modulable (PixelBaseComponent px))
+gradientColorAtRepeat :: ModulablePixel px
                       => SamplerRepeat -> GradientArray px -> Float -> px
 {-# SPECIALIZE INLINE
 	gradientColorAtRepeat ::
@@ -313,7 +301,7 @@ gradientColorAtRepeat SamplerRepeat grad =
 gradientColorAtRepeat SamplerReflect grad =
     gradientColorAt grad . reflectGradient
 
-linearGradientShader :: (Pixel px, Modulable (PixelBaseComponent px))
+linearGradientShader :: ModulablePixel px
                      => Gradient px -- ^ Gradient description.
                      -> Point       -- ^ Linear gradient start point.
                      -> Point       -- ^ Linear gradient end point.
@@ -332,9 +320,8 @@ linearGradientShader gradient start end repeating =
 -- Contrary to `imageTexture`, this function perform a bilinear
 -- filtering on the texture.
 --
-sampledImageShader :: forall px.
-                       ( Pixel px, Modulable (PixelBaseComponent px))
-                    => Image px -> SamplerRepeat -> ShaderFunction px
+sampledImageShader :: forall px.  ModulablePixel px
+                   => Image px -> SamplerRepeat -> ShaderFunction px
 {-# SPECIALIZE
  	sampledImageShader :: Image Pixel8 -> SamplerRepeat
  	                   -> ShaderFunction Pixel8 #-}
@@ -399,7 +386,7 @@ imageShader img x y =
    h = imageHeight img
    rawData = imageData img
 
-radialGradientShader :: (Pixel px, Modulable (PixelBaseComponent px))
+radialGradientShader :: ModulablePixel px
                      => Gradient px -- ^ Gradient description
                      -> Point       -- ^ Radial gradient center
                      -> Float       -- ^ Radial gradient radius
@@ -412,7 +399,7 @@ radialGradientShader gradient center radius repeating =
     gradArray = V.fromList gradient
 
 radialGradientWithFocusShader
-    :: (Pixel px, Modulable (PixelBaseComponent px))
+    :: ModulablePixel px
     => Gradient px -- ^ Gradient description
     -> Point      -- ^ Radial gradient center
     -> Float      -- ^ Radial gradient radius
@@ -456,7 +443,7 @@ radialGradientWithFocusShader gradient center radius focusScreen repeating =
 
 -- | Perform a multiplication operation between a full color texture
 -- and a greyscale one, used for clip-path implementation.
-modulateTexture :: (Pixel px, Modulable (PixelBaseComponent px))
+modulateTexture :: ModulablePixel px
                 => ShaderFunction px
                 -> ShaderFunction (PixelBaseComponent px)
                 -> ShaderFunction px

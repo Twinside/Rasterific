@@ -1,10 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 -- | Compositor handle the pixel composition, which
 -- leads to texture composition.
 -- Very much a work in progress
 module Graphics.Rasterific.Compositor
     ( Compositor
     , Modulable( .. )
+    , ModulablePixel
+    , RenderablePixel
     , compositionDestination
     , compositionAlpha
     ) where
@@ -17,6 +20,24 @@ import Codec.Picture.Types( Pixel( .. ) )
 type Compositor px =
     (PixelBaseComponent px) ->
         (PixelBaseComponent px) -> px -> px -> px
+
+-- | This constraint ensure that a type is a pixel
+-- and we're allowed to modulate it's color components
+-- generically.
+type ModulablePixel px =
+    (Pixel px, Modulable (PixelBaseComponent px))
+
+-- | This constraint tells us that pixel component
+-- must also be pixel and be the "bottom" of component,
+-- we cannot go further than a PixelBaseComponent level.
+--
+-- All pixel instances of JuicyPixels should be usable.
+type RenderablePixel px =
+    ( ModulablePixel px
+    , Pixel (PixelBaseComponent px)
+    , PixelBaseComponent (PixelBaseComponent px)
+            ~ (PixelBaseComponent px)
+    )
 
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.

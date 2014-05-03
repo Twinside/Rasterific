@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
 -- Creating an image is rather simple, here is a simple example
@@ -50,6 +51,9 @@ module Graphics.Rasterific
     , dashedStrokeWithOffset
     , printTextAt
 
+      -- * Generating images
+    , ModulablePixel
+    , RenderablePixel
     , renderDrawing
     , pathToPrimitives
 
@@ -344,12 +348,7 @@ data RenderContext px = RenderContext
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
 -- in other colorspace will probably produce weird results.
 renderDrawing
-    :: forall px
-     . ( Pixel px
-       , Pixel (PixelBaseComponent px)
-       , Modulable (PixelBaseComponent px)
-       , PixelBaseComponent (PixelBaseComponent px) ~ (PixelBaseComponent px)
-       )
+    :: forall px . (RenderablePixel px)
     => Int -- ^ Rendering width
     -> Int -- ^ Rendering height
     -> px  -- ^ Background color
@@ -500,12 +499,7 @@ isCoverageDrawable img coverage =
 -- be equal to the first point of the first primitive.
 --
 -- The primitive should be connected.
-fillWithTexture :: ( Pixel px
-                   , Pixel (PixelBaseComponent px)
-                   , Modulable (PixelBaseComponent px)
-                   , PixelBaseComponent px
-                        ~ PixelBaseComponent (PixelBaseComponent px)
-                   )
+fillWithTexture :: RenderablePixel px
                 => FillMethod
                 -> Texture px  -- ^ Color/Texture used for the filling
                 -> [Primitive] -- ^ Primitives to fill
@@ -527,12 +521,7 @@ fillWithTexture fillMethod texture els = do
     lift . F.mapM_ filler $ filter (isCoverageDrawable img) spans
 
 fillWithTextureAndMask
-    :: ( Pixel px
-       , Pixel (PixelBaseComponent px)
-       , Modulable (PixelBaseComponent px)
-       , (PixelBaseComponent px)
-            ~ PixelBaseComponent (PixelBaseComponent px)
-       )
+    :: RenderablePixel px
     => FillMethod
     -> Texture px  -- ^ Color/Texture used for the filling
     -> Texture (PixelBaseComponent px)
@@ -620,7 +609,7 @@ rectangle p@(V2 px py) w h =
 --
 -- <<docimages/image_simple.png>>
 --
-drawImage :: (Pixel px, Modulable (PixelBaseComponent px))
+drawImage :: ModulablePixel px
           => Image px       -- ^ Image to be drawn
           -> StrokeWidth    -- ^ Border size, drawn with current texture.
           -> Point          -- ^ Position of the corner upper left of the image.

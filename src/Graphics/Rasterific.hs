@@ -164,16 +164,27 @@ data DrawCommand px next
 --
 -- The outputted code looks like Haskell, but there is no
 -- guarantee that it is compilable.
-dumpDrawing :: (Show px) => Drawing px () -> String
+dumpDrawing :: ( Show px
+               , Show (PixelBaseComponent px)
+               , PixelBaseComponent (PixelBaseComponent px)
+                    ~ (PixelBaseComponent px)
+
+               ) => Drawing px () -> String
 dumpDrawing = go . fromF where
-  go :: Show px => Free (DrawCommand px) () -> String
+  go ::
+        ( Show px
+        , Show (PixelBaseComponent px)
+        , PixelBaseComponent (PixelBaseComponent px)
+                    ~ (PixelBaseComponent px)
+
+        ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
   go (Free (Fill _ prims next)) =
     "fill " ++ show prims ++ " >>=\n" ++   go next
   go (Free (TextFill _ _ _ text next)) =
     "-- Text : " ++ text ++ "\n" ++   go next
-  go (Free (SetTexture _tx drawing next)) =
-    "withTexture ({- texture -}) (" ++
+  go (Free (SetTexture tx drawing next)) =
+    "withTexture (" ++ dumpTexture tx ++ ") (" ++
               go (fromF drawing) ++ ") >>=\n" ++ go next
   go (Free (DashedStroke o pat w j cap prims next)) =
     "dashedStrokeWithOffset "
@@ -189,11 +200,11 @@ dumpDrawing = go . fromF where
               ++ show cap ++ " "
               ++ show prims ++ " >>=\n" ++   go next
   go (Free (WithTransform trans sub next)) =
-    "withTransform (" ++ show trans ++ ") (" 
+    "withTransform (" ++ show trans ++ ") ("
                       ++ go (fromF sub) ++ ") >>=\n "
                       ++ go next
   go (Free (WithCliping clipping draw next)) =
-    "withClipping (" ++   go (fromF $ withTexture clipTexture clipping)
+    "withClipping (" ++ go (fromF $ withTexture clipTexture clipping)
                      ++ ")\n" ++
         "         (" ++ go (fromF draw) ++ ")\n >>= " ++
               go next
@@ -483,7 +494,7 @@ isCoverageDrawable img coverage =
     !imgHeight = fromIntegral $ mutableImageHeight img
     x = _coverageX coverage
     y = _coverageY coverage
-  
+
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
 -- be equal to the first point of the first primitive.
@@ -511,8 +522,8 @@ fillWithTexture fillMethod texture els = do
         !maxi = V2 (fromIntegral width) (fromIntegral height)
         !filler = transformTextureToFiller texture img
         spans :: [CoverageSpan]
-        spans = rasterize fillMethod . listOfContainer 
-              $ F.foldMap (clip mini maxi) els 
+        spans = rasterize fillMethod . listOfContainer
+              $ F.foldMap (clip mini maxi) els
     lift . F.mapM_ filler $ filter (isCoverageDrawable img) spans
 
 fillWithTextureAndMask

@@ -106,7 +106,7 @@ sampledImageTexture = SampledTexture
 -- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
 -- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
 -- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
--- > withTexture (radialGradientTexture SamplerPad gradDef
+-- > withTexture (radialGradientTexture gradDef
 -- >                    (V2 100 100) 75) $
 -- >    fill $ circle (V2 100 100) 100
 --
@@ -123,7 +123,7 @@ radialGradientTexture = RadialGradientTexture
 -- > let gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
 -- >               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
 -- >               ,(1, PixelRGBA8 0xFF 0x53 0x73 255)] in
--- > withTexture (radialGradientWithFocusTexture SamplerPad gradDef
+-- > withTexture (radialGradientWithFocusTexture gradDef
 -- >                    (V2 100 100) 75 (V2 70 70) ) $
 -- >    fill $ circle (V2 100 100) 100
 --

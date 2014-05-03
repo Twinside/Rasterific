@@ -7,6 +7,7 @@ module Graphics.Rasterific.Shading
     , Gradient
     , ShaderFunction
     , transformTextureToFiller
+    , dumpTexture
     ) where
 
 import Data.Fixed( mod' )
@@ -50,6 +51,31 @@ data Texture px
   | RawTexture     !(Image px)
   | ShaderTexture  !(ShaderFunction px)
   | ModulateTexture (Texture px) (Texture (PixelBaseComponent px))
+
+dumpTexture :: ( Show px
+               , Show (PixelBaseComponent px)
+               , PixelBaseComponent (PixelBaseComponent px)
+                    ~ (PixelBaseComponent px)
+               ) => Texture px -> String
+dumpTexture (SolidTexture px) = "uniformTexture (" ++ show px++ ")"
+dumpTexture (LinearGradientTexture grad (Line a b)) =
+    "linearGradientTexture " ++ show grad ++ " (" ++ show a ++ ") (" ++ show b ++ ")"
+dumpTexture (RadialGradientTexture grad p rad) =
+    "radialGradientTexture " ++ show grad ++ " (" ++ show p ++ ") " ++ show rad
+dumpTexture (RadialGradientWithFocusTexture grad center rad focus) =
+    "radialGradientWithFocusTexture " ++ show grad ++ " (" ++ show center 
+                                      ++ ") " ++ show rad ++ " (" ++ show focus ++ ")"
+dumpTexture (WithSampler sampler sub) =
+    "withSampler " ++ show sampler ++ " (" ++ dumpTexture sub ++ ")"
+dumpTexture (WithTextureTransform trans sub) =
+    "transformTexture (" ++ show trans ++ ") (" ++ dumpTexture sub ++ ")"
+dumpTexture (SampledTexture _) = "sampledImageTexture <IMG>"
+dumpTexture (RawTexture _) = "<RAWTEXTURE>"
+dumpTexture (ShaderTexture _) = "shaderFunction <FUNCTION>"
+dumpTexture (ModulateTexture sub mask) =
+    "modulateTexture (" ++ dumpTexture sub ++ ") ("
+                        ++ dumpTexture mask ++ ")"
+
 
 data TextureSpaceInfo = TextureSpaceInfo
     { _tsStart     :: {-# UNPACK #-} !Point

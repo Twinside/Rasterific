@@ -58,31 +58,41 @@ instance Modulable Float where
   alphaOver coverage inverseCoverage background painted =
       coverage * painted + background * inverseCoverage
 
+div255 :: Word32 -> Word32
+{-# INLINE div255 #-}
+div255 v = (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+
 instance Modulable Word8 where
+  {-# INLINE emptyValue #-}
   emptyValue = 0
+  {-# INLINE fullValue #-}
   fullValue = 255
+  {-# INLINE clampCoverage #-}
   clampCoverage f = (fromIntegral c, fromIntegral $ 255 - c)
      where c = toWord8 f
 
-  modulate c a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+  {-# INLINE modulate #-}
+  modulate c a = fromIntegral . div255 $ fi c * fi a + 128
     where fi :: Word8 -> Word32
           fi = fromIntegral
-          v = fi c * fi a + 128
 
+  {-# INLINE modiv #-}
   modiv c 0 = c
   modiv c a = fromIntegral . min 255 $ (fi c * 255) `div` fi a
     where fi :: Word8 -> Word32
           fi = fromIntegral
 
+  {-# INLINE alphaCompose #-}
   alphaCompose coverage inverseCoverage backgroundAlpha _ =
-      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+      fromIntegral $ div255 v
         where fi :: Word8 -> Word32
               fi = fromIntegral
               v = fi coverage * 255
                 + fi backgroundAlpha * fi inverseCoverage + 128
 
+  {-# INLINE alphaOver #-}
   alphaOver coverage inverseCoverage background painted =
-      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+      fromIntegral $ div255 v
     where fi :: Word8 -> Word32
           fi = fromIntegral
           v = fi coverage * fi painted + fi background * fi inverseCoverage + 128

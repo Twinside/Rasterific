@@ -7,6 +7,7 @@
 module Graphics.Rasterific.Transformations
     ( Transformation( .. )
     , applyTransformation
+    , applyVectorTransformation
     , translate
     , scale
     , rotate
@@ -59,6 +60,14 @@ applyTransformation :: Transformation -> Point -> Point
 applyTransformation (Transformation a c e
                                     b d f) (V2 x y) =
     V2 (a * x + y * c + e) (b * x + d * y + f)
+
+-- | Effectively transform a vector given a transformation.
+-- The translation part won't be applied.
+applyVectorTransformation :: Transformation -> Vector -> Vector
+applyVectorTransformation
+    (Transformation a c _e
+                    b d _f) (V2 x y) =
+    V2 (a * x + y * c) (b * x + d * y)
 
 
 -- | Create a transformation representing a rotation

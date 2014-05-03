@@ -123,6 +123,7 @@ import Graphics.Rasterific.Compositor
 {-import Graphics.Rasterific.Operators-}
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Shading
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.QuadraticBezier
@@ -383,7 +384,7 @@ renderDrawing width height background drawing = runST $
         go ctxt next
     go ctxt@RenderContext { currentClip = Just moduler }
        (Free (Fill method prims next)) = do
-        fillWithTextureAndMask method (currentTexture ctxt)
+        fillWithTextureAndMask method (textureOf ctxt)
             moduler $ geometryOf ctxt prims
         go ctxt next
 
@@ -418,7 +419,7 @@ renderDrawing width height background drawing = runST $
         go ctxt next
       where
         modulationTexture :: Texture (PixelBaseComponent px)
-        modulationTexture = imageTexture $ clipRender clipPath
+        modulationTexture = RawTexture $ clipRender clipPath
 
         newModuler = Just . subModuler $ currentClip ctxt
 
@@ -474,27 +475,53 @@ clip mini maxi (LinePrim l) = clipLine mini maxi l
 clip mini maxi (BezierPrim b) = clipBezier mini maxi b
 clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
 
+isCoverageDrawable :: MutableImage s px -> CoverageSpan -> Bool
+isCoverageDrawable img coverage =
+    _coverageVal coverage > 0 && x >= 0 && y >= 0 && x < imgWidth && y < imgHeight
+  where
+    !imgWidth = fromIntegral $ mutableImageWidth img
+    !imgHeight = fromIntegral $ mutableImageHeight img
+    x = _coverageX coverage
+    y = _coverageY coverage
+  
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
 -- be equal to the first point of the first primitive.
 --
 -- The primitive should be connected.
-fillWithTexture :: (Pixel px, Modulable (PixelBaseComponent px))
+fillWithTexture :: ( Pixel px
+                   , Pixel (PixelBaseComponent px)
+                   , Modulable (PixelBaseComponent px)
+                   , PixelBaseComponent px
+                        ~ PixelBaseComponent (PixelBaseComponent px)
+                   )
                 => FillMethod
                 -> Texture px  -- ^ Color/Texture used for the filling
                 -> [Primitive] -- ^ Primitives to fill
                 -> DrawContext s px ()
+{-# SPECIALIZE fillWithTexture
+    :: FillMethod -> Texture PixelRGBA8 -> [Primitive]
+    -> DrawContext s PixelRGBA8 () #-}
+{-# SPECIALIZE fillWithTexture
+    :: FillMethod -> Texture Pixel8 -> [Primitive]
+    -> DrawContext s Pixel8 () #-}
 fillWithTexture fillMethod texture els = do
     img@(MutableImage width height _) <- get
-    let mini = V2 0 0
-        maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod . listOfContainer $ F.foldMap (clip mini maxi) els 
-    lift $ F.mapM_ (composeCoverageSpan texture img) spans
+    let !mini = V2 0 0
+        !maxi = V2 (fromIntegral width) (fromIntegral height)
+        !filler = transformTextureToFiller texture img
+        spans :: [CoverageSpan]
+        spans = rasterize fillMethod . listOfContainer 
+              $ F.foldMap (clip mini maxi) els 
+    lift . F.mapM_ filler $ filter (isCoverageDrawable img) spans
 
 fillWithTextureAndMask
     :: ( Pixel px
        , Pixel (PixelBaseComponent px)
-       , Modulable (PixelBaseComponent px))
+       , Modulable (PixelBaseComponent px)
+       , (PixelBaseComponent px)
+            ~ PixelBaseComponent (PixelBaseComponent px)
+       )
     => FillMethod
     -> Texture px  -- ^ Color/Texture used for the filling
     -> Texture (PixelBaseComponent px)
@@ -502,97 +529,12 @@ fillWithTextureAndMask
     -> DrawContext s px ()
 fillWithTextureAndMask fillMethod texture mask els = do
     img@(MutableImage width height _) <- get
-    let mini = V2 0 0
-        maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod . listOfContainer $ F.foldMap (clip mini maxi) els
-    lift $ mapM_ (composeCoverageSpanWithMask texture mask img) spans
-
-composeCoverageSpan :: forall s px .
-                      ( Pixel px, Modulable (PixelBaseComponent px) )
-                    => Texture px
-                    -> MutableImage s px
-                    -> CoverageSpan
-                    -> ST s ()
-{-# SPECIALIZE
-    composeCoverageSpan
-        :: forall s. 
-           Texture PixelRGBA8
-        -> MutableImage s PixelRGBA8
-        -> CoverageSpan -> ST s () #-}
-{-# SPECIALIZE
-    composeCoverageSpan
-        :: forall s. 
-           Texture Pixel8
-        -> MutableImage s Pixel8
-        -> CoverageSpan -> ST s () #-}
-composeCoverageSpan texture img coverage
-  | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
-  | otherwise = go 0 initialX initIndex
-  where !compCount = componentCount (undefined :: px)
-        !maxi = _coverageLength coverage
-        !imgData = mutableImageData img
-        !y = floor $ _coverageY coverage
-        !initialX = floor $ _coverageX coverage
-        !imgWidth = mutableImageWidth img
-        !imgHeight = mutableImageHeight img
-        !initIndex = (initialX + y * imgWidth) * compCount
-        !(initialCov, _) =
-            clampCoverage $ _coverageVal coverage
-
-        !shader = texture SamplerPad
-
-        go count _   _ | count >= maxi = return ()
-        go !count !x !idx = do
-          oldPixel <- unsafeReadPixel imgData idx
-          let px = shader (fromIntegral x) (fromIntegral y)
-              !opacity = pixelOpacity px
-              !(cov, icov) = coverageModulate initialCov opacity
-          unsafeWritePixel imgData idx
-            $ compositionAlpha cov icov oldPixel px
-
-          go (count + 1) (x + 1) $ idx + compCount
-
-composeCoverageSpanWithMask
-    :: forall s px
-     . ( Pixel px
-       , Pixel (PixelBaseComponent px)
-       , Modulable (PixelBaseComponent px) )
-    => Texture px
-    -> Texture (PixelBaseComponent px)
-    -> MutableImage s px
-    -> CoverageSpan
-    -> ST s ()
-{-# INLINE composeCoverageSpanWithMask #-}
-composeCoverageSpanWithMask texture mask img coverage
-  | initialCov == 0 || initialX < 0 || y < 0 || imgWidth < initialX || imgHeight < y = return ()
-  | otherwise = go 0 initialX initIndex
-  where compCount = componentCount (undefined :: px)
-        maxi = _coverageLength coverage
-        imgData = mutableImageData img
-        y = floor $ _coverageY coverage
-        initialX = floor $ _coverageX coverage
-        imgWidth = mutableImageWidth img
-        imgHeight = mutableImageHeight img
-        initIndex = (initialX + y * imgWidth) * compCount
-        (initialCov, _) =
-            clampCoverage $ _coverageVal coverage
-
-        maskShader = mask SamplerPad
-        shader = texture SamplerPad
-
-        go count _   _ | count >= maxi = return ()
-        go count x idx = do
-          oldPixel <- unsafeReadPixel imgData idx
-          let fx = fromIntegral x
-              fy = fromIntegral y
-              maskValue = maskShader fx fy
-              px = shader fx fy
-              (coeffMasked, _) = coverageModulate initialCov maskValue
-              (cov, icov) = coverageModulate coeffMasked $ pixelOpacity px
-          unsafeWritePixel imgData idx
-            $ compositionAlpha cov icov oldPixel px
-          go (count + 1) (x + 1) $ idx + compCount
-
+    let !mini = V2 0 0
+        !maxi = V2 (fromIntegral width) (fromIntegral height)
+        spans = rasterize fillMethod . listOfContainer
+               $ F.foldMap (clip mini maxi) els
+        !shader = transformTextureToFiller (modulateTexture texture mask) img
+    lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 
 -- | Generate a list of primitive representing a circle.
 --

@@ -2,7 +2,15 @@
 
 v0.3 2014
  * Switching main free monad type to the church encoded one.
- * Various speed optimisations
+ * Optimized the bezier decomposition, strictness annotations
+   made wonders. May require forward differencing in the future.
+ * Implementing specific decomposition for lines.
+ * Reworked texture system, now allowing some specialized
+   filler (hoping faster computation). For now only the
+   solid color has been optimized, and all the transformed
+   textures.
+ * Fixing space leak in combineEdgeSamples, avoiding many
+   allocations.
 
 v0.2.1 April 2014
  * Fixing transparency in gradients.

@@ -134,7 +134,7 @@ import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Stroke
 import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.TensorPatch
+{-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
 
@@ -515,10 +515,15 @@ fillWithTexture fillMethod texture els = do
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
         !filler = transformTextureToFiller texture img
-        spans :: [CoverageSpan]
-        spans = rasterize fillMethod . listOfContainer
-              $ F.foldMap (clip mini maxi) els
-    lift . F.mapM_ filler $ filter (isCoverageDrawable img) spans
+        clipped = F.foldMap (clip mini maxi) els
+        spans = rasterize fillMethod clipped
+    lift . mapExec filler $ filter (isCoverageDrawable img) spans
+
+mapExec :: Monad m => (a -> m ()) -> [a] -> m ()
+mapExec f = go
+  where
+    go [] = return ()
+    go (x : xs) = f x >> go xs
 
 fillWithTextureAndMask
     :: RenderablePixel px
@@ -531,8 +536,7 @@ fillWithTextureAndMask fillMethod texture mask els = do
     img@(MutableImage width height _) <- get
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod . listOfContainer
-               $ F.foldMap (clip mini maxi) els
+        spans = rasterize fillMethod $ F.foldMap (clip mini maxi) els
         !shader = transformTextureToFiller (modulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 

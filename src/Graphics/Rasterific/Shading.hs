@@ -158,8 +158,8 @@ shaderFiller shader img tsInfo =
 
     go count  _ _ _ | count >= maxi = return ()
     go !count !idx !x !y = do
-      let color = shader x y
-          opacity = pixelOpacity color
+      let !color = shader x y
+          !opacity = pixelOpacity color
           (cov, icov) = coverageModulate scanCoverage opacity
       oldPixel <- unsafeReadPixel imgData idx
       unsafeWritePixel imgData idx
@@ -283,13 +283,13 @@ gradientColorAt grad at
     | at >= 1.0 = snd $ V.last grad
     | otherwise = go (0, snd $ V.head grad) 0
   where
-    maxi = V.length grad
+    !maxi = V.length grad
     go (prevCoeff, prevValue) ix
       | ix >= maxi = snd $ V.last grad
       | at < coeff = mixWith (\_ -> alphaOver cov icov) prevValue px
       | otherwise = go value $ ix + 1
-      where value@(coeff, px) = grad `V.unsafeIndex` ix
-            zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
+      where !value@(coeff, px) = grad `V.unsafeIndex` ix
+            !zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
             (cov, icov) = clampCoverage zeroToOne
 
 gradientColorAtRepeat :: ModulablePixel px
@@ -383,10 +383,10 @@ imageShader img x y =
   where
    clampedX = min (w - 1) . max 0 $ floor x
    clampedY = min (h - 1) . max 0 $ floor y
-   compCount = componentCount (undefined :: px)
-   w = imageWidth img
-   h = imageHeight img
-   rawData = imageData img
+   !compCount = componentCount (undefined :: px)
+   !w = imageWidth img
+   !h = imageHeight img
+   !rawData = imageData img
 
 radialGradientShader :: ModulablePixel px
                      => Gradient px -- ^ Gradient description
@@ -397,8 +397,8 @@ radialGradientShader :: ModulablePixel px
 radialGradientShader gradient center radius repeating =
     \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
   where
-    colorAt = gradientColorAtRepeat repeating gradArray
-    gradArray = V.fromList gradient
+    !colorAt = gradientColorAtRepeat repeating gradArray
+    !gradArray = V.fromList gradient
 
 radialGradientWithFocusShader
     :: ModulablePixel px

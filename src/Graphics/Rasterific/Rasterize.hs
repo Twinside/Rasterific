@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Graphics.Rasterific.Rasterize
     ( CoverageSpan( .. )
     , rasterize
@@ -5,7 +6,7 @@ module Graphics.Rasterific.Rasterize
 
 import Data.Fixed( mod' )
 import Data.Foldable( foldMap )
-import Data.List( mapAccumL, sortBy )
+import Data.List( sortBy )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
@@ -21,24 +22,23 @@ data CoverageSpan = CoverageSpan
 
 combineEdgeSamples :: (Float -> Float) -> [EdgeSample] -> [CoverageSpan]
 {-# INLINE combineEdgeSamples #-}
-combineEdgeSamples prepareCoverage = append . mapAccumL go (0, 0, 0, 0)
-  where append ((x, y, a, _), lst) =
-            concat lst ++ [CoverageSpan x y (prepareCoverage a) 1]
-
-        go (x, y, a, h) (EdgeSample x' y' a' h')
-          | y == y' && x == x' = ((x', y', a + a', h + h'), [])
-          | y == y' = ((x', y', h + a', h + h'), [p1, p2])
-          | otherwise =
-             ((x', y', a', h'), [CoverageSpan x y (prepareCoverage a) 1])
-               where p1 = CoverageSpan x y (prepareCoverage a) 1
-                     p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
+combineEdgeSamples prepareCoverage = go 0 0 0 0
+  where
+    go !x !y !a !_h [] = [CoverageSpan x y (prepareCoverage a) 1]
+    go !x !y !a !h (EdgeSample x' y' a' h' : rest)
+      | y == y' && x == x' = go x' y' (a + a') (h + h') rest
+      | y == y' = p1 : p2 : go x' y' (h + a') (h + h') rest
+      | otherwise =
+         CoverageSpan x y (prepareCoverage a) 1 : go x' y' a' h' rest
+           where p1 = CoverageSpan x y (prepareCoverage a) 1
+                 p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
 decompose :: Primitive -> Container EdgeSample
 decompose (LinePrim l) = decomposeLine l
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) = decomposeCubicBeziers c
 
-rasterize :: FillMethod -> [Primitive] -> [CoverageSpan]
+rasterize :: FillMethod -> Container Primitive -> [CoverageSpan]
 rasterize method = 
   case method of
     FillWinding -> combineEdgeSamples combineWinding 

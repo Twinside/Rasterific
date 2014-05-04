@@ -4,3 +4,4 @@ cabal
 cabal.sandbox.config
 *.png
 sources
+.hpc

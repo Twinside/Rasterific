@@ -62,6 +62,7 @@ library
                , FontyFruity >= 0.2     && < 0.3
                , vector      >= 0.9
                , mtl         >= 2.1
+               , vector-algorithms >= 0.3
                , dlist
   
   

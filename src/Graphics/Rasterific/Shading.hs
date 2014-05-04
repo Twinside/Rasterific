@@ -242,6 +242,8 @@ shaderOfTexture trans sampling (ModulateTexture texture modulation) =
 transformTextureToFiller
     :: RenderablePixel px
     => Texture px -> CoverageFiller s px
+{-# SPECIALIZE transformTextureToFiller
+        :: Texture PixelRGBA8 -> CoverageFiller s PixelRGBA8 #-}
 transformTextureToFiller texture = go Nothing SamplerPad texture
   where
     go _ _ (SolidTexture px) =

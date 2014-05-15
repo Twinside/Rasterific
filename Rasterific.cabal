@@ -51,6 +51,8 @@ library
                , Graphics.Rasterific.Types
                , Graphics.Rasterific.Compositor
                , Graphics.Rasterific.Shading
+               , Graphics.Rasterific.PlaneBoundable
+               , Graphics.Rasterific.QuadraticFormula
 
   ghc-options: -O2 -Wall
   ghc-prof-options: -Wall -prof -auto-all

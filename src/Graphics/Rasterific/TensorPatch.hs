@@ -4,6 +4,18 @@ import Control.Applicative( (<$>) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
 
+data TensorPatch px = TensorPath
+    { _p0 :: !CubicBezier
+    , _p1 :: !CubicBezier
+    , _p2 :: !CubicBezier
+    , _p3 :: !CubicBezier
+
+    , _c0 :: !px
+    , _c1 :: !px
+    , _c2 :: !px
+    , _c3 :: !px
+    }
+
 data TensorPatchInternal = TensorPatchInternal
     { _tp0 :: !CubicBezier
     , _tp1 :: !CubicBezier
@@ -17,7 +29,7 @@ data TensorPatchInternal = TensorPatchInternal
     }
     deriving (Eq, Show)
 
-data TensorPatchSubdivision = TensorPatchSubdivision 
+data TensorPatchSubdivision = TensorPatchSubdivision
     { _subdivTopLeft     :: TensorPatchInternal
     , _subdivTopRight    :: TensorPatchInternal
     , _subdivBottomLeft  :: TensorPatchInternal
@@ -98,4 +110,24 @@ subdividePatch patch atU atV = mapSubdivision transposePatch $ TensorPatchSubdiv
         transposePatch left `splitTensorPatchInUDirection` atV
     (topRight, bottomRight) =
         transposePatch right `splitTensorPatchInUDirection` atV
+
+maxCoefficientDeviation :: TensorPatchInternal -> Float
+maxCoefficientDeviation TensorPatchInternal
+    { _w00 = w00, _w01 = w01, _w10 = w10, _w11 = w11 } =
+        max w00 . max w01 $ max w10 w11
+
+:: ModulablePixel px => (px, px, px, px) -> 
+
+subdivideDraw :: Float -> Int -> TensorPatchInternal -> Drawing s px
+subdivideDraw maxCoeffcient maxDepth = go 0 where
+  go depth patch
+      | depth >= maxDepth ||
+          maxCoefficientDeviation patch >= maxCoeffcient =
+              fill $ toPrimitives patch
+          -- FUCKING DRAW it
+  go depth patch = sub p0 >> sub p1 >> sub p2 >> sub p3
+    where
+      sub = go (depth + 1)
+      TensorPatchSubdivision p0 p1 p2 p3 =
+          subdividePatch patch 0.5 0.5
 

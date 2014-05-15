@@ -74,6 +74,7 @@ module Graphics.Rasterific
     , PathCommand( .. )
     , Transformable( .. )
     , PointFoldable( .. )
+    , PlaneBoundable( .. )
 
       -- * Helpers
     , line
@@ -134,6 +135,7 @@ import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Stroke
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.PlaneBoundable
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )

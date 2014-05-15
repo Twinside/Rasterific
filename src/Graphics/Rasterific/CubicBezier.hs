@@ -12,6 +12,7 @@ module Graphics.Rasterific.CubicBezier
     , offsetCubicBezier
     , flattenCubicBezier
     , cubicBezierLengthApproximation
+    , cubicBezierBounds
     ) where
 
 import Prelude hiding( or )
@@ -28,9 +29,11 @@ import Linear( V1( .. )
              , (^*)
              , norm
              )
+import Data.List( nub )
 import Data.Monoid( Monoid, mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.QuadraticFormula
 import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
 -- | Create a list of cubic bezier patch from a list of points.
@@ -107,6 +110,44 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
 --               3                    2            2                  3
 -- y(t) = (1 - t) ∙y     + 3∙t∙(1 - t) ∙y     + 3∙t ∙(1 - t)∙y     + t ∙y
 --                   0                    1                    2          3
+
+-- | Represent the cubic bezier curve as a vector ready
+-- for matrix multiplication
+data CachedBezier = CachedBezier !Float !Float !Float !Float
+
+cacheBezier :: CubicBezier -> (CachedBezier, CachedBezier)
+cacheBezier (CubicBezier p0@(V2 x0 y0) p1 p2 p3) =
+
+    (CachedBezier x0 bX cX dX, CachedBezier y0 bY cY dY)
+  where
+   V2 bX bY = p1 ^* 3 ^-^ p0 ^* 3
+   V2 cX cY = p2 ^* 3 ^-^ p1 ^* 6 + p0 ^* 3
+   V2 dX dY = p3 ^-^ p2 ^* 3 ^+^ p1 ^* 3 ^-^ p0
+
+cachedBezierAt :: CachedBezier -> Float -> Float
+cachedBezierAt (CachedBezier a b c d) t =
+    a + b * t + c * tSquare + tCube * d
+  where
+    tSquare = t * t
+    tCube = tSquare * t
+
+cachedBezierDerivative :: CachedBezier -> QuadraticFormula Float
+cachedBezierDerivative (CachedBezier _ b c d) =
+    QuadraticFormula (3 * d) (2 * c) b
+
+-- | Find the coefficient of the extremum points
+extremums :: CachedBezier -> [Float]
+extremums cached =
+ nub [ root | root <- formulaRoots $ cachedBezierDerivative cached
+            , 0 <= root && root <= 1.0 ]
+
+extremumPoints :: (CachedBezier, CachedBezier) -> [Point]
+extremumPoints (onX, onY) = toPoints <$> nub (extremums onX <> extremums onY)
+  where toPoints at = V2 (cachedBezierAt onX at) (cachedBezierAt onY at)
+
+cubicBezierBounds :: CubicBezier -> [Point]
+cubicBezierBounds bez@(CubicBezier p0 _ _ p3) =
+    p0 : p3 : extremumPoints (cacheBezier bez)
 
 offsetCubicBezier :: Float -> CubicBezier -> Container Primitive
 offsetCubicBezier offset bezier@(CubicBezier a b c d)

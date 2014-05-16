@@ -157,9 +157,6 @@ main = do
     let addFolder (p, v) = (outFolder </> p, v)
     createDirectoryIfMissing True outFolder
     moduleExample 
-    textExample
-    coordinateSystem 
-
     mapM_ (capTester . addFolder)
         [ ("cap_straight.png", CapStraight 0)
         , ("cap_straight_1.png", CapStraight 1)
@@ -345,3 +342,7 @@ main = do
                                       scale 0.5 0.25)
                     $ sampledImageTexture textureImage) $
             fill $ rectangle (V2 0 0) 200 200
+
+    textExample
+    coordinateSystem
+

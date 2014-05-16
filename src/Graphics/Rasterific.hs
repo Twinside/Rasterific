@@ -75,6 +75,7 @@ module Graphics.Rasterific
     , Transformable( .. )
     , PointFoldable( .. )
     , PlaneBoundable( .. )
+    , PlaneBound( .. )
 
       -- * Helpers
     , line

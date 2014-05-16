@@ -1,6 +1,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Graphics.Rasterific.PlaneBoundable ( PlaneBoundable( .. ) ) where
+-- | Module implementing types used for geometry
+-- bound calculations.
+module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
+                                          , PlaneBoundable( .. ) ) where
 
 import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( Monoid( .. ), (<>) )
@@ -10,8 +13,16 @@ import Linear( V2( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
 
+-- | Represent the minimal axis aligned rectangle
+-- in which some primitives can be drawn. Should
+-- fit to bezier curve and not use directly their
+-- control points.
 data PlaneBound = PlaneBound
-    { _planeMinBound :: !Point
+    { -- | Corner upper left of the bounding box of
+      -- the considered primitives.
+      _planeMinBound :: !Point
+      -- | Corner lower right of the bounding box of
+      -- the considered primitives.
     , _planeMaxBound :: !Point
     }
     deriving (Eq, Show)
@@ -26,7 +37,11 @@ instance Monoid PlaneBound where
     PlaneBound (min <$> mini1 <*> mini2)
                (max <$> maxi1 <*> maxi2)
 
+-- | Class used to calculate bounds of various geometrical
+-- primitives. The calculated is precise, the bounding should
+-- be minimal with respect with drawn curve.
 class PlaneBoundable a where
+    -- | Given a graphical elements, calculate it's bounds.
     planeBounds :: a -> PlaneBound
 
 instance PlaneBoundable Point where

@@ -3,15 +3,20 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
+import Data.Foldable( foldMap )
 import Data.Monoid( (<>) )
 import Control.Applicative( (<$>) )
-import Graphics.Rasterific
+import Graphics.Rasterific hiding ( fill
+                                  , dashedStrokeWithOffset
+                                  , dashedStroke
+                                  , fillWithMethod, stroke)
+import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( (^+^) )
+import Linear( (^+^), (^-^) )
 import Arbitrary
 import System.Environment( getArgs )
 import Criterion.Config( defaultConfig )
@@ -63,6 +68,37 @@ white = PixelRGBA8 255 255 255 255
 biColor, triColor :: Gradient PixelRGBA8
 biColor = [ (0.0, black) , (1.0, yellow) ]
 triColor = [ (0.0, blue), (0.5, white) , (1.0, red) ]
+
+fill :: [Primitive] -> Drawing PixelRGBA8 ()
+fill = fillWithMethod FillWinding
+
+drawBoundingBox :: [Primitive] -> Drawing PixelRGBA8 ()
+drawBoundingBox prims = do
+  let PlaneBound mini maxi = foldMap planeBounds prims
+      V2 width height = maxi ^-^ mini
+  withTexture (uniformTexture red) $
+      R.stroke 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
+        rectangle mini width height
+
+stroke :: Float -> Join -> (Cap, Cap) -> [Primitive]
+       -> Drawing PixelRGBA8 ()
+stroke w j cap prims =
+    R.stroke w j cap prims >> drawBoundingBox prims
+
+dashedStroke :: DashPattern -> Float -> Join -> (Cap, Cap) -> [Primitive]
+            -> Drawing PixelRGBA8 ()
+dashedStroke p w j c prims =
+    R.dashedStroke p w j c prims >> drawBoundingBox prims
+
+dashedStrokeWithOffset
+    :: Float -> DashPattern -> Float -> Join -> (Cap, Cap) -> [Primitive]
+    -> Drawing PixelRGBA8 ()
+dashedStrokeWithOffset o p w j c prims =
+    R.dashedStrokeWithOffset o p w j c prims >> drawBoundingBox prims
+
+fillWithMethod :: FillMethod -> [Primitive] -> Drawing PixelRGBA8 ()
+fillWithMethod method prims =
+  R.fillWithMethod method prims >> drawBoundingBox prims
 
 logoTest :: Texture PixelRGBA8 -> String -> IO ()
 logoTest texture prefix =
@@ -161,7 +197,7 @@ strokeTestCliping stroker prefix =
             [ V2 10 10, V2 100 100
             , V2 200 20, V2 300 100, V2 450 50]
 
-        clipShape = fill $ circle (V2 250 250) 200
+        clipShape = R.fill $ circle (V2 250 250) 200
         
         drawing = do
           withClipping clipShape .
@@ -334,7 +370,7 @@ complexEvenOddTest size texture = mapM_ tester [(filling, ix)
 
   tester ((method, name), i) =
     writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ "_" ++ show size ++ "px.png"))
-        .  renderDrawing size size white
+        . renderDrawing size size white
         . withTexture texture
         . fillWithMethod method
         . fmap (transform . applyTransformation $

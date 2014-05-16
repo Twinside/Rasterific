@@ -11,6 +11,7 @@ v0.3 2014
    textures.
  * Fixing space leak in combineEdgeSamples, avoiding many
    allocations.
+ * Adding bounding box calculation facility.
 
 v0.2.1 April 2014
  * Fixing transparency in gradients.

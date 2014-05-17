@@ -171,7 +171,6 @@ class PointFoldable a where
     -- the primitive.
     foldPoints :: (b -> Point -> b) -> b -> a -> b
 
-
 instance Transformable Point where
     {-# INLINE transform #-}
     transform f p = f p

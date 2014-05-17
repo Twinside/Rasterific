@@ -39,15 +39,16 @@ Source-Repository this
 library
   hs-source-dirs: src
   exposed-modules: Graphics.Rasterific
+                 , Graphics.Rasterific.Outline
                  , Graphics.Rasterific.Texture
                  , Graphics.Rasterific.Transformations
 
   other-modules: Graphics.Rasterific.Line
-               , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.CubicBezier
-               , Graphics.Rasterific.Stroke
+               , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize
+               , Graphics.Rasterific.StrokeInternal
                , Graphics.Rasterific.Types
                , Graphics.Rasterific.Compositor
                , Graphics.Rasterific.Shading

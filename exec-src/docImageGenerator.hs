@@ -5,6 +5,7 @@ import Codec.Picture
 import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
+import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 import System.Directory( createDirectoryIfMissing )
@@ -201,6 +202,21 @@ main = do
           fill $ circle (V2 100 100) 20
           withTexture accent2Texture $
                fill $ circle (V2 150 150) 20
+
+    produceDocImage (outFolder </> "strokize_path.png") $
+      stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
+          strokize 40 JoinRound (CapRound, CapRound)
+            [CubicBezierPrim $
+                 CubicBezier (V2  40 160) (V2 40   40)
+                             (V2 160  40) (V2 160 160)]
+
+    produceDocImage (outFolder </> "strokize_dashed_path.png") $
+      mapM_ (stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0)) $
+          dashedStrokize 0 [10, 5]
+                         40 JoinRound (CapStraight 0, CapStraight 0)
+            [CubicBezierPrim $
+                 CubicBezier (V2  40 160) (V2 40   40)
+                             (V2 160  40) (V2 160 160)]
 
     produceDocImage (outFolder </> "with_clipping.png") $
       withClipping (fill $ circle (V2 100 100) 75) $

@@ -7,6 +7,7 @@ before_install:
   # Uncomment whenever hackage is down.
   # - mkdir -p ~/.cabal && cp travis/config ~/.cabal/config && cabal update
   - cabal update
+  - cabal sandbox init
   - cabal sandbox add-source FontyFruity
 
 install:

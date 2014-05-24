@@ -123,10 +123,8 @@ import Codec.Picture.Types( Image( .. )
                           , unsafeFreezeImage )
 
 import qualified Data.Vector.Unboxed as VU
-import Linear( V2( .. ), (^+^), (^*) )
-
 import Graphics.Rasterific.Compositor
-{-import Graphics.Rasterific.Operators-}
+import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^*) )
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading

@@ -13,7 +13,8 @@ module Graphics.Rasterific.Shading
 
 import Data.Fixed( mod' )
 import Data.Monoid( (<>) )
-import Linear( V2( .. )
+import Graphics.Rasterific.Linear
+             ( V2( .. )
              , (^-^)
              , (^/)
              , dot

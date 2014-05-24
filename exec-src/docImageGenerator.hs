@@ -11,7 +11,7 @@ import Graphics.Rasterific.Transformations
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
-import Linear( (^+^) )
+import Graphics.Rasterific.Linear( (^+^) )
 
 logo :: Int -> Bool -> Vector -> [Primitive]
 logo size inv offset =

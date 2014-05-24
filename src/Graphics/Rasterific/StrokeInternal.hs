@@ -5,10 +5,11 @@ module Graphics.Rasterific.StrokeInternal
     , dashedStrokize
     )  where
 
-import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( Monoid, (<>), mempty )
-import Data.Foldable( Foldable, foldMap )
-import Linear( V2( .. )
+import Control.Applicative( (<$>), pure )
+import Data.Monoid( (<>), mempty )
+import Data.Foldable( foldMap )
+import Graphics.Rasterific.Linear
+             ( V2( .. )
              , (^-^)
              , (^+^)
              , (^*)

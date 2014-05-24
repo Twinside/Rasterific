@@ -35,7 +35,7 @@ module Graphics.Rasterific.Types
 
 import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable, foldl' )
-import Linear( V2( .. ) )
+import Graphics.Rasterific.Linear( V2( .. ) )
 
 -- | Represent a vector
 type Vector = V2 Float

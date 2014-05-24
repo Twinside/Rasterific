@@ -16,21 +16,22 @@ module Graphics.Rasterific.CubicBezier
     ) where
 
 import Prelude hiding( or )
-import Control.Applicative( Applicative
-                          , liftA2
+import Control.Applicative( liftA2
                           , (<$>)
                           , (<*>)
                           , pure
                           )
-import Linear( V1( .. )
+import Graphics.Rasterific.Linear
+             ( V1( .. )
              , V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
              , norm
+             , lerp
              )
 import Data.List( nub )
-import Data.Monoid( Monoid, mempty, (<>) )
+import Data.Monoid( mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
@@ -254,13 +255,13 @@ cubicBezierBreakAt :: CubicBezier -> Float
 cubicBezierBreakAt (CubicBezier a b c d) val =
     (CubicBezier a ab abbc abbcbccd, CubicBezier abbcbccd bccd cd d)
   where
-    ab = lerpPoint a b val
-    bc = lerpPoint b c val
-    cd = lerpPoint c d val
+    ab = lerp val a b
+    bc = lerp val b c
+    cd = lerp val c d
 
-    abbc = lerpPoint ab bc val
-    bccd = lerpPoint bc cd val
-    abbcbccd = lerpPoint abbc bccd val
+    abbc = lerp val ab bc
+    bccd = lerp val bc cd
+    abbcbccd = lerp val abbc bccd
 
 decomposeCubicBeziers :: CubicBezier -> Container EdgeSample
 decomposeCubicBeziers (CubicBezier aR bR cR dR) = go aR bR cR dR where

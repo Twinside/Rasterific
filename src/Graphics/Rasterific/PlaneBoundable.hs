@@ -7,9 +7,9 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
 
 import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( Monoid( .. ), (<>) )
-import Data.Foldable( Foldable, foldMap )
-import Linear( V2( .. ) )
+import Data.Foldable( foldMap )
 
+import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
 

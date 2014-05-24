@@ -12,11 +12,11 @@ import Graphics.Rasterific hiding ( fill
                                   , fillWithMethod, stroke)
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific.Transformations
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
-import Linear( (^+^), (^-^) )
 import Arbitrary
 import System.Environment( getArgs )
 import Criterion.Config( defaultConfig )

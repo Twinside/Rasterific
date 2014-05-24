@@ -16,17 +16,16 @@ module Graphics.Rasterific.QuadraticBezier
     , bezierLengthApproximation
     ) where
 
-import Control.Applicative( (<$>)
-                          , (<*>)
-                          , Applicative
-                          , pure )
-import Linear( V2( .. )
+import Control.Applicative( (<$>), (<*>), pure )
+import Graphics.Rasterific.Linear
+             ( V2( .. )
              , V1( .. )
              , (^-^)
              , (^+^)
              , (^*)
              , dot
              , norm
+             , lerp
              )
 import Data.Monoid( Monoid( mempty ), (<>) )
 import Graphics.Rasterific.Operators
@@ -194,9 +193,9 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     --     / abbc  \
     --    /         \
     -- A X           X C
-    ab = lerpPoint a b t
-    bc = lerpPoint b c t
-    abbc = lerpPoint ab bc t
+    ab = lerp t a b
+    bc = lerp t b c
+    abbc = lerp t ab bc
 
 flattenBezier :: Bezier -> Container Primitive
 flattenBezier bezier@(Bezier a b c)

@@ -17,7 +17,7 @@ module Graphics.Rasterific.Transformations
 
 import Data.Monoid( Monoid( .. ), (<>) )
 import Graphics.Rasterific.Types
-import Linear( V2( .. ) )
+import Graphics.Rasterific.Linear( V2( .. ) )
 
 -- | Represent a 3*3 matrix for homogenous coordinates.
 --

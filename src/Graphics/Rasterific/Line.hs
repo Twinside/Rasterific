@@ -11,13 +11,15 @@ module Graphics.Rasterific.Line
     , offsetLine
     ) where
 
-import Control.Applicative( Applicative, (<$>), (<*>), pure )
-import Data.Monoid( Monoid, (<>), mempty )
-import Linear( V1( .. )
+import Control.Applicative( (<$>), (<*>), pure )
+import Data.Monoid( (<>), mempty )
+import Graphics.Rasterific.Linear
+             ( V1( .. )
              , V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
+             , lerp
              , norm )
 
 import Graphics.Rasterific.Operators
@@ -42,7 +44,7 @@ sanitizeLine l@(Line p1 p2)
 
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
-  where ab = lerpPoint a b t
+  where ab = lerp t a b
 
 flattenLine :: Line -> Container Primitive
 flattenLine = pure . LinePrim

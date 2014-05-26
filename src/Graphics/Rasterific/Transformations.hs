@@ -124,11 +124,17 @@ translate (V2 x y) =
     Transformation 1 0 x
                    0 1 y
 
+transformationDeterminant :: Transformation -> Float
+transformationDeterminant (Transformation a c _e
+                                          b d _f) = a * d - c * b
+
 -- | Inverse a transformation (if possible)
-inverseTransformation :: Transformation -> Transformation
+inverseTransformation :: Transformation -> Maybe Transformation
+inverseTransformation trans
+    | transformationDeterminant trans == 0 = Nothing
 inverseTransformation (Transformation a c e
                                       b d f) =
-    Transformation a' c' e' b' d' f'
+    Just $ Transformation a' c' e' b' d' f'
   where det = a * d - b * c
         a' = d / det
         c' = (- c) / det
@@ -137,3 +143,4 @@ inverseTransformation (Transformation a c e
         b' = (- b) / det
         d' = a / det
         f' = (e * b - a * f) / det
+

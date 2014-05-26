@@ -113,6 +113,7 @@ import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
 import Control.Monad.ST( ST, runST )
 import Control.Monad.State( StateT, execStateT, get, lift )
+import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
@@ -386,8 +387,10 @@ renderDrawing width height background drawing = runST $
         let trans'
               | Just (t, _) <- currentTransformation ctxt = t <> trans
               | otherwise = trans
+            invTrans = 
+                fromMaybe mempty $ inverseTransformation trans'
         go ctxt { currentTransformation =
-                        Just (trans', inverseTransformation trans') } $ fromF sub
+                        Just (trans', invTrans) } $ fromF sub
         go ctxt next
     go ctxt@RenderContext { currentClip = Nothing }
        (Free (Fill method prims next)) = do

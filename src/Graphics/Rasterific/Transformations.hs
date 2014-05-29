@@ -12,6 +12,8 @@ module Graphics.Rasterific.Transformations
     , scale
     , rotate
     , rotateCenter
+    , skewX
+    , skewY
     , inverseTransformation
     ) where
 
@@ -123,6 +125,33 @@ translate :: Vector -> Transformation
 translate (V2 x y) =
     Transformation 1 0 x
                    0 1 y
+
+-- | Skew transformation along the
+-- X axis.
+--
+-- > fill . transform (applyTransformation $ skewX 0.3)
+-- >      $ rectangle (V2 50 50) 80 80
+--
+-- <<docimages/transform_skewx.png>>
+--
+skewX :: Float -> Transformation
+skewX v =
+    Transformation 1 t 0
+                   0 1 0
+  where t = tan v
+
+-- | Skew transformation along the Y axis.
+--
+-- > fill . transform (applyTransformation $ skewY 0.3)
+-- >      $ rectangle (V2 50 50) 80 80
+--
+-- <<docimages/transform_skewy.png>>
+--
+skewY :: Float -> Transformation
+skewY v =
+    Transformation 1 0 0
+                   t 1 0
+  where t = tan v
 
 transformationDeterminant :: Transformation -> Float
 transformationDeterminant (Transformation a c _e

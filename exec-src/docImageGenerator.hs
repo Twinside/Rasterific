@@ -324,6 +324,14 @@ main = do
         fill . transform (applyTransformation $ scale 2 2)
              $ rectangle (V2 40 40) 40 40
 
+    produceDocImage (outFolder </> "transform_skewx.png") $
+        fill . transform (applyTransformation $ skewX 0.3)
+             $ rectangle (V2 50 50) 80 80
+
+    produceDocImage (outFolder </> "transform_skewy.png") $
+        fill . transform (applyTransformation $ skewY 0.3)
+             $ rectangle (V2 50 50) 80 80
+
     Right (ImageRGB8 img) <- readImage "avatar.png"
     let textureImage = promoteImage img
     produceDocImage (outFolder </> "sampled_texture_repeat.png") $

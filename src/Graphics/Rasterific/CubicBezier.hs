@@ -315,9 +315,9 @@ sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | a `isDistingableFrom` b &&
     c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
-  | ac `isDistingableFrom` b && 
-     bd `isDistingableFrom` c =
-      pure . CubicBezierPrim $ CubicBezier a ac bd d
+  | (ac `isDistingableFrom` b && 
+     bd `isDistingableFrom` c) =
+      pure . CubicBezierPrim $ bezier
   | ac `isDistingableFrom` b =
       pure . CubicBezierPrim $ CubicBezier a ac c d
   | bd `isDistingableFrom` c =

@@ -498,6 +498,34 @@ gradientRadial name back =
             ,(0.75, PixelRGBA8 0 128 128 255)
             ,(1, PixelRGBA8 0 128 128 255)
             ]
+strokeBad :: IO ()
+strokeBad =
+    writePng (outFolder </> ("bad_stroke_tiger.png")) $
+        renderDrawing 500 500 white drawing
+  where 
+    drawing =
+        withTransformation (Transformation { _transformA = 1.6
+                                      , _transformC = 0.0
+                                      , _transformE = 350.0
+                                      , _transformB = 0.0
+                                      , _transformD = 1.6
+                                      , _transformF = 300.0}) $
+            withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
+                stroke 2.0 (JoinMiter 1.0) (CapStraight 0.0
+                                           ,CapStraight 0.0) $
+                    CubicBezierPrim <$>
+                        [CubicBezier (V2 21.2 63.0)
+                                     (V2 21.2 63.0)
+                                     (V2 4.200001 55.8)
+                                     (V2 (-10.599998) 53.6)
+                        ,CubicBezier (V2 (-10.599998) 53.6)
+                                     (V2 (-10.599998) 53.6)
+                                     (V2 (-27.199999) 51.0)
+                                     (V2 (-43.8) 58.199997)
+                        ,CubicBezier (V2 (-43.8) 58.199997)
+                                     (V2 (-43.8) 58.199997)
+                                     (V2 (-56.0) 64.2)
+                                     (V2 (-61.4) 74.399994)]
 
 testSuite :: IO ()
 testSuite = do
@@ -520,6 +548,7 @@ testSuite = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  strokeBad 
   evenOddTest uniform
   complexEvenOddTest 700 uniform
   complexEvenOddTest 350 uniform

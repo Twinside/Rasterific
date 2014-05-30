@@ -169,23 +169,27 @@ class Additive f => Metric f where
   -- | Compute the squared norm. The name quadrance arises from
   -- Norman J. Wildberger's rational trigonometry.
   quadrance :: Num a => f a -> a
+  {-# INLINE quadrance #-}
   quadrance v = dot v v
 
   -- | Compute the quadrance of the difference
   qd :: Num a => f a -> f a -> a
+  {-# INLINE qd #-}
   qd f g = quadrance (f ^-^ g)
 
   -- | Compute the distance between two vectors in a metric space
   distance :: Floating a => f a -> f a -> a
+  {-# INLINE distance #-}
   distance f g = norm (f ^-^ g)
 
   -- | Compute the norm of a vector in a metric space
   norm :: Floating a => f a -> a
+  {-# INLINE norm #-}
   norm v = sqrt (quadrance v)
 
   -- | Convert a non-zero vector to unit vector.
   signorm :: Floating a => f a -> f a
-  signorm v = fmap (/m) v where
+  signorm v = fmap (/ m) v where
     m = norm v
 
 instance Metric V2 where

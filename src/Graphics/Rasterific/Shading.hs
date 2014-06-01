@@ -289,8 +289,8 @@ gradientColorAt grad at
       | ix >= maxi = snd $ V.last grad
       | at < coeff = mixWith (\_ -> alphaOver cov icov) prevValue px
       | otherwise = go value $ ix + 1
-      where !value@(coeff, px) = grad `V.unsafeIndex` ix
-            !zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
+      where value@(coeff, px) = grad `V.unsafeIndex` ix
+            zeroToOne = (at - prevCoeff) / (coeff - prevCoeff)
             (cov, icov) = clampCoverage zeroToOne
 
 gradientColorAtRepeat :: ModulablePixel px

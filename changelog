@@ -13,6 +13,8 @@ v0.3 2014
    allocations.
  * Adding bounding box calculation facility.
  * Exposing outline creation capability
+ * Adding a skewX & skewY transformation function.
+ * Fixing some numerical stability with the mitter join.
 
 v0.2.1 April 2014
  * Fixing transparency in gradients.

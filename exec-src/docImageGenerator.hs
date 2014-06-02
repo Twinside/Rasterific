@@ -5,12 +5,13 @@ import Codec.Picture
 import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )
 import Graphics.Rasterific
+import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
-import Linear( (^+^) )
+import Graphics.Rasterific.Linear( (^+^) )
 
 logo :: Int -> Bool -> Vector -> [Primitive]
 logo size inv offset =
@@ -157,9 +158,6 @@ main = do
     let addFolder (p, v) = (outFolder </> p, v)
     createDirectoryIfMissing True outFolder
     moduleExample 
-    textExample
-    coordinateSystem 
-
     mapM_ (capTester . addFolder)
         [ ("cap_straight.png", CapStraight 0)
         , ("cap_straight_1.png", CapStraight 1)
@@ -204,6 +202,21 @@ main = do
           fill $ circle (V2 100 100) 20
           withTexture accent2Texture $
                fill $ circle (V2 150 150) 20
+
+    produceDocImage (outFolder </> "strokize_path.png") $
+      stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
+          strokize 40 JoinRound (CapRound, CapRound)
+            [CubicBezierPrim $
+                 CubicBezier (V2  40 160) (V2 40   40)
+                             (V2 160  40) (V2 160 160)]
+
+    produceDocImage (outFolder </> "strokize_dashed_path.png") $
+      mapM_ (stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0)) $
+          dashedStrokize 0 [10, 5]
+                         40 JoinRound (CapStraight 0, CapStraight 0)
+            [CubicBezierPrim $
+                 CubicBezier (V2  40 160) (V2 40   40)
+                             (V2 160  40) (V2 160 160)]
 
     produceDocImage (outFolder </> "with_clipping.png") $
       withClipping (fill $ circle (V2 100 100) 75) $
@@ -311,6 +324,14 @@ main = do
         fill . transform (applyTransformation $ scale 2 2)
              $ rectangle (V2 40 40) 40 40
 
+    produceDocImage (outFolder </> "transform_skewx.png") $
+        fill . transform (applyTransformation $ skewX 0.3)
+             $ rectangle (V2 50 50) 80 80
+
+    produceDocImage (outFolder </> "transform_skewy.png") $
+        fill . transform (applyTransformation $ skewY 0.3)
+             $ rectangle (V2 50 50) 80 80
+
     Right (ImageRGB8 img) <- readImage "avatar.png"
     let textureImage = promoteImage img
     produceDocImage (outFolder </> "sampled_texture_repeat.png") $
@@ -345,3 +366,7 @@ main = do
                                       scale 0.5 0.25)
                     $ sampledImageTexture textureImage) $
             fill $ rectangle (V2 0 0) 200 200
+
+    textExample
+    coordinateSystem
+

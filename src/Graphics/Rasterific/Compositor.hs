@@ -1,10 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 -- | Compositor handle the pixel composition, which
 -- leads to texture composition.
 -- Very much a work in progress
 module Graphics.Rasterific.Compositor
     ( Compositor
     , Modulable( .. )
+    , ModulablePixel
+    , RenderablePixel
     , compositionDestination
     , compositionAlpha
     ) where
@@ -17,6 +20,24 @@ import Codec.Picture.Types( Pixel( .. ) )
 type Compositor px =
     (PixelBaseComponent px) ->
         (PixelBaseComponent px) -> px -> px -> px
+
+-- | This constraint ensure that a type is a pixel
+-- and we're allowed to modulate it's color components
+-- generically.
+type ModulablePixel px =
+    (Pixel px, Modulable (PixelBaseComponent px))
+
+-- | This constraint tells us that pixel component
+-- must also be pixel and be the "bottom" of component,
+-- we cannot go further than a PixelBaseComponent level.
+--
+-- All pixel instances of JuicyPixels should be usable.
+type RenderablePixel px =
+    ( ModulablePixel px
+    , Pixel (PixelBaseComponent px)
+    , PixelBaseComponent (PixelBaseComponent px)
+            ~ (PixelBaseComponent px)
+    )
 
 -- | Typeclass intented at pixel value modulation.
 -- May be throwed out soon.
@@ -58,31 +79,41 @@ instance Modulable Float where
   alphaOver coverage inverseCoverage background painted =
       coverage * painted + background * inverseCoverage
 
+div255 :: Word32 -> Word32
+{-# INLINE div255 #-}
+div255 v = (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+
 instance Modulable Word8 where
+  {-# INLINE emptyValue #-}
   emptyValue = 0
+  {-# INLINE fullValue #-}
   fullValue = 255
+  {-# INLINE clampCoverage #-}
   clampCoverage f = (fromIntegral c, fromIntegral $ 255 - c)
      where c = toWord8 f
 
-  modulate c a = fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+  {-# INLINE modulate #-}
+  modulate c a = fromIntegral . div255 $ fi c * fi a + 128
     where fi :: Word8 -> Word32
           fi = fromIntegral
-          v = fi c * fi a + 128
 
+  {-# INLINE modiv #-}
   modiv c 0 = c
   modiv c a = fromIntegral . min 255 $ (fi c * 255) `div` fi a
     where fi :: Word8 -> Word32
           fi = fromIntegral
 
+  {-# INLINE alphaCompose #-}
   alphaCompose coverage inverseCoverage backgroundAlpha _ =
-      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+      fromIntegral $ div255 v
         where fi :: Word8 -> Word32
               fi = fromIntegral
               v = fi coverage * 255
                 + fi backgroundAlpha * fi inverseCoverage + 128
 
+  {-# INLINE alphaOver #-}
   alphaOver coverage inverseCoverage background painted =
-      fromIntegral $ (v + (v `unsafeShiftR` 8)) `unsafeShiftR` 8
+      fromIntegral $ div255 v
     where fi :: Word8 -> Word32
           fi = fromIntegral
           v = fi coverage * fi painted + fi background * fi inverseCoverage + 128

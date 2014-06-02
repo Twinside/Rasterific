@@ -18,7 +18,6 @@ module Graphics.Rasterific.Operators
     , vceil
     , clampPoint
     , midPoint
-    , lerpPoint
     , vpartition 
     , normal
     , ifZero
@@ -32,12 +31,11 @@ import Control.Applicative( Applicative
                           , (<$>)
                           )
 
-import Linear( V2( .. )
+import Graphics.Rasterific.Linear
+             ( V2( .. )
              , Additive( .. )
-             {-, Metric( .. )-}
              , Epsilon( nearZero )
              , (^+^)
-             {-, (^/)-}
              , (^*)
              , dot
              , normalize
@@ -122,10 +120,6 @@ clampPoint mini maxi v = vmin maxi $ vmax mini v
 midPoint :: (Additive a) => a Float -> a Float -> a Float
 {-# INLINE midPoint #-}
 midPoint a b = (a ^+^ b) ^* 0.5
-
-lerpPoint :: (Additive a) => a Float -> a Float -> Float -> a Float
-{-# INLINE lerpPoint #-}
-lerpPoint a b v = a ^+^ (b ^-^ a) ^* v
 
 -- | Given a boolean choice vector, return elements of
 -- the first one if true, of the second one otherwise.

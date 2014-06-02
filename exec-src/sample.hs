@@ -1,3 +1,4 @@
+module Sample where
 
 import Data.Monoid
 import Codec.Picture

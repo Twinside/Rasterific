@@ -1,16 +1,26 @@
+{-# LANGUAGE BangPatterns #-}
 -- | Handle straight lines polygon.
 module Graphics.Rasterific.Line
     ( lineFromPath
+    , decomposeLine
     , clipLine
     , sanitizeLine
     , lineBreakAt
     , flattenLine
     , lineLength
+    , offsetLine
     ) where
 
-import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( Monoid, (<>), mempty )
-import Linear( V2( .. ), (^-^), norm )
+import Control.Applicative( (<$>), (<*>), pure )
+import Data.Monoid( (<>), mempty )
+import Graphics.Rasterific.Linear
+             ( V1( .. )
+             , V2( .. )
+             , (^-^)
+             , (^+^)
+             , (^*)
+             , lerp
+             , norm )
 
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
@@ -34,10 +44,17 @@ sanitizeLine l@(Line p1 p2)
 
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
-  where ab = lerpPoint a b t
+  where ab = lerp t a b
 
 flattenLine :: Line -> Container Primitive
 flattenLine = pure . LinePrim
+
+offsetLine :: Float -> Line -> Container Primitive
+offsetLine offset (Line a b) = pure . LinePrim $ Line shiftedA shiftedB
+  where
+   u = a `normal` b
+   shiftedA = a ^+^ (u ^* offset)
+   shiftedB = b ^+^ (u ^* offset)
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
@@ -97,4 +114,36 @@ clipLine mini maxi poly@(Line a b)
         -- If we're near an edge, snap the component to the
         -- edge.
         m = vpartition (vabs (ab ^-^ edge) ^< 0.1) edge ab
+
+-- TODO: implement better algorithm for lines, should
+-- be doable.
+decomposeLine :: Line -> Container EdgeSample
+decomposeLine (Line aRoot bRoot) = go aRoot bRoot where
+  go !a@(V2 ax ay) !b@(V2 bx by)
+    | insideX && insideY = pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
+      where
+        !floorA = vfloor a
+        !floorB = vfloor b
+        !(V2 insideX insideY) =
+            floorA ^==^ floorB ^||^ vceil a ^==^ vceil b
+
+        !(V2 px py)  = fromIntegral <$> vmin floorA floorB
+        !(V1 w) = (px + 1 -) <$>  (V1 bx `midPoint` V1 ax)
+        !h = by - ay
+
+  go a b = go a m <> go m b
+    where
+      !ab = a `midPoint` b
+
+      !mini = fromIntegral <$> vfloor ab
+      !maxi = fromIntegral <$> vceil ab
+      !nearmin = vabs (ab ^-^ mini) ^< 0.1
+      !nearmax = vabs (ab ^-^ maxi) ^< 0.1
+
+      minMaxing mi nearmi ma nearma p
+        | nearmi = mi
+        | nearma = ma
+        | otherwise = p
+
+      !m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax <*> ab
 

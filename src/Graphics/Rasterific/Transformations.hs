@@ -7,16 +7,19 @@
 module Graphics.Rasterific.Transformations
     ( Transformation( .. )
     , applyTransformation
+    , applyVectorTransformation
     , translate
     , scale
     , rotate
     , rotateCenter
+    , skewX
+    , skewY
     , inverseTransformation
     ) where
 
 import Data.Monoid( Monoid( .. ), (<>) )
 import Graphics.Rasterific.Types
-import Linear( V2( .. ) )
+import Graphics.Rasterific.Linear( V2( .. ) )
 
 -- | Represent a 3*3 matrix for homogenous coordinates.
 --
@@ -59,6 +62,14 @@ applyTransformation :: Transformation -> Point -> Point
 applyTransformation (Transformation a c e
                                     b d f) (V2 x y) =
     V2 (a * x + y * c + e) (b * x + d * y + f)
+
+-- | Effectively transform a vector given a transformation.
+-- The translation part won't be applied.
+applyVectorTransformation :: Transformation -> Vector -> Vector
+applyVectorTransformation
+    (Transformation a c _e
+                    b d _f) (V2 x y) =
+    V2 (a * x + y * c) (b * x + d * y)
 
 
 -- | Create a transformation representing a rotation
@@ -115,11 +126,44 @@ translate (V2 x y) =
     Transformation 1 0 x
                    0 1 y
 
+-- | Skew transformation along the
+-- X axis.
+--
+-- > fill . transform (applyTransformation $ skewX 0.3)
+-- >      $ rectangle (V2 50 50) 80 80
+--
+-- <<docimages/transform_skewx.png>>
+--
+skewX :: Float -> Transformation
+skewX v =
+    Transformation 1 t 0
+                   0 1 0
+  where t = tan v
+
+-- | Skew transformation along the Y axis.
+--
+-- > fill . transform (applyTransformation $ skewY 0.3)
+-- >      $ rectangle (V2 50 50) 80 80
+--
+-- <<docimages/transform_skewy.png>>
+--
+skewY :: Float -> Transformation
+skewY v =
+    Transformation 1 0 0
+                   t 1 0
+  where t = tan v
+
+transformationDeterminant :: Transformation -> Float
+transformationDeterminant (Transformation a c _e
+                                          b d _f) = a * d - c * b
+
 -- | Inverse a transformation (if possible)
-inverseTransformation :: Transformation -> Transformation
+inverseTransformation :: Transformation -> Maybe Transformation
+inverseTransformation trans
+    | transformationDeterminant trans == 0 = Nothing
 inverseTransformation (Transformation a c e
                                       b d f) =
-    Transformation a' c' e' b' d' f'
+    Just $ Transformation a' c' e' b' d' f'
   where det = a * d - b * c
         a' = d / det
         c' = (- c) / det
@@ -128,3 +172,4 @@ inverseTransformation (Transformation a c e
         b' = (- b) / det
         d' = a / det
         f' = (e * b - a * f) / det
+

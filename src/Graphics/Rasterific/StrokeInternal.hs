@@ -1,14 +1,15 @@
-module Graphics.Rasterific.Stroke
+module Graphics.Rasterific.StrokeInternal
     ( flatten
     , dashize
     , strokize
     , dashedStrokize
     )  where
 
-import Control.Applicative( Applicative, (<$>), pure )
-import Data.Monoid( Monoid, (<>), mempty )
-import Data.Foldable( Foldable, foldMap )
-import Linear( V2( .. )
+import Control.Applicative( (<$>), pure )
+import Data.Monoid( (<>), mempty )
+import Data.Foldable( foldMap )
+import Graphics.Rasterific.Linear
+             ( V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
@@ -50,7 +51,7 @@ roundJoin offset p = go
           -- If we're already on a nice curvature,
           -- don't bother doing anything
           | u `dot` w >= 0.9 = pure . BezierPrim $ Bezier a b c
-          | otherwise = go w v <> go u w
+          | otherwise = go u w <> go w v
           where --     ^
                 --     |w
                 -- a X---X c
@@ -115,7 +116,7 @@ lineFromTo a b = LinePrim (Line a b)
 miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
-  | uDotW > l / max 1 l && uDotW > 0 =
+  | uDotW > l / max 1 l && uDotW > 0.001 =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
@@ -150,8 +151,7 @@ joinPrimitives offset join prim1 prim2  =
         (_, v) = firstPointAndNormal prim2
 
 offsetPrimitives :: Float -> Primitive -> Container Primitive
-offsetPrimitives offset (LinePrim (Line x1 x2)) =
-    offsetPrimitives offset . BezierPrim $ straightLine x1 x2
+offsetPrimitives offset (LinePrim l) = offsetLine offset l
 offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
 offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 
@@ -165,7 +165,7 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
 
         go prev []
            | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
-           | otherwise = cap offset caping prev <> offseter prev
+           | otherwise = offseter prev <> cap offset caping prev
         go prev (x:xs) =
              joiner prev x <> offseter prev <> go x xs
 
@@ -181,11 +181,12 @@ sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 
 strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
-         -> [Primitive]
+         -> Container Primitive
 strokize width join (capStart, capEnd) beziers =
     offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
-  where sanitized = foldMap sanitize beziers
+  where 
+        sanitized = foldMap (listOfContainer . sanitize) $ beziers
         offseter = offsetAndJoin (width / 2) join
 
 flattenPrimitive :: Primitive -> Container Primitive
@@ -232,7 +233,9 @@ dropPattern = go
 
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
 dashize offset pattern =
-    taker infinitePattern . concatMap flattenPrimitive . concatMap sanitize
+    taker infinitePattern . listOfContainer 
+                          . foldMap flattenPrimitive
+                          . foldMap sanitize
   where
     realOffset | offset >= 0 = offset
                | otherwise = offset + sum pattern
@@ -250,9 +253,26 @@ dashize offset pattern =
     droper (atValue:atRest) stream = taker atRest next
       where (_toKeep, next) = splitPrimitiveUntil atValue stream
 
-dashedStrokize :: Float -> DashPattern -> StrokeWidth
-               -> Join -> (Cap, Cap) -> [Primitive]
+-- | Create a list of outlines corresponding to all the
+-- dashed elements. They can be then stroked
+--
+-- > mapM_ (stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0)) $
+-- >     dashedStrokize 0 [10, 5]
+-- >                    40 JoinRound (CapStraight 0, CapStraight 0)
+-- >       [CubicBezierPrim $
+-- >            CubicBezier (V2  40 160) (V2 40   40)
+-- >                        (V2 160  40) (V2 160 160)]
+--
+-- <<docimages/strokize_dashed_path.png>>
+--
+dashedStrokize :: Float       -- ^ Starting offset
+               -> DashPattern -- ^ Dashing pattern to use for stroking
+               -> StrokeWidth -- ^ Stroke width
+               -> Join        -- ^ Which kind of join will be used
+               -> (Cap, Cap)  -- ^ Start and end capping.
+               -> [Primitive] -- ^ List of elements to transform
                -> [[Primitive]]
 dashedStrokize offset dashPattern width join capping beziers =
-    strokize width join capping <$> dashize offset dashPattern beziers
+    listOfContainer . strokize width join capping
+        <$> dashize offset dashPattern beziers
 

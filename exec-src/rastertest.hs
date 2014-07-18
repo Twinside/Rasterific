@@ -526,6 +526,12 @@ strokeBad =
                                      (V2 (-43.8) 58.199997)
                                      (V2 (-56.0) 64.2)
                                      (V2 (-61.4) 74.399994)]
+pledgeTest :: IO ()
+pledgeTest = do
+  (Right (ImageRGBA8 png)) <- readImage "exec-src/test_img.png"
+  writePng (outFolder </> "pledge_render.png") .
+    renderDrawing 389 89 white $
+        drawImage png 0 (V2 0 0)
 
 testSuite :: IO ()
 testSuite = do
@@ -548,6 +554,7 @@ testSuite = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  pledgeTest
   strokeBad 
   evenOddTest uniform
   complexEvenOddTest 700 uniform

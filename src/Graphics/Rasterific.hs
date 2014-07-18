@@ -125,7 +125,7 @@ import Codec.Picture.Types( Image( .. )
 
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^*) )
+import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading
@@ -638,7 +638,7 @@ drawImageAtSize :: (Pixel px, Modulable (PixelBaseComponent px))
                 -> Float -- ^ Width of the drawn image
                 -> Float -- ^ Height of the drawn image
                 -> Drawing px ()
-drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize p
+drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
             reqWidth reqHeight
     | borderSize <= 0 =
         withTransformation (translate p <> scale scaleX scaleY) .
@@ -649,6 +649,7 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize p
         stroke borderSize (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'
         where
+          p = ip ^-^ V2 0.5 0.5
           rect = rectangle (V2 0 0) rw rh
           rect' = rectangle p reqWidth reqHeight
 

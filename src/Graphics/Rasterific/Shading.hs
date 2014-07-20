@@ -40,6 +40,7 @@ import Graphics.Rasterific.Compositor( Modulable( .. )
                                      , ModulablePixel
                                      , RenderablePixel
                                      , compositionAlpha )
+import Graphics.Rasterific.PackeableWrite
 
 type ShaderFunction px = Float -> Float -> px
 

@@ -124,6 +124,7 @@ import Codec.Picture.Types( Image( .. )
                           , unsafeFreezeImage )
 
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Storable.Mutable as M
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
@@ -136,6 +137,7 @@ import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
+import Graphics.Rasterific.PackeableWrite
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
@@ -356,9 +358,11 @@ renderDrawing
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderDrawing width height background drawing = runST $
-  createMutableImage width height background
-        >>= execStateT (go initialContext $ fromF drawing)
+renderDrawing width height background drawing = runST $ do
+  buff <- M.new (width * height * componentCount background)
+  let mutable = MutableImage width height buff
+  fillImageWith mutable background
+  execStateT (go initialContext $ fromF drawing) mutable
         >>= unsafeFreezeImage
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing

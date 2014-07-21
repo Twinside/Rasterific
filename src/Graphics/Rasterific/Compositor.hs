@@ -12,10 +12,12 @@ module Graphics.Rasterific.Compositor
     , compositionAlpha
     ) where
 
+import Foreign.Storable( Storable )
 import Data.Bits( unsafeShiftR )
 import Data.Word( Word8, Word32 )
 
 import Codec.Picture.Types( Pixel( .. ) )
+import Graphics.Rasterific.PackeableWrite
 
 type Compositor px =
     (PixelBaseComponent px) ->
@@ -25,7 +27,10 @@ type Compositor px =
 -- and we're allowed to modulate it's color components
 -- generically.
 type ModulablePixel px =
-    (Pixel px, Modulable (PixelBaseComponent px))
+    ( Pixel px
+    , PackeablePixel px
+    , Storable (PackedRepresentation px)
+    , Modulable (PixelBaseComponent px))
 
 -- | This constraint tells us that pixel component
 -- must also be pixel and be the "bottom" of component,
@@ -35,6 +40,8 @@ type ModulablePixel px =
 type RenderablePixel px =
     ( ModulablePixel px
     , Pixel (PixelBaseComponent px)
+    , PackeablePixel (PixelBaseComponent px)
+    , Storable (PackedRepresentation (PixelBaseComponent px))
     , PixelBaseComponent (PixelBaseComponent px)
             ~ (PixelBaseComponent px)
     )

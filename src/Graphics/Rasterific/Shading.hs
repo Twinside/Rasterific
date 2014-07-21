@@ -110,17 +110,11 @@ solidColor color img tsInfo
     -- We are in the case fully opaque, so we can
     -- just overwrite what was there before
     | pixelOpacity color == fullOpacity && _tsCoverage tsInfo >= 1 =
-        go 0 $ _tsBaseIndex tsInfo
+        writePixelBetweenAt img color (_tsBaseIndex tsInfo) maxi
+        {-go 0 $ _tsBaseIndex tsInfo-}
   where
     !fullOpacity = fullValue :: PixelBaseComponent px
     !maxi = _tsRepeat tsInfo
-    !compCount = componentCount (undefined :: px)
-    !vectorData = mutableImageData img
-
-    go count _ | count >= maxi = return ()
-    go count writeIndex = do
-      (vectorData `unsafeWritePixel` writeIndex) color
-      go (count + 1) $ writeIndex + compCount
 
 -- We can be transparent, so perform alpha blending.
 solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
@@ -135,7 +129,7 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
     go count  _ | count >= maxi = return ()
     go !count !idx = do
       oldPixel <- unsafeReadPixel imgData idx
-      unsafeWritePixel imgData idx
+      writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
 
@@ -164,7 +158,7 @@ shaderFiller shader img tsInfo =
           !opacity = pixelOpacity color
           (cov, icov) = coverageModulate scanCoverage opacity
       oldPixel <- unsafeReadPixel imgData idx
-      unsafeWritePixel imgData idx
+      writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) (idx + compCount) (x + dx) (y + dy)
 

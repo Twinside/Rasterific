@@ -59,6 +59,7 @@ library
                , Graphics.Rasterific.Shading
                , Graphics.Rasterific.PlaneBoundable
                , Graphics.Rasterific.QuadraticFormula
+               , Graphics.Rasterific.PackeableWrite
 
   ghc-options: -O2 -Wall
   ghc-prof-options: -Wall -prof -auto-all

@@ -1,7 +1,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns #-}
 module Graphics.Rasterific.PackeableWrite( PackeablePixel( .. )
+                                         , fillImageWith
+                                         , writePixelBetweenAt
+                                         , writePackedPixelAt
                                          ) where
 
 import Control.Monad.ST( ST )
@@ -53,10 +57,10 @@ instance PackeablePixel PixelF where
 instance PackeablePixel PixelRGBA8 where
     type PackedRepresentation PixelRGBA8 = Word32
     packPixel (PixelRGBA8 r g b a) =
-        (fi r `unsafeShiftL` (3 * bitCount)) .|.
-        (fi g `unsafeShiftL` (2 * bitCount)) .|.
-        (fi b `unsafeShiftL` (1 * bitCount)) .|.
-        (fi a `unsafeShiftL` (0 * bitCount))
+        (fi r `unsafeShiftL` (0 * bitCount)) .|.
+        (fi g `unsafeShiftL` (1 * bitCount)) .|.
+        (fi b `unsafeShiftL` (2 * bitCount)) .|.
+        (fi a `unsafeShiftL` (3 * bitCount))
       where fi = fromIntegral
             bitCount = 8
 
@@ -115,24 +119,43 @@ fromFloat float = unsafePerformIO $ F.alloca $ \buf -> do
 	F.peek buf
 	-- -}
 
+fillImageWith :: ( Pixel px, PackeablePixel px
+                 , M.Storable (PackedRepresentation px))
+              => MutableImage s px -> px -> ST s ()
+fillImageWith img px = M.set converted $ packPixel px
+  where
+    (ptr, s, s2) = M.unsafeToForeignPtr $ mutableImageData img
+    !packedPtr = castForeignPtr ptr
+    !converted =
+        M.unsafeFromForeignPtr packedPtr s (s2 `div` componentCount px)
+
 writePixelBetweenAt :: ( Pixel px, PackeablePixel px
                        , M.Storable (PackedRepresentation px))
-                    => Int -> Int -> MutableImage s px -> px
+                    => MutableImage s px -> px -> Int -> Int
                     -> ST s ()
-writePixelBetweenAt start count img px = M.set converted packed
+writePixelBetweenAt img px start count = M.set converted packed
   where
-    packed = packPixel px
-    pixelData = mutableImageData img
-    compCount = componentCount px
-    startOffset = start `div` compCount
-    packedCount = count `div` compCount
+    !packed = packPixel px
+    !pixelData = mutableImageData img
 
-    toSet = M.slice startOffset packedCount pixelData
+    !toSet = M.slice start count pixelData
     (ptr, s, s2) = M.unsafeToForeignPtr toSet
-    packedPtr = castForeignPtr ptr
-    converted =
-        M.unsafeFromForeignPtr
-            packedPtr
-            (s `div` compCount)
-            (s2 `div` compCount)
+    !packedPtr = castForeignPtr ptr
+    !converted =
+        M.unsafeFromForeignPtr packedPtr s s2
+
+writePackedPixelAt :: ( Pixel px, PackeablePixel px
+                      , M.Storable (PackedRepresentation px))
+                   => MutableImage s px -> Int -> px -> ST s ()
+{-# INLINE writePackedPixelAt #-}
+writePackedPixelAt img idx px =
+    M.unsafeWrite converted (idx `div` compCount) packed
+  where
+    !packed = packPixel px
+    !compCount = componentCount px
+
+    (ptr, s, s2) = M.unsafeToForeignPtr $ mutableImageData img
+    !packedPtr = castForeignPtr ptr
+    !converted =
+        M.unsafeFromForeignPtr packedPtr s s2
 

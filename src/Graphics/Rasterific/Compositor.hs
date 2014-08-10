@@ -16,8 +16,8 @@ import Foreign.Storable( Storable )
 import Data.Bits( unsafeShiftR )
 import Data.Word( Word8, Word32 )
 
-import Codec.Picture.Types( Pixel( .. ) )
-import Graphics.Rasterific.PackeableWrite
+import Codec.Picture.Types( Pixel( .. )
+                          , PackeablePixel( PackedRepresentation ) )
 
 type Compositor px =
     (PixelBaseComponent px) ->

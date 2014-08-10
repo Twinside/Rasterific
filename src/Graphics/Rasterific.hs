@@ -120,8 +120,9 @@ import Codec.Picture.Types( Image( .. )
                           , Pixel8
                           , PixelRGBA8
                           , MutableImage( .. )
-                          , createMutableImage
-                          , unsafeFreezeImage )
+                          , unsafeFreezeImage
+                          , fillImageWith
+                          )
 
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Storable.Mutable as M
@@ -137,7 +138,6 @@ import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
-import Graphics.Rasterific.PackeableWrite
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )

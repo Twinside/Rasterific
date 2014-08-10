@@ -29,7 +29,10 @@ import Codec.Picture.Types( Pixel( .. )
                           , MutableImage( .. )
                           , Pixel8
                           , PixelRGBA8
+                          , unsafeWritePixelBetweenAt
+                          , writePackedPixelAt
                           )
+
 import Graphics.Rasterific.Types( Point
                                 , Vector
                                 , Line( .. )
@@ -40,7 +43,6 @@ import Graphics.Rasterific.Compositor( Modulable( .. )
                                      , ModulablePixel
                                      , RenderablePixel
                                      , compositionAlpha )
-import Graphics.Rasterific.PackeableWrite
 
 type ShaderFunction px = Float -> Float -> px
 
@@ -110,7 +112,7 @@ solidColor color img tsInfo
     -- We are in the case fully opaque, so we can
     -- just overwrite what was there before
     | pixelOpacity color == fullOpacity && _tsCoverage tsInfo >= 1 =
-        writePixelBetweenAt img color (_tsBaseIndex tsInfo) maxi
+        unsafeWritePixelBetweenAt img color (_tsBaseIndex tsInfo) maxi
         {-go 0 $ _tsBaseIndex tsInfo-}
   where
     !fullOpacity = fullValue :: PixelBaseComponent px

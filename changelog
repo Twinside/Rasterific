@@ -1,6 +1,8 @@
 -*-change-log-*-
 
-v0.3 2014
+v0.3.1 2014
+
+v0.3 June 2014
  * Switching main free monad type to the church encoded one.
  * Optimized the bezier decomposition, strictness annotations
    made wonders. May require forward differencing in the future.

@@ -8,6 +8,7 @@ module Graphics.Rasterific.CubicBezier
     , cubicBezierBreakAt
     , clipCubicBezier
     , decomposeCubicBeziers
+    , decomposeCubicBezierForwardDifference
     , sanitizeCubicBezier
     , offsetCubicBezier
     , flattenCubicBezier
@@ -36,6 +37,9 @@ import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
 import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
+
+import Debug.Trace
+import Text.Printf
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -114,33 +118,128 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
 
 -- | Represent the cubic bezier curve as a vector ready
 -- for matrix multiplication
-data CachedBezier = CachedBezier !Float !Float !Float !Float
+data CachedBezier = CachedBezier 
+    { _cachedA :: {-# UNPACK #-} !Float 
+    , _cachedB :: {-# UNPACK #-} !Float
+    , _cachedC :: {-# UNPACK #-} !Float
+    , _cachedD :: {-# UNPACK #-} !Float
+    }
 
 cacheBezier :: CubicBezier -> (CachedBezier, CachedBezier)
 cacheBezier (CubicBezier p0@(V2 x0 y0) p1 p2 p3) =
 
-    (CachedBezier x0 bX cX dX, CachedBezier y0 bY cY dY)
+    (CachedBezier aX bX cX x0, CachedBezier aY bY cY y0)
   where
-   V2 bX bY = p1 ^* 3 ^-^ p0 ^* 3
-   V2 cX cY = p2 ^* 3 ^-^ p1 ^* 6 + p0 ^* 3
-   V2 dX dY = p3 ^-^ p2 ^* 3 ^+^ p1 ^* 3 ^-^ p0
+   V2 cX cY = (p1 ^-^ p0) ^* 3
+   V2 bX bY = (p2 ^-^ p1 ^* 2 + p0) ^* 3
+   V2 aX aY = p3 ^-^ (p2 ^+^ p1) ^* 3 ^-^ p0
 
 cachedBezierAt :: CachedBezier -> Float -> Float
 cachedBezierAt (CachedBezier a b c d) t =
-    a + b * t + c * tSquare + tCube * d
+    a * tCube + b * tSquare + c * t + d
   where
     tSquare = t * t
     tCube = tSquare * t
 
+data ForwardDifferenceCoefficient = ForwardDifferenceCoefficient
+    { _fdA :: {-# UNPACK #-} !Float -- ^ First order
+    , _fdB :: {-# UNPACK #-} !Float -- ^ Second order
+    , _fdC :: {-# UNPACK #-} !Float -- ^ Third order
+    }
+
+fdCoeffOfEqua :: Float -> CachedBezier -> ForwardDifferenceCoefficient
+fdCoeffOfEqua stepSize (CachedBezier a b c _) = ForwardDifferenceCoefficient 
+  { _fdA = aHCube + bHSquare + c * stepSize
+  , _fdB = 6 * aHCube + 2 * bHSquare
+  , _fdC = 6 * aHCube
+  }
+  where
+    stepSizeSquare = stepSize * stepSize
+    aHCube = a * stepSizeSquare * stepSize
+    bHSquare = b * stepSizeSquare
+
+halveFDCoefficients :: ForwardDifferenceCoefficient -> ForwardDifferenceCoefficient
+halveFDCoefficients (ForwardDifferenceCoefficient a b c) =
+    ForwardDifferenceCoefficient { _fdA = a', _fdB = b', _fdC = c' }
+  where
+    a' = a / 8
+    b' = b / 4 - a'
+    c' = (c - b') / 2
+
+doubleFDCoefficients :: ForwardDifferenceCoefficient -> ForwardDifferenceCoefficient
+doubleFDCoefficients (ForwardDifferenceCoefficient a b c) =
+    ForwardDifferenceCoefficient { _fdA = a', _fdB = b', _fdC = c' }
+  where
+    a' = 8 * a
+    b' = 4 * b + 4 * a
+    c' = 2 * c + b
+
+updateForwardDifferencing :: Float -> ForwardDifferenceCoefficient
+                          -> (Float, ForwardDifferenceCoefficient)
+updateForwardDifferencing v (ForwardDifferenceCoefficient a b c) =
+    (v + a, ForwardDifferenceCoefficient (a + b) (b + c) c)
+
+decomposeCubicBezierForwardDifference :: CubicBezier -> Container EdgeSample
+decomposeCubicBezierForwardDifference bez = lst where
+  lst = go initialStep 0
+            xStartCoeff yStartCoeff
+            xStart yStart
+
+  initialStep :: Float
+  initialStep = 0.5
+
+  (xEqua, yEqua) = cacheBezier bez
+  xStartCoeff = fdCoeffOfEqua initialStep xEqua
+  yStartCoeff = fdCoeffOfEqua initialStep yEqua
+
+  xStart = cachedBezierAt xEqua 0
+  yStart = cachedBezierAt yEqua 0
+
+  go !stepSize !currentStep !xFdCoeff !yFdCoeff !xPrev !yPrev
+    | currentStep >= 1.0 = trace "DONE" $ mempty
+    | xDelta > 1 || yDelta > 1 =
+        trace (printf "Halving %g @%g delta:(%g,%g)" stepSize currentStep xDelta yDelta) $
+        go (stepSize / 2) currentStep
+            (halveFDCoefficients xFdCoeff)
+            (halveFDCoefficients yFdCoeff)
+            xPrev yPrev
+
+    | xDelta < 0.5 && yDelta < 0.5 =
+        trace (printf "Doubling %g @%g delta:(%g,%g)" stepSize currentStep xDelta yDelta) $
+        go (stepSize * 2) currentStep
+            (doubleFDCoefficients xFdCoeff)
+            (doubleFDCoefficients yFdCoeff)
+            xPrev yPrev
+
+    | otherwise =
+        {-trace (printf "Producing %g @%g delta:(%g,%g)" stepSize currentStep xDelta yDelta) $-}
+        let next =
+              go stepSize (currentStep + stepSize)
+                 xCoeff yCoeff
+                 xNext yNext
+            sample = EdgeSample
+                { _sampleX     = xPrev + 0.5
+                , _sampleY     = yPrev + 0.5
+                , _sampleAlpha = 1.0 -- For testing purposes only.
+                , _sampleH     = yDelta
+                }
+        in
+        pure sample <> next
+      where
+        xDelta = abs (xNext - xPrev)
+        yDelta = abs (yNext - yPrev)
+        (xNext, xCoeff) = updateForwardDifferencing xPrev xFdCoeff
+        (yNext, yCoeff) = updateForwardDifferencing yPrev yFdCoeff
+
 cachedBezierDerivative :: CachedBezier -> QuadraticFormula Float
-cachedBezierDerivative (CachedBezier _ b c d) =
-    QuadraticFormula (3 * d) (2 * c) b
+cachedBezierDerivative (CachedBezier a b c _) =
+    QuadraticFormula (3 * a) (2 * b) c
 
 -- | Find the coefficient of the extremum points
 extremums :: CachedBezier -> [Float]
 extremums cached =
- nub [ root | root <- formulaRoots $ cachedBezierDerivative cached
-            , 0 <= root && root <= 1.0 ]
+  [ root | root <- formulaRoots $ cachedBezierDerivative cached
+         , 0 <= root && root <= 1.0 ]
 
 extremumPoints :: (CachedBezier, CachedBezier) -> [Point]
 extremumPoints (onX, onY) = toPoints <$> nub (extremums onX <> extremums onY)

@@ -41,12 +41,15 @@ combineEdgeSamples prepareCoverage vec = go 0 0 0 0 0
 decompose :: Primitive -> Container EdgeSample
 decompose (LinePrim l) = decomposeLine l
 decompose (BezierPrim b) = decomposeBeziers b
-decompose (CubicBezierPrim c) = decomposeCubicBeziers c
+decompose (CubicBezierPrim c) =
+    decomposeCubicBezierForwardDifference c
 
 sortEdgeSamples :: [EdgeSample] -> V.Vector EdgeSample
 sortEdgeSamples samples = runST $ do
     mutableVector <- V.unsafeThaw $ V.fromList samples
-    let xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
+    let xy a b = case compare (_sampleY a) $ _sampleY b of
+			EQ -> compare (_sampleX a) $ _sampleX b
+			c -> c
     VS.sortBy xy mutableVector
     V.unsafeFreeze mutableVector
 

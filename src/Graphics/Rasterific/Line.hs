@@ -119,39 +119,39 @@ clipLine mini maxi poly@(Line a b)
 decomposeLine :: Line -> Producer EdgeSample
 decomposeLine (Line (V2 aRx aRy) (V2 bRx bRy)) = go aRx aRy bRx bRy where
   go !ax !ay !bx !by cont
-    | insideX && insideY = EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
+    | insideX && insideY =
+      let !px = fromIntegral $ min floorAx floorBx
+          !py = fromIntegral $ min floorAy floorBy
+          !w = px + 1 - (bx `middle` ax)
+          !h = by - ay
+      in
+      EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
       where
         floorAx, floorAy :: Int
-        floorAx = floor ax
-        floorAy = floor ay
+        !floorAx = floor ax
+        !floorAy = floor ay
 
-        floorBx = floor bx
-        floorBy = floor by
+        !floorBx = floor bx
+        !floorBy = floor by
 
-        insideX = floorAx == floorBx || ceiling ax == (ceiling bx :: Int)
-        insideY = floorAy == floorBy || ceiling ay == (ceiling by :: Int)
+        !insideX = floorAx == floorBx || ceiling ax == (ceiling bx :: Int)
+        !insideY = floorAy == floorBy || ceiling ay == (ceiling by :: Int)
 
-        px = fromIntegral $ min floorAx floorBx
-        py = fromIntegral $ min floorAy floorBy
-
-        w = px + 1 - (bx `middle` ax)
-        h = by - ay
 
   go !ax !ay !bx !by cont = go ax ay mx my $ go mx my bx by cont
     where
-      abx = ax `middle` bx
-      aby = ay `middle` by
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
 
-      mx | abs (abx - mini) < 0.1 = mini
-         | abs (abx - maxi) < 0.1 = maxi
-         | otherwise = abx
-        where mini = fromIntegral (floor abx :: Int)
-              maxi = fromIntegral (ceiling abx :: Int)
+      !mx | abs (abx - mini) < 0.1 = mini
+          | abs (abx - maxi) < 0.1 = maxi
+          | otherwise = abx
+         where !mini = fromIntegral (floor abx :: Int)
+               !maxi = fromIntegral (ceiling abx :: Int)
 
-      my | abs (aby - mini) < 0.1 = mini
-         | abs (aby - maxi) < 0.1 = maxi
-         | otherwise = aby
-        where mini = fromIntegral (floor aby :: Int)
-              maxi = fromIntegral (ceiling aby :: Int)
-
+      !my | abs (aby - mini) < 0.1 = mini
+          | abs (aby - maxi) < 0.1 = maxi
+          | otherwise = aby
+         where !mini = fromIntegral (floor aby :: Int)
+               !maxi = fromIntegral (ceiling aby :: Int)
 

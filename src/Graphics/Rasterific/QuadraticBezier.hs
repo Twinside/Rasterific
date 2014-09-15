@@ -51,47 +51,48 @@ decomposeBeziers :: Bezier -> Producer EdgeSample
 decomposeBeziers (Bezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy)) =
     go aRx aRy bRx bRy cRx cRy where
   go ax ay _bx _by cx cy cont
-    | insideX && insideY = EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
+    | insideX && insideY =
+      let !px = fromIntegral $ min floorAx floorCx
+          !py = fromIntegral $ min floorAy floorCy
+          !w = px + 1 - cx `middle` ax
+          !h = cy - ay
+      in
+      EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
       where
         floorAx, floorAy :: Int
-        floorAx = floor ax
-        floorAy = floor ay
+        !floorAx = floor ax
+        !floorAy = floor ay
 
-        floorCx = floor cx
-        floorCy = floor cy
+        !floorCx = floor cx
+        !floorCy = floor cy
 
-        insideX = floorAx == floorCx || ceiling ax == (ceiling cx :: Int)
-        insideY = floorAy == floorCy || ceiling ay == (ceiling cy :: Int)
+        !insideX = floorAx == floorCx || ceiling ax == (ceiling cx :: Int)
+        !insideY = floorAy == floorCy || ceiling ay == (ceiling cy :: Int)
 
-        px = fromIntegral $ min floorAx floorCx
-        py = fromIntegral $ min floorAy floorCy
-
-        w = px + 1 - cx `middle` ax
-        h = cy - ay
 
   go !ax !ay !bx !by !cx !cy cont =
       go ax ay abx aby mx my $ go mx my bcx bcy cx cy cont
     where
-      abx = ax `middle` bx
-      aby = ay `middle` by
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
 
-      bcx = bx `middle` cx
-      bcy = by `middle` cy
+      !bcx = bx `middle` cx
+      !bcy = by `middle` cy
 
-      abbcx = abx `middle` bcx
-      abbcy = aby `middle` bcy
+      !abbcx = abx `middle` bcx
+      !abbcy = aby `middle` bcy
 
-      mx | abs (abbcx - mini) < 0.1 = mini
-         | abs (abbcx - maxi) < 0.1 = maxi
-         | otherwise = abbcx
-        where mini = fromIntegral (floor abbcx :: Int)
-              maxi = fromIntegral (ceiling abbcx :: Int)
+      !mx | abs (abbcx - mini) < 0.1 = mini
+          | abs (abbcx - maxi) < 0.1 = maxi
+          | otherwise = abbcx
+         where !mini = fromIntegral (floor abbcx :: Int)
+               !maxi = fromIntegral (ceiling abbcx :: Int)
 
-      my | abs (abbcy - mini) < 0.1 = mini
-         | abs (abbcy - maxi) < 0.1 = maxi
-         | otherwise = abbcy
-        where mini = fromIntegral (floor abbcy :: Int)
-              maxi = fromIntegral (ceiling abbcy :: Int)
+      !my | abs (abbcy - mini) < 0.1 = mini
+          | abs (abbcy - maxi) < 0.1 = maxi
+          | otherwise = abbcy
+         where !mini = fromIntegral (floor abbcy :: Int)
+               !maxi = fromIntegral (ceiling abbcy :: Int)
 
 
 -- | Create a quadratic bezier curve representing

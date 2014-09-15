@@ -12,6 +12,7 @@ module Graphics.Rasterific.Types
     , Bezier( .. )
     , CubicBezier( .. )
     , Primitive( .. )
+    , Producer
     , Container
     , containerOfList
     , listOfContainer
@@ -37,6 +38,9 @@ module Graphics.Rasterific.Types
 import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable, foldl' )
 import Graphics.Rasterific.Linear( V2( .. ) )
+
+import Foreign.Ptr( castPtr, plusPtr )
+import Foreign.Storable( Storable( sizeOf, alignment, peek, poke ) )
 
 -- | Represent a vector
 type Vector = V2 Float
@@ -156,6 +160,28 @@ data EdgeSample = EdgeSample
   , _sampleH     :: {-# UNPACK #-} !Float -- ^ Height
   }
   deriving Show
+
+-- | Just to get faster sorting
+instance Storable EdgeSample where
+   sizeOf _ = 4 * sizeOf (0 :: Float)
+   alignment v = sizeOf v
+
+   peek ptr = do
+     let floatPtr = castPtr ptr
+         floatSize = sizeOf (0 :: Float)
+     sx <- peek floatPtr
+     sy <- peek $ floatPtr `plusPtr` floatSize
+     sa <- peek $ floatPtr `plusPtr` (floatSize * 2)
+     sh <- peek $ floatPtr `plusPtr` (floatSize * 3)
+     return $ EdgeSample sx sy sa sh
+
+   poke ptr (EdgeSample sx sy sa sh) = do
+     let floatPtr = castPtr ptr
+         floatSize = sizeOf (0 :: Float)
+     poke floatPtr sx
+     poke (floatPtr `plusPtr` floatSize) sy
+     poke (floatPtr `plusPtr` (floatSize * 2)) sa
+     poke (floatPtr `plusPtr` (floatSize * 3)) sh
 
 -- | This typeclass is there to help transform the geometry,
 -- by applying a transformation on every point of a geometric
@@ -318,6 +344,8 @@ instance (Functor f, Transformable a)
 instance (Foldable f, PointFoldable a)
       => PointFoldable (f a) where
     foldPoints f = foldl' (foldPoints f)
+
+type Producer a = [a] -> [a]
 
 type Container a = DList a
 

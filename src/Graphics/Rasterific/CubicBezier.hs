@@ -415,9 +415,9 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     bccd = lerp val bc cd
     abbcbccd = lerp val abbc bccd
 
-decomposeCubicBeziers :: CubicBezier -> Container EdgeSample
+decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
 decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =
-    containerOfFunction $ go aRx aRy bRx bRy cRx cRy dRx dRy where
+    go aRx aRy bRx bRy cRx cRy dRx dRy where
   go ax ay _bx _by _cx _cy dx dy cont | insideX && insideY =
     EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
     where

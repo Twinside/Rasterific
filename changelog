@@ -1,6 +1,11 @@
 -*-change-log-*-
 
 v0.3.1 2014
+ * Tried Fast forward differencing for cubic bezier, not worth
+   the hassle
+ * Further optimized decomposition of all primitives, allowing
+   less alocated memory
+ * Added an "immediate" module to avoid constructing
 
 v0.3 June 2014
  * Switching main free monad type to the church encoded one.

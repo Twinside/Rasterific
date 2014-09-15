@@ -42,8 +42,8 @@ decompose :: Primitive -> Container EdgeSample
 decompose (LinePrim l) = decomposeLine l
 decompose (BezierPrim b) = decomposeBeziers b
 decompose (CubicBezierPrim c) =
-    decomposeCubicBezierForwardDifference c
-    {-decomposeCubicBeziers c-}
+    {-decomposeCubicBezierForwardDifference c-}
+    decomposeCubicBeziers c
 
 sortEdgeSamples :: [EdgeSample] -> V.Vector EdgeSample
 sortEdgeSamples samples = runST $ do

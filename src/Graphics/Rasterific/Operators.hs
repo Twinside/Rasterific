@@ -18,6 +18,7 @@ module Graphics.Rasterific.Operators
     , vceil
     , clampPoint
     , midPoint
+    , middle
     , vpartition 
     , normal
     , ifZero
@@ -120,6 +121,10 @@ clampPoint mini maxi v = vmin maxi $ vmax mini v
 midPoint :: (Additive a) => a Float -> a Float -> a Float
 {-# INLINE midPoint #-}
 midPoint a b = (a ^+^ b) ^* 0.5
+
+middle :: (Fractional a) => a -> a -> a
+{-# INLINE middle #-}
+middle a b = (a + b) * 0.5
 
 -- | Given a boolean choice vector, return elements of
 -- the first one if true, of the second one otherwise.

@@ -15,6 +15,7 @@ module Graphics.Rasterific.Types
     , Container
     , containerOfList
     , listOfContainer
+    , containerOfFunction
     , PathCommand( .. )
     , Path( .. )
     , Transformable( .. )
@@ -319,6 +320,9 @@ instance (Foldable f, PointFoldable a)
     foldPoints f = foldl' (foldPoints f)
 
 type Container a = DList a
+
+containerOfFunction :: ([a] -> [a]) -> Container a
+containerOfFunction f = fromList $ f []
 
 containerOfList :: [a] -> Container a
 containerOfList = fromList

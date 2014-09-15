@@ -419,24 +419,25 @@ decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
 decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =
     go aRx aRy bRx bRy cRx cRy dRx dRy where
   go ax ay _bx _by _cx _cy dx dy cont | insideX && insideY =
+    let !px = fromIntegral $ min floorAx floorDx
+        !py = fromIntegral $ min floorAy floorDy
+        !w = px + 1 - (dx `middle` ax)
+        !h = dy - ay
+    in
     EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
     where
       floorAx, floorAy :: Int
-      floorAx = floor ax
-      floorAy = floor ay
+      !floorAx = floor ax
+      !floorAy = floor ay
 
-      floorDx = floor dx
-      floorDy = floor dy
+      !floorDx = floor dx
+      !floorDy = floor dy
 
-      px = fromIntegral $ min floorAx floorDx
-      py = fromIntegral $ min floorAy floorDy
-
-      w = px + 1 - (dx `middle` ax)
-      h = dy - ay
-      insideX =
+      !insideX =
           floorAx == floorDx || ceiling ax == (ceiling dx :: Int)
-      insideY =
+      !insideY =
           floorAy == floorDy || ceiling ay == (ceiling dy :: Int)
+
 
   go !ax !ay !bx !by !cx !cy !dx !dy cont =
      go ax ay abx aby abbcx abbcy mx my $
@@ -452,31 +453,31 @@ decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dR
       --     /                                \
       --    /                                  \
       -- A X                                    X D
-      abx = ax `middle` bx
-      aby = ay `middle` by
-      bcx = bx `middle` cx
-      bcy = by `middle` cy
-      cdx = cx `middle` dx
-      cdy = cy `middle` dy
-      abbcx = abx `middle` bcx
-      abbcy = aby `middle` bcy
-      bccdx = bcx `middle` cdx
-      bccdy = bcy `middle` cdy
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
+      !bcx = bx `middle` cx
+      !bcy = by `middle` cy
+      !cdx = cx `middle` dx
+      !cdy = cy `middle` dy
+      !abbcx = abx `middle` bcx
+      !abbcy = aby `middle` bcy
+      !bccdx = bcx `middle` cdx
+      !bccdy = bcy `middle` cdy
 
-      abbcbccdx = abbcx `middle` bccdx
-      abbcbccdy = abbcy `middle` bccdy
+      !abbcbccdx = abbcx `middle` bccdx
+      !abbcbccdy = abbcy `middle` bccdy
 
-      mx | abs (abbcbccdx - mini) < 0.1 = mini
-         | abs (abbcbccdx - maxi) < 0.1 = maxi
-         | otherwise = abbcbccdx
-           where mini = fromIntegral (floor abbcbccdx :: Int)
-                 maxi = fromIntegral (ceiling abbcbccdx :: Int)
+      !mx | abs (abbcbccdx - mini) < 0.1 = mini
+          | abs (abbcbccdx - maxi) < 0.1 = maxi
+          | otherwise = abbcbccdx
+            where !mini = fromIntegral (floor abbcbccdx :: Int)
+                  !maxi = fromIntegral (ceiling abbcbccdx :: Int)
 
-      my | abs (abbcbccdy - mini) < 0.1 = mini
-         | abs (abbcbccdy - maxi) < 0.1 = maxi
-         | otherwise = abbcbccdy
-           where mini = fromIntegral (floor abbcbccdy :: Int)
-                 maxi = fromIntegral (ceiling abbcbccdy :: Int)
+      !my | abs (abbcbccdy - mini) < 0.1 = mini
+          | abs (abbcbccdy - maxi) < 0.1 = maxi
+          | otherwise = abbcbccdy
+            where !mini = fromIntegral (floor abbcbccdy :: Int)
+                  !maxi = fromIntegral (ceiling abbcbccdy :: Int)
 
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive

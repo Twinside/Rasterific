@@ -20,12 +20,10 @@ import Prelude hiding( or )
 import Data.Bits( unsafeShiftL )
 import Control.Applicative( liftA2
                           , (<$>)
-                          , (<*>)
                           , pure
                           )
 import Graphics.Rasterific.Linear
-             ( V1( .. )
-             , V2( .. )
+             ( V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
@@ -40,8 +38,8 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
 import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
-import Debug.Trace
-import Text.Printf
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -153,25 +151,13 @@ data ForwardDifferenceCoefficient = ForwardDifferenceCoefficient
     , _fdC :: {-# UNPACK #-} !Float
     }
 
-{-
-fdCoeffOfEqua :: Float -> CachedBezier -> ForwardDifferenceCoefficient
-fdCoeffOfEqua stepSize (CachedBezier a b c _) = ForwardDifferenceCoefficient
-  { _fdA = aHCube + bHSquare + c * stepSize
-  , _fdB = 6 * aHCube + 2 * bHSquare
-  , _fdC = 6 * aHCube
-  }
-  where
-    stepSizeSquare = stepSize * stepSize
-    aHCube = a * stepSizeSquare * stepSize
-    bHSquare = b * stepSizeSquare
--- -}
-
 -- | Given a cubic curve, return the initial step size and
 -- the coefficient for the forward difference.
+-- Initial step is assumed to be "1"
 bezierToForwardDifferenceCoeff
     :: CubicBezier
-    -> (Float, ForwardDifferenceCoefficient, ForwardDifferenceCoefficient)
-bezierToForwardDifferenceCoeff (CubicBezier x y z w) = (1, xCoeffs, yCoeffs)
+    -> (ForwardDifferenceCoefficient, ForwardDifferenceCoefficient)
+bezierToForwardDifferenceCoeff (CubicBezier x y z w) = (xCoeffs, yCoeffs)
   where
     xCoeffs = ForwardDifferenceCoefficient { _fdA = ax, _fdB = bx, _fdC = cx }
     yCoeffs = ForwardDifferenceCoefficient { _fdA = ay, _fdB = by, _fdC = cy }
@@ -197,7 +183,7 @@ doubleFDCoefficients (ForwardDifferenceCoefficient a b c) =
     b' = 4 * b + 4 * a
     c' = 2 * c + b
 -- -}
---
+
 updateForwardDifferencing :: Float -> ForwardDifferenceCoefficient
                           -> (Float, ForwardDifferenceCoefficient)
 updateForwardDifferencing v (ForwardDifferenceCoefficient a b c) =
@@ -229,40 +215,74 @@ fixIter count f = go count
     go 0 a = a
     go n a = go (n-1) $ f a
 
-decomposeCubicBezierForwardDifference :: CubicBezier -> Container EdgeSample
-decomposeCubicBezierForwardDifference bez =
-    (trace $ printf "stepCount:%d maxStepCount:%d" stepCount maxStepCount) lst where
-  lst = go 0 xStartCoeff yStartCoeff xStart yStart
+{-
+fractionalRest :: Float -> Float
+fractionalRest v = v - fromIntegral (truncate v :: Int)
+-- -}
 
-  (_initialStep, xFull, yFull) = bezierToForwardDifferenceCoeff bez
+decomposeCubicBezierForwardDifference :: CubicBezier -> Container EdgeSample
+decomposeCubicBezierForwardDifference bez = pure initialSample <> lst where
+  lst = go 0 xStartCoeff yStartCoeff integerStart initialVec initialIx
+  initialSample = EdgeSample
+    { _sampleX     = fromIntegral initialIx
+    , _sampleY     = fromIntegral initialIy
+    , _sampleAlpha = 1.0 -- For testing purposes only.
+    , _sampleH     = 1.0
+    }
+
+  (xFull, yFull) = bezierToForwardDifferenceCoeff bez
   xStartCoeff = fixIter stepCount halveFDCoefficients xFull
   yStartCoeff = fixIter stepCount halveFDCoefficients yFull
 
-  V2 xStart yStart = _cBezierX0 bez
+  initialVec = _cBezierX0 bez
+  integerStart@(V2 initialIx initialIy) = vfloor initialVec
+
   stepCount = estimateFDStepCount bez
 
   maxStepCount :: Int
   maxStepCount = 1 `unsafeShiftL` stepCount
 
-  go !currentStep _xFdCoeff _yFdCoeff _xPrev !_yPrev
-    | currentStep >= maxStepCount = trace "DONE" $ mempty
-  go !currentStep !xFdCoeff !yFdCoeff !xPrev !yPrev =
-     pure sample <> go (currentStep + 1) xCoeff yCoeff xNext yNext
+  go currentStep _ _ (V2 px py) _ firstWrittenX
+    | currentStep >= maxStepCount =
+      if firstWrittenX == px then mempty
+      else pure EdgeSample { _sampleX = fromIntegral px
+                           , _sampleY = fromIntegral py
+                           , _sampleAlpha = 1.0
+                           , _sampleH = 1.0 }
+  go !currentStep !xFdCoeff !yFdCoeff
+     !(V2 prevXpx prevYpx)
+     !(V2 xPrev yPrev)
+     !lastWrittenX
+    | prevYpx == integerNextY = rest lastWrittenX
+
+    | prevXpx == lastWrittenX =
+        pure nextSample <> rest integerNextX
+    | otherwise =
+        pure prevSample <> pure nextSample <> rest integerNextX
     where
-      sample = EdgeSample
-          { _sampleX     = fromIntegral integerPrevX
-          , _sampleY     = fromIntegral integerPrevY
+      rest = go (currentStep + 1) xCoeff yCoeff nexti next
+
+      next = V2 xNext yNext
+      (xNext, xCoeff) = updateForwardDifferencing xPrev xFdCoeff
+      (yNext, yCoeff) = updateForwardDifferencing yPrev yFdCoeff
+      nexti@(V2 integerNextX integerNextY) = vfloor next :: V2 Int
+
+      prevSample = EdgeSample
+          { _sampleX     = fromIntegral prevXpx
+          , _sampleY     = fromIntegral prevYpx
           , _sampleAlpha = 1.0 -- For testing purposes only.
           , _sampleH     = 1.0
           }
 
-      integerPrevX, integerPrevY :: Int
-      integerPrevX = floor xPrev
-      integerPrevY = floor yPrev
+      nextSample = EdgeSample
+          { _sampleX     = fromIntegral integerNextX
+          , _sampleY     = fromIntegral integerNextY
+          , _sampleAlpha = 1.0 -- For testing purposes only.
+          , _sampleH     = 1.0
+          }
+      {-deltas@(V2 xDelta yDelta) = next ^-^ prev-}
+      {-V2 xFrac yFrac = fractionalRest <$> deltas-}
 
-      {-yDelta = xNext - xPrev-}
-      (xNext, xCoeff) = updateForwardDifferencing xPrev xFdCoeff
-      (yNext, yCoeff) = updateForwardDifferencing yPrev yFdCoeff
 
 cachedBezierDerivative :: CachedBezier -> QuadraticFormula Float
 cachedBezierDerivative (CachedBezier _ b c d) =

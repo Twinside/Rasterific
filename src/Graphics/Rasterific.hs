@@ -110,6 +110,7 @@ import Control.Applicative( (<$>) )
 import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
+import Control.Monad.ST( ST, runST )
 import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
 import Codec.Picture.Types( Image( .. ), Pixel( .. ), Pixel8 )
@@ -345,7 +346,7 @@ renderDrawing
     -> Drawing px () -- ^ Rendering action
     -> Image px
 renderDrawing width height background drawing =
-    runDrawContext width height background $
+    runST $ runDrawContext width height background $
         go initialContext $ fromF drawing
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
@@ -368,7 +369,7 @@ renderDrawing width height background drawing =
 
     go :: RenderContext px
        -> Free (DrawCommand px) ()
-       -> DrawContext s px ()
+       -> DrawContext (ST s) px ()
     go _ (Pure ()) = return ()
     go ctxt (Free (WithTransform trans sub next)) = do
         let trans'

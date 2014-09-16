@@ -126,6 +126,7 @@ instance Modulable Word8 where
 
 
 toWord8 :: Float -> Int
+{-# INLINE toWord8 #-}
 toWord8 r = floor $ r * 255 + 0.5
 
 compositionDestination :: (Pixel px, Modulable (PixelBaseComponent px))

@@ -1,4 +1,6 @@
 
+import Control.Monad( forM_ )
+import Control.Monad.ST( runST )
 import Control.Applicative( (<$>) )
 import Data.Monoid( (<>) )
 import Codec.Picture
@@ -8,6 +10,7 @@ import Graphics.Rasterific
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.Immediate
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 
@@ -96,7 +99,6 @@ moduleExample = do
   writePng (outFolder </> "module_example.png") img
 
 
-
 textExample :: IO ()
 textExample = do
   fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
@@ -153,6 +155,31 @@ fillingSample fillMethod = fillWithMethod fillMethod geometry where
          ]
      ]
 
+immediateDrawExample :: Image PixelRGBA8
+immediateDrawExample = runST $
+  runDrawContext 200 200 (PixelRGBA8 0 0 0 255) $
+    fillWithTexture FillWinding texture geometry
+  where
+    circlePrimitives = circle (V2 100 100) 50
+    geometry = strokize 4 JoinRound (CapRound, CapRound) circlePrimitives
+    texture = uniformTexture (PixelRGBA8 255 255 255 255)
+
+immediateDrawMaskExample :: Image PixelRGBA8
+immediateDrawMaskExample = runST $
+  runDrawContext 200 200 (PixelRGBA8 0 0 0 255) $
+    forM_ [1 .. 10] $ \ix ->
+       fillWithTextureAndMask FillWinding texture mask $
+           rectangle (V2 10 (ix * 18 - 5)) 180 13
+  where
+    texture = uniformTexture $ PixelRGBA8 0 0x86 0xc1 255
+    mask = sampledImageTexture
+         $ runST
+         $ runDrawContext 200 200 0
+         $ fillWithTexture FillWinding (uniformTexture 255) maskGeometry
+
+    maskGeometry = strokize 15 JoinRound (CapRound, CapRound)
+                 $ circle (V2 100 100) 80
+
 main :: IO ()
 main = do
     let addFolder (p, v) = (outFolder </> p, v)
@@ -175,6 +202,9 @@ main = do
         , ("sampler_repeat.png", SamplerRepeat)
         , ("sampler_reflect.png", SamplerReflect)
         ]
+
+    writePng (outFolder </> "immediate_fill.png") immediateDrawExample
+    writePng (outFolder </> "immediate_mask.png") immediateDrawMaskExample 
 
     produceDocImage (outFolder </> "fill_circle.png") $
         fill $ circle (V2 100 100) 75 

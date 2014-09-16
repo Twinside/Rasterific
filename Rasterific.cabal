@@ -47,6 +47,7 @@ library
                  , Graphics.Rasterific.Texture
                  , Graphics.Rasterific.Linear
                  , Graphics.Rasterific.Transformations
+                 , Graphics.Rasterific.Immediate
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.CubicBezier
@@ -69,8 +70,9 @@ library
                , FontyFruity >= 0.3     && < 0.4
                , vector      >= 0.9
                , mtl         >= 1.9
-               , vector-algorithms >= 0.3
                , dlist       >= 0.6
+               , primitive   >= 0.5
+               , vector-algorithms >= 0.3
 
   if !flag(embed_linear)
       build-depends: linear >= 1.3

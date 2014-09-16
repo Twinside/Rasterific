@@ -39,8 +39,13 @@ import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable, foldl' )
 import Graphics.Rasterific.Linear( V2( .. ) )
 
-import Foreign.Ptr( castPtr, plusPtr )
-import Foreign.Storable( Storable( sizeOf, alignment, peek, poke ) )
+import Foreign.Ptr( castPtr )
+import Foreign.Storable( Storable( sizeOf
+                       , alignment
+                       , peek
+                       , poke
+                       , peekElemOff
+                       , pokeElemOff ) )
 
 -- | Represent a vector
 type Vector = V2 Float
@@ -166,22 +171,22 @@ instance Storable EdgeSample where
    sizeOf _ = 4 * sizeOf (0 :: Float)
    alignment v = sizeOf v
 
+   {-# INLINE peek #-}
    peek ptr = do
-     let floatPtr = castPtr ptr
-         floatSize = sizeOf (0 :: Float)
-     sx <- peek floatPtr
-     sy <- peek $ floatPtr `plusPtr` floatSize
-     sa <- peek $ floatPtr `plusPtr` (floatSize * 2)
-     sh <- peek $ floatPtr `plusPtr` (floatSize * 3)
+     let q = castPtr ptr
+     sx <- peekElemOff q 0
+     sy <- peekElemOff q 1
+     sa <- peekElemOff q 2
+     sh <- peekElemOff q 3
      return $ EdgeSample sx sy sa sh
-
+      
+   {-# INLINE poke #-}
    poke ptr (EdgeSample sx sy sa sh) = do
-     let floatPtr = castPtr ptr
-         floatSize = sizeOf (0 :: Float)
-     poke floatPtr sx
-     poke (floatPtr `plusPtr` floatSize) sy
-     poke (floatPtr `plusPtr` (floatSize * 2)) sa
-     poke (floatPtr `plusPtr` (floatSize * 3)) sh
+     let q = castPtr ptr
+     pokeElemOff q 0 sx
+     pokeElemOff q 1 sy
+     pokeElemOff q 2 sa
+     pokeElemOff q 3 sh
 
 -- | This typeclass is there to help transform the geometry,
 -- by applying a transformation on every point of a geometric

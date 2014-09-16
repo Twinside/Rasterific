@@ -46,13 +46,20 @@ decompose (CubicBezierPrim c) =
     {-decomposeCubicBezierForwardDifference c-}
     decomposeCubicBeziers c
 
+xyCompare :: EdgeSample -> EdgeSample -> Ordering
+{-# INLINE xyCompare #-}
+xyCompare !(EdgeSample { _sampleY = ay, _sampleX = ax })
+          !(EdgeSample { _sampleY = by, _sampleX = bx }) =
+  case compare ay by of
+    EQ -> compare ax bx
+    c -> c
+
 sortEdgeSamples :: [EdgeSample] -> V.Vector EdgeSample
 sortEdgeSamples samples = runST $ do
+    -- Resist the urge to make this a storable vector,
+    -- it is actually a pessimisation.
     mutableVector <- V.unsafeThaw $ V.fromList samples
-    let xy a b = case compare (_sampleY a) $ _sampleY b of
-			EQ -> compare (_sampleX a) $ _sampleX b
-			c -> c
-    VS.sortBy xy mutableVector
+    VS.sortBy xyCompare mutableVector
     V.unsafeFreeze mutableVector
 
 rasterize :: FillMethod -> Container Primitive -> [CoverageSpan]

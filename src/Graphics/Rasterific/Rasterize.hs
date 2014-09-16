@@ -7,6 +7,7 @@ module Graphics.Rasterific.Rasterize
 import Control.Monad.ST( runST )
 import Data.Fixed( mod' )
 import Data.Foldable( foldMap )
+import Data.Monoid( Endo( Endo, appEndo ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.CubicBezier
@@ -38,16 +39,27 @@ combineEdgeSamples prepareCoverage vec = go 0 0 0 0 0
              where p1 = CoverageSpan x y (prepareCoverage a) 1
                    p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
-decompose :: Primitive -> Container EdgeSample
+decompose :: Primitive -> Producer EdgeSample
 decompose (LinePrim l) = decomposeLine l
 decompose (BezierPrim b) = decomposeBeziers b
-decompose (CubicBezierPrim c) = decomposeCubicBeziers c
+decompose (CubicBezierPrim c) =
+    {-decomposeCubicBezierForwardDifference c-}
+    decomposeCubicBeziers c
+
+xyCompare :: EdgeSample -> EdgeSample -> Ordering
+{-# INLINE xyCompare #-}
+xyCompare !(EdgeSample { _sampleY = ay, _sampleX = ax })
+          !(EdgeSample { _sampleY = by, _sampleX = bx }) =
+  case compare ay by of
+    EQ -> compare ax bx
+    c -> c
 
 sortEdgeSamples :: [EdgeSample] -> V.Vector EdgeSample
 sortEdgeSamples samples = runST $ do
+    -- Resist the urge to make this a storable vector,
+    -- it is actually a pessimisation.
     mutableVector <- V.unsafeThaw $ V.fromList samples
-    let xy a b = compare (_sampleY a, _sampleX a) (_sampleY b, _sampleX b)
-    VS.sortBy xy mutableVector
+    VS.sortBy xyCompare mutableVector
     V.unsafeFreeze mutableVector
 
 rasterize :: FillMethod -> Container Primitive -> [CoverageSpan]
@@ -55,12 +67,12 @@ rasterize method =
   case method of
     FillWinding -> combineEdgeSamples combineWinding 
                         . sortEdgeSamples
-                        . listOfContainer
-                        . foldMap decompose
+                        . (($ []) . appEndo)
+                        . foldMap (Endo . decompose)
     FillEvenOdd -> combineEdgeSamples combineEvenOdd
                         . sortEdgeSamples
-                        . listOfContainer
-                        . foldMap decompose
+                        . (($ []) . appEndo)
+                        . foldMap (Endo . decompose)
   where combineWinding = min 1 . abs
         combineEvenOdd cov = abs $ abs (cov - 1) `mod'` 2 - 1
 

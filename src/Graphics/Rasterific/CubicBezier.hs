@@ -18,17 +18,16 @@ module Graphics.Rasterific.CubicBezier
 import Prelude hiding( or )
 import Control.Applicative( liftA2
                           , (<$>)
-                          , (<*>)
                           , pure
                           )
 import Graphics.Rasterific.Linear
-             ( V1( .. )
-             , V2( .. )
+             ( V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
              , norm
              , lerp
+             , qd
              )
 import Data.List( nub )
 import Data.Monoid( mempty, (<>) )
@@ -36,6 +35,9 @@ import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
 import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
+
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 -- | Create a list of cubic bezier patch from a list of points.
 --
@@ -112,13 +114,22 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
 -- y(t) = (1 - t) ∙y     + 3∙t∙(1 - t) ∙y     + 3∙t ∙(1 - t)∙y     + t ∙y
 --                   0                    1                    2          3
 
+-- Other representation:
+--                3                2        2              3
+-- B(t) = x(1 - t)  + 3∙y∙t∙(1 - t)  + 3∙z∙t ∙(1 - t) + w∙t
+
+
 -- | Represent the cubic bezier curve as a vector ready
 -- for matrix multiplication
-data CachedBezier = CachedBezier !Float !Float !Float !Float
+data CachedBezier = CachedBezier
+    { _cachedA :: {-# UNPACK #-} !Float
+    , _cachedB :: {-# UNPACK #-} !Float
+    , _cachedC :: {-# UNPACK #-} !Float
+    , _cachedD :: {-# UNPACK #-} !Float
+    }
 
 cacheBezier :: CubicBezier -> (CachedBezier, CachedBezier)
 cacheBezier (CubicBezier p0@(V2 x0 y0) p1 p2 p3) =
-
     (CachedBezier x0 bX cX dX, CachedBezier y0 bY cY dY)
   where
    V2 bX bY = p1 ^* 3 ^-^ p0 ^* 3
@@ -139,8 +150,8 @@ cachedBezierDerivative (CachedBezier _ b c d) =
 -- | Find the coefficient of the extremum points
 extremums :: CachedBezier -> [Float]
 extremums cached =
- nub [ root | root <- formulaRoots $ cachedBezierDerivative cached
-            , 0 <= root && root <= 1.0 ]
+  [ root | root <- formulaRoots $ cachedBezierDerivative cached
+         , 0 <= root && root <= 1.0 ]
 
 extremumPoints :: (CachedBezier, CachedBezier) -> [Point]
 extremumPoints (onX, onY) = toPoints <$> nub (extremums onX <> extremums onY)
@@ -263,21 +274,34 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     bccd = lerp val bc cd
     abbcbccd = lerp val abbc bccd
 
-decomposeCubicBeziers :: CubicBezier -> Container EdgeSample
-decomposeCubicBeziers (CubicBezier aR bR cR dR) = go aR bR cR dR where
-  go a@(V2 ax ay) _b _c d@(V2 dx dy) | insideX && insideY =
-    pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
+decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
+decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =
+    go aRx aRy bRx bRy cRx cRy dRx dRy where
+  go ax ay _bx _by _cx _cy dx dy cont | insideX && insideY =
+    let !px = fromIntegral $ min floorAx floorDx
+        !py = fromIntegral $ min floorAy floorDy
+        !w = px + 1 - (dx `middle` ax)
+        !h = dy - ay
+    in
+    EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
     where
-      !floorA = vfloor a
-      !floorD = vfloor d
-      !(V2 px py)  = fromIntegral <$> vmin floorA floorD
-      !(V1 w) = (px + 1 -) <$>  (V1 dx `midPoint` V1 ax)
-      !h = dy - ay
-      !(V2 insideX insideY) =
-          floorA ^==^ floorD ^||^ vceil a ^==^ vceil d
+      floorAx, floorAy :: Int
+      !floorAx = floor ax
+      !floorAy = floor ay
 
-  go a b c d = go a ab abbc m <> go m bccd cd d
-    where 
+      !floorDx = floor dx
+      !floorDy = floor dy
+
+      !insideX =
+          floorAx == floorDx || ceiling ax == (ceiling dx :: Int)
+      !insideY =
+          floorAy == floorDy || ceiling ay == (ceiling dy :: Int)
+
+
+  go !ax !ay !bx !by !cx !cy !dx !dy cont =
+     go ax ay abx aby abbcx abbcy mx my $
+        go mx my bccdx bccdy cdx cdy dx dy cont
+    where
       --                     BC
       --         B X----------X---------X C
       --          /      ___/   \___     \
@@ -288,26 +312,32 @@ decomposeCubicBeziers (CubicBezier aR bR cR dR) = go aR bR cR dR where
       --     /                                \
       --    /                                  \
       -- A X                                    X D
-      !ab = a `midPoint` b
-      !bc = b `midPoint` c
-      !cd = c `midPoint` d
-      !abbc = ab `midPoint` bc
-      !bccd = bc `midPoint` cd
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
+      !bcx = bx `middle` cx
+      !bcy = by `middle` cy
+      !cdx = cx `middle` dx
+      !cdy = cy `middle` dy
+      !abbcx = abx `middle` bcx
+      !abbcy = aby `middle` bcy
+      !bccdx = bcx `middle` cdx
+      !bccdy = bcy `middle` cdy
 
-      !abbcbccd = abbc `midPoint` bccd
+      !abbcbccdx = abbcx `middle` bccdx
+      !abbcbccdy = abbcy `middle` bccdy
 
-      mini = fromIntegral <$> vfloor abbcbccd
-      maxi = fromIntegral <$> vceil abbcbccd
-      !nearmin = vabs (abbcbccd ^-^ mini) ^< 0.1
-      !nearmax = vabs (abbcbccd ^-^ maxi) ^< 0.1
+      !mx | abs (abbcbccdx - mini) < 0.1 = mini
+          | abs (abbcbccdx - maxi) < 0.1 = maxi
+          | otherwise = abbcbccdx
+            where !mini = fromIntegral (floor abbcbccdx :: Int)
+                  !maxi = fromIntegral (ceiling abbcbccdx :: Int)
 
-      minMaxing mi nearmi ma nearma p
-        | nearmi = mi
-        | nearma = ma
-        | otherwise = p
+      !my | abs (abbcbccdy - mini) < 0.1 = mini
+          | abs (abbcbccdy - maxi) < 0.1 = maxi
+          | otherwise = abbcbccdy
+            where !mini = fromIntegral (floor abbcbccdy :: Int)
+                  !maxi = fromIntegral (ceiling abbcbccdy :: Int)
 
-      !m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax
-                     <*> abbcbccd
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
@@ -315,7 +345,7 @@ sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | a `isDistingableFrom` b &&
     c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
-  | (ac `isDistingableFrom` b && 
+  | (ac `isDistingableFrom` b &&
      bd `isDistingableFrom` c) =
       pure . CubicBezierPrim $ bezier
   | ac `isDistingableFrom` b =

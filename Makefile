@@ -10,3 +10,7 @@ depinstall:
 
 test:
 	dist/build/test/test
+
+formula:
+	eq eval -f forward_diff.eq -o rez.txt
+

@@ -242,6 +242,8 @@ transformTextureToFiller
     => Texture px -> CoverageFiller s px
 {-# SPECIALIZE transformTextureToFiller
         :: Texture PixelRGBA8 -> CoverageFiller s PixelRGBA8 #-}
+{-# SPECIALIZE transformTextureToFiller
+        :: Texture Pixel8 -> CoverageFiller s Pixel8 #-}
 transformTextureToFiller texture = go Nothing SamplerPad texture
   where
     go _ _ (SolidTexture px) =

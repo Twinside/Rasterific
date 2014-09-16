@@ -35,6 +35,7 @@ import Codec.Picture.Types( Pixel( .. )
                           , Pixel8
                           , PixelRGBA8
                           , unsafeWritePixelBetweenAt
+                          , readPackedPixelAt
                           , writePackedPixelAt
                           )
 
@@ -132,12 +133,11 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
     !(scanCoverage,_) = clampCoverage $_tsCoverage tsInfo
     !(cov, icov) = coverageModulate scanCoverage opacity
     !maxi = _tsRepeat tsInfo
-    !imgData = mutableImageData img
     !compCount = componentCount (undefined :: px)
 
     go count  _ | count >= maxi = return ()
     go !count !idx = do
-      oldPixel <- unsafeReadPixel imgData idx
+      oldPixel <- readPackedPixelAt img idx
       writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
@@ -156,7 +156,6 @@ shaderFiller shader img tsInfo =
   where
     !(scanCoverage,_) = clampCoverage $_tsCoverage tsInfo
     !maxi = _tsRepeat tsInfo
-    !imgData = mutableImageData img
     !compCount = componentCount (undefined :: px)
     !(V2 xStart yStart) = _tsStart tsInfo
     !(V2 dx dy) = _tsDelta tsInfo
@@ -166,7 +165,7 @@ shaderFiller shader img tsInfo =
       let !color = shader x y
           !opacity = pixelOpacity color
           (cov, icov) = coverageModulate scanCoverage opacity
-      oldPixel <- unsafeReadPixel imgData idx
+      oldPixel <- readPackedPixelAt img idx
       writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) (idx + compCount) (x + dx) (y + dy)

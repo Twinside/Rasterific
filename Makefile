@@ -8,6 +8,9 @@ doc:
 depinstall:
 	cabal install -j4 --only-dependencies
 
+run:
+	dist/build/test/test
+	
 test:
 	dist/build/test/test
 

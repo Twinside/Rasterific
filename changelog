@@ -1,11 +1,15 @@
 -*-change-log-*-
 
-v0.3.1 2014
+v0.4 September 2014
  * Tried Fast forward differencing for cubic bezier, not worth
    the hassle
- * Further optimized decomposition of all primitives, allowing
-   less alocated memory
+ * Further optimized decomposition of all primitives, less
+   alocated memory.
+ * After optimizing pixel writing, optimized pixel reading,
+   yielding non-negligeable speed improvements.
  * Added an "immediate" module to avoid constructing
+ * Allowing both IO & (ST s) as drawing monads, enabling
+   interleaved drawing with io operations.
 
 v0.3 June 2014
  * Switching main free monad type to the church encoded one.

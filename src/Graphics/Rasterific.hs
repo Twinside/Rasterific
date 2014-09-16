@@ -106,26 +106,15 @@ module Graphics.Rasterific
 
     ) where
 
-import qualified Data.Foldable as F
 import Control.Applicative( (<$>) )
 import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
-import Control.Monad.ST( ST, runST )
-import Control.Monad.State( StateT, execStateT, get, lift )
 import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
-import Codec.Picture.Types( Image( .. )
-                          , Pixel( .. )
-                          , Pixel8
-                          , PixelRGBA8
-                          , MutableImage( .. )
-                          , unsafeFreezeImage
-                          , fillImageWith
-                          )
+import Codec.Picture.Types( Image( .. ), Pixel( .. ), Pixel8 )
 
 import qualified Data.Vector.Unboxed as VU
-import qualified Data.Vector.Storable.Mutable as M
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
@@ -138,16 +127,13 @@ import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
+import Graphics.Rasterific.Immediate
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
-
--- | Monad used to describe the drawing context.
-type DrawContext s px a =
-    StateT (MutableImage s px) (ST s) a
 
 ------------------------------------------------
 ----    Free Monad DSL section
@@ -358,12 +344,9 @@ renderDrawing
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderDrawing width height background drawing = runST $ do
-  buff <- M.new (width * height * componentCount background)
-  let mutable = MutableImage width height buff
-  fillImageWith mutable background
-  execStateT (go initialContext $ fromF drawing) mutable
-        >>= unsafeFreezeImage
+renderDrawing width height background drawing =
+    runDrawContext width height background $
+        go initialContext $ fromF drawing
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
     clipBackground = emptyValue :: PixelBaseComponent px
@@ -483,70 +466,6 @@ dashedStrokeWithOffset _ [] width join caping prims =
     stroke width join caping prims
 dashedStrokeWithOffset offset dashing width join caping prims =
     liftF $ DashedStroke offset dashing width join caping prims ()
-
--- | Clip the geometry to a rectangle.
-clip :: Point     -- ^ Minimum point (corner upper left)
-     -> Point     -- ^ Maximum point (corner bottom right)
-     -> Primitive -- ^ Primitive to be clipped
-     -> Container Primitive
-clip mini maxi (LinePrim l) = clipLine mini maxi l
-clip mini maxi (BezierPrim b) = clipBezier mini maxi b
-clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
-
-isCoverageDrawable :: MutableImage s px -> CoverageSpan -> Bool
-isCoverageDrawable img coverage =
-    _coverageVal coverage > 0 && x >= 0 && y >= 0 && x < imgWidth && y < imgHeight
-  where
-    !imgWidth = fromIntegral $ mutableImageWidth img
-    !imgHeight = fromIntegral $ mutableImageHeight img
-    x = _coverageX coverage
-    y = _coverageY coverage
-
--- | Fill some geometry. The geometry should be "looping",
--- ie. the last point of the last primitive should
--- be equal to the first point of the first primitive.
---
--- The primitive should be connected.
-fillWithTexture :: RenderablePixel px
-                => FillMethod
-                -> Texture px  -- ^ Color/Texture used for the filling
-                -> [Primitive] -- ^ Primitives to fill
-                -> DrawContext s px ()
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture PixelRGBA8 -> [Primitive]
-    -> DrawContext s PixelRGBA8 () #-}
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture Pixel8 -> [Primitive]
-    -> DrawContext s Pixel8 () #-}
-fillWithTexture fillMethod texture els = do
-    img@(MutableImage width height _) <- get
-    let !mini = V2 0 0
-        !maxi = V2 (fromIntegral width) (fromIntegral height)
-        !filler = transformTextureToFiller texture img
-        clipped = F.foldMap (clip mini maxi) els
-        spans = rasterize fillMethod clipped
-    lift . mapExec filler $ filter (isCoverageDrawable img) spans
-
-mapExec :: Monad m => (a -> m ()) -> [a] -> m ()
-mapExec f = go
-  where
-    go [] = return ()
-    go (x : xs) = f x >> go xs
-
-fillWithTextureAndMask
-    :: RenderablePixel px
-    => FillMethod
-    -> Texture px  -- ^ Color/Texture used for the filling
-    -> Texture (PixelBaseComponent px)
-    -> [Primitive] -- ^ Primitives to fill
-    -> DrawContext s px ()
-fillWithTextureAndMask fillMethod texture mask els = do
-    img@(MutableImage width height _) <- get
-    let !mini = V2 0 0
-        !maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod $ F.foldMap (clip mini maxi) els
-        !shader = transformTextureToFiller (modulateTexture texture mask) img
-    lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 
 -- | Generate a list of primitive representing a circle.
 --

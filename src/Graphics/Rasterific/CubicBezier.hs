@@ -27,7 +27,6 @@ import Graphics.Rasterific.Linear
              , (^*)
              , norm
              , lerp
-             , qd
              )
 import Data.List( nub )
 import Data.Monoid( mempty, (<>) )

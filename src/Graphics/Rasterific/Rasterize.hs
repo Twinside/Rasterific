@@ -2,6 +2,7 @@
 module Graphics.Rasterific.Rasterize
     ( CoverageSpan( .. )
     , rasterize
+    , clip
     ) where
 
 import Control.Monad.ST( runST )
@@ -38,6 +39,15 @@ combineEdgeSamples prepareCoverage vec = go 0 0 0 0 0
            CoverageSpan x y (prepareCoverage a) 1 : go (ix + 1) x' y' a' h'
              where p1 = CoverageSpan x y (prepareCoverage a) 1
                    p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
+
+-- | Clip the geometry to a rectangle.
+clip :: Point     -- ^ Minimum point (corner upper left)
+     -> Point     -- ^ Maximum point (corner bottom right)
+     -> Primitive -- ^ Primitive to be clipped
+     -> Container Primitive
+clip mini maxi (LinePrim l) = clipLine mini maxi l
+clip mini maxi (BezierPrim b) = clipBezier mini maxi b
+clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
 
 decompose :: Primitive -> Producer EdgeSample
 decompose (LinePrim l) = decomposeLine l

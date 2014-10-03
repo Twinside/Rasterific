@@ -3,6 +3,7 @@ module Graphics.Rasterific.StrokeInternal
     , dashize
     , strokize
     , dashedStrokize
+    , splitPrimitiveUntil
     )  where
 
 import Control.Applicative( (<$>), pure )
@@ -231,11 +232,15 @@ dropPattern = go
         | offset < x = x - offset : xs
         | otherwise {- offset >= x -} = go (offset - x) xs
 
+-- | Don't make them completly flat, but suficiently
+-- to assume they are.
+linearizePrimitives :: [Primitive] -> [Primitive]
+linearizePrimitives =
+  listOfContainer . foldMap flattenPrimitive . foldMap sanitize
+
+
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
-dashize offset pattern =
-    taker infinitePattern . listOfContainer 
-                          . foldMap flattenPrimitive
-                          . foldMap sanitize
+dashize offset pattern = taker infinitePattern . linearizePrimitives 
   where
     realOffset | offset >= 0 = offset
                | otherwise = offset + sum pattern

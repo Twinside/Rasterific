@@ -107,10 +107,9 @@ module Graphics.Rasterific
     ) where
 
 import Control.Applicative( (<$>) )
-import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
-import Control.Monad.ST( ST, runST )
+import Control.Monad.ST( runST )
 import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
 import Codec.Picture.Types( Image( .. ), Pixel( .. ), Pixel8 )
@@ -148,6 +147,7 @@ data DrawCommand px next
     | Stroke Float Join (Cap, Cap) [Primitive] next
     | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
     | TextFill Font PointSize Point String next
+    {-| PathAligned Path (Drawing px ()) next-}
     | SetTexture (Texture px)
                  (Drawing px ()) next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
@@ -346,8 +346,9 @@ renderDrawing
     -> Drawing px () -- ^ Rendering action
     -> Image px
 renderDrawing width height background drawing =
-    runST $ runDrawContext width height background $
-        go initialContext $ fromF drawing
+    runST $ runDrawContext width height background
+        $ mapM_ fillOrder
+        $ go initialContext (fromF drawing) []
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
     clipBackground = emptyValue :: PixelBaseComponent px
@@ -367,44 +368,46 @@ renderDrawing width height background drawing =
         transform (applyTransformation trans)
     geometryOf _ = id
 
-    go :: RenderContext px
-       -> Free (DrawCommand px) ()
-       -> DrawContext (ST s) px ()
-    go _ (Pure ()) = return ()
-    go ctxt (Free (WithTransform trans sub next)) = do
-        let trans'
-              | Just (t, _) <- currentTransformation ctxt = t <> trans
-              | otherwise = trans
-            invTrans = 
-                fromMaybe mempty $ inverseTransformation trans'
-        go ctxt { currentTransformation =
-                        Just (trans', invTrans) } $ fromF sub
-        go ctxt next
-    go ctxt@RenderContext { currentClip = Nothing }
-       (Free (Fill method prims next)) = do
-        fillWithTexture method (textureOf ctxt) $ geometryOf ctxt prims
-        go ctxt next
-    go ctxt@RenderContext { currentClip = Just moduler }
-       (Free (Fill method prims next)) = do
-        fillWithTextureAndMask method (textureOf ctxt)
-            moduler $ geometryOf ctxt prims
-        go ctxt next
+    go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
+       -> [DrawOrder px]
+    go _ (Pure ()) rest = rest
 
-    go ctxt (Free (Stroke w j cap prims next)) =
-        go ctxt . Free $ Fill FillWinding prim' next
+    go ctxt (Free (WithTransform trans sub next)) rest = final where
+      trans'
+        | Just (t, _) <- currentTransformation ctxt = t <> trans
+        | otherwise = trans
+      invTrans = fromMaybe mempty $ inverseTransformation trans'
+      after = go ctxt next rest
+      subContext =
+          ctxt { currentTransformation = Just (trans', invTrans) }
+
+      final = go subContext (fromF sub) after
+
+    go ctxt (Free (Fill method prims next)) rest = order : after where
+      after = go ctxt next rest
+      order = DrawOrder 
+            { _orderPrimitives = [geometryOf ctxt prims]
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = method
+            , _orderMask       = currentClip ctxt
+            }
+
+    go ctxt (Free (Stroke w j cap prims next)) rest =
+        go ctxt (Free $ Fill FillWinding prim' next) rest
             where prim' = listOfContainer $ strokize w j cap prims
-    go ctxt (Free (SetTexture tx sub next)) = do
-        go (ctxt { currentTexture = tx }) $ fromF sub
-        go ctxt next
-    go ctxt (Free (DashedStroke o d w j cap prims next)) = do
-        let recurse sub =
-                go ctxt . liftF $ Fill FillWinding sub ()
-        mapM_ recurse $ dashedStrokize o d w j cap prims
-        go ctxt next
 
-    go ctxt (Free (TextFill font size (V2 x y) str next)) = do
-        forM_ drawCalls (go ctxt)
-        go ctxt next
+    go ctxt (Free (SetTexture tx sub next)) rest =
+        go (ctxt { currentTexture = tx }) (fromF sub) $ go ctxt next rest
+
+    go ctxt (Free (DashedStroke o d w j cap prims next)) rest =
+        foldr recurse after $ dashedStrokize o d w j cap prims
+      where
+        after = go ctxt next rest
+        recurse sub =
+            go ctxt (liftF $ Fill FillWinding sub ())
+
+    go ctxt (Free (TextFill font size (V2 x y) str next)) rest =
+        foldr (go ctxt) (go ctxt next rest) drawCalls 
       where
         drawCalls =
             beziersOfChar <$> getStringCurveAtPoint 90 (x, y)
@@ -416,9 +419,9 @@ renderDrawing width height background drawing =
               [map BezierPrim . bezierFromPath . map (uncurry V2)
                               $ VU.toList c | c <- curves]
 
-    go ctxt (Free (WithCliping clipPath path next)) = do
-        go (ctxt { currentClip = newModuler }) $ fromF path
-        go ctxt next
+    go ctxt (Free (WithCliping clipPath path next)) rest =
+        go (ctxt { currentClip = newModuler }) (fromF path) $
+            go ctxt next rest
       where
         modulationTexture :: Texture (PixelBaseComponent px)
         modulationTexture = RawTexture $ clipRender clipPath

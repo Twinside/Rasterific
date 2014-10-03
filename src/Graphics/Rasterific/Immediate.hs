@@ -17,10 +17,12 @@
 -- `Graphics.Rasterific.Outline` module.
 module Graphics.Rasterific.Immediate
     ( DrawContext
+    , DrawOrder( .. )
 
     , runDrawContext
     , fillWithTextureAndMask
     , fillWithTexture
+    , fillOrder
     ) where
 
 import qualified Data.Foldable as F
@@ -46,6 +48,29 @@ import Graphics.Rasterific.Types
 -- | Monad used to describe the drawing context.
 type DrawContext m px a =
     StateT (MutableImage (PrimState m) px) m a
+
+-- | Reify a filling function call, to be able to manipulate
+-- them in a simpler fashion.
+data DrawOrder px = DrawOrder
+    { -- | Primitives to be filled.
+      _orderPrimitives :: ![[Primitive]]
+      -- | Texture for the filled primitives.
+    , _orderTexture    :: !(Texture px)
+      -- | How to fill the primitives.
+    , _orderFillMethod :: !FillMethod
+      -- | Optional mask used for clipping.
+    , _orderMask       :: !(Maybe (Texture (PixelBaseComponent px)))
+    }
+
+-- | Render the drawing orders on the canvas.
+fillOrder :: (PrimMonad m, RenderablePixel px)
+          => DrawOrder px -> DrawContext m px ()
+fillOrder o@DrawOrder { _orderMask = Nothing } =
+  F.forM_ (_orderPrimitives o) $
+    fillWithTexture (_orderFillMethod o) (_orderTexture o)
+fillOrder o@DrawOrder { _orderMask = Just mask } =
+  F.forM_ (_orderPrimitives o) $
+    fillWithTextureAndMask (_orderFillMethod o) (_orderTexture o) mask
 
 -- | Start an image rendering. See `fillWithTexture` for
 -- an usage example. This function can work with either
@@ -146,5 +171,4 @@ fillWithTextureAndMask fillMethod texture mask els = do
         !shader = primToPrim
                 . transformTextureToFiller (modulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans
-
 

@@ -48,6 +48,7 @@ library
                  , Graphics.Rasterific.Linear
                  , Graphics.Rasterific.Transformations
                  , Graphics.Rasterific.Immediate
+                 , Graphics.Rasterific.PathWalker
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.CubicBezier
@@ -68,7 +69,7 @@ library
   build-depends: base        >= 4.6     && < 4.9
                , free        >= 4.7
                , JuicyPixels >= 3.1.8
-               , FontyFruity >= 0.3     && < 0.4
+               , FontyFruity >= 0.4     && < 0.5
                , vector      >= 0.9
                , mtl         >= 1.9
                , dlist       >= 0.6

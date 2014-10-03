@@ -1,7 +1,8 @@
 -- | This module provide helper functions to create outline
 -- of  shapes.
 module Graphics.Rasterific.Outline
-    ( strokize
+    ( StrokeWidth
+    , strokize
     , S.dashedStrokize 
     ) where
 

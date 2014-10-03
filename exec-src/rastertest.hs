@@ -347,6 +347,23 @@ strokeTest stroker texture prefix =
           ]
         img = renderDrawing 500 500 background drawing
 
+orientationAxisText :: IO ()
+orientationAxisText =
+    let trans = translate (V2 200 200) <> toNewXBase (V2 1 (-0.5)) in
+    writePng (outFolder </> "axis_transform.png")
+        . renderDrawing 400 400 white
+        . withTexture (uniformTexture blue)
+        . fill . transform (applyTransformation trans)
+        . pathToPrimitives
+        $ Path (V2 (-100) (-10)) True
+              [ PathLineTo (V2 (-20) (-10))
+              , PathLineTo (V2 0 5)
+              , PathLineTo (V2 20 (-10))
+              , PathLineTo (V2 100 (-10))
+              , PathLineTo (V2 100 10)
+              , PathLineTo (V2 (-100) 10)
+              ]
+
 complexEvenOddTest :: Int -> Texture PixelRGBA8 -> IO ()
 complexEvenOddTest size texture = mapM_ tester [(filling, ix)
                                               | filling <- [(FillEvenOdd, "evenodd")
@@ -557,6 +574,7 @@ testSuite = do
   pledgeTest
   strokeBad 
   evenOddTest uniform
+  orientationAxisText 
   complexEvenOddTest 700 uniform
   complexEvenOddTest 350 uniform
 

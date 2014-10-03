@@ -14,12 +14,13 @@ module Graphics.Rasterific.Transformations
     , rotateCenter
     , skewX
     , skewY
+    , toNewXBase
     , inverseTransformation
     ) where
 
 import Data.Monoid( Monoid( .. ), (<>) )
 import Graphics.Rasterific.Types
-import Graphics.Rasterific.Linear( V2( .. ) )
+import Graphics.Rasterific.Linear( V2( .. ), normalize )
 
 -- | Represent a 3*3 matrix for homogenous coordinates.
 --
@@ -152,6 +153,15 @@ skewY v =
     Transformation 1 0 0
                    t 1 0
   where t = tan v
+
+-- | Given a new X-acis vector, create a rotation matrix
+-- to get into this new base, assuming an Y basis orthonormal
+-- to the X one.
+toNewXBase :: Vector -> Transformation
+toNewXBase vec =
+    Transformation dx (-dy) 0
+                   dy   dx  0
+  where V2 dx dy = normalize vec
 
 transformationDeterminant :: Transformation -> Float
 transformationDeterminant (Transformation a c _e

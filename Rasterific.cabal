@@ -51,6 +51,7 @@ library
                  , Graphics.Rasterific.PathWalker
 
   other-modules: Graphics.Rasterific.Line
+               , Graphics.Rasterific.Command
                , Graphics.Rasterific.CubicBezier
                , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators

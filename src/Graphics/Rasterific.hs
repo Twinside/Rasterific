@@ -46,6 +46,7 @@ module Graphics.Rasterific
     , withTexture
     , withClipping
     , withTransformation
+    , withPathOrientation
     , stroke
     , dashedStroke
     , dashedStrokeWithOffset
@@ -108,11 +109,12 @@ module Graphics.Rasterific
 
 import Control.Applicative( (<$>) )
 import Control.Monad.Free( Free( .. ), liftF )
-import Control.Monad.Free.Church( F, fromF )
+import Control.Monad.Free.Church( fromF )
 import Control.Monad.ST( runST )
+import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
-import Codec.Picture.Types( Image( .. ), Pixel( .. ), Pixel8 )
+import Codec.Picture.Types( Image( .. ), Pixel( .. ) )
 
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Rasterific.Compositor
@@ -128,9 +130,11 @@ import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.PathWalker
+import Graphics.Rasterific.Command
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
+import Graphics.Text.TrueType( Font, getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -138,91 +142,6 @@ import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
 ------------------------------------------------
 ----    Free Monad DSL section
 ------------------------------------------------
-
--- | Monad used to record the drawing actions.
-type Drawing px = F (DrawCommand px)
-
-data DrawCommand px next
-    = Fill FillMethod [Primitive] next
-    | Stroke Float Join (Cap, Cap) [Primitive] next
-    | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
-    | TextFill Font PointSize Point String next
-    {-| PathAligned Path (Drawing px ()) next-}
-    | SetTexture (Texture px)
-                 (Drawing px ()) next
-    | WithCliping (forall innerPixel. Drawing innerPixel ())
-                  (Drawing px ()) next
-    | WithTransform Transformation (Drawing px ()) next
-
--- | This function will spit out drawing instructions to
--- help debugging.
---
--- The outputted code looks like Haskell, but there is no
--- guarantee that it is compilable.
-dumpDrawing :: ( Show px
-               , Show (PixelBaseComponent px)
-               , PixelBaseComponent (PixelBaseComponent px)
-                    ~ (PixelBaseComponent px)
-
-               ) => Drawing px () -> String
-dumpDrawing = go . fromF where
-  go ::
-        ( Show px
-        , Show (PixelBaseComponent px)
-        , PixelBaseComponent (PixelBaseComponent px)
-                    ~ (PixelBaseComponent px)
-
-        ) => Free (DrawCommand px) () -> String
-  go (Pure ()) = "return ()"
-  go (Free (Fill _ prims next)) =
-    "fill " ++ show prims ++ " >>=\n" ++   go next
-  go (Free (TextFill _ _ _ text next)) =
-    "-- Text : " ++ text ++ "\n" ++   go next
-  go (Free (SetTexture tx drawing next)) =
-    "withTexture (" ++ dumpTexture tx ++ ") (" ++
-              go (fromF drawing) ++ ") >>=\n" ++ go next
-  go (Free (DashedStroke o pat w j cap prims next)) =
-    "dashedStrokeWithOffset "
-              ++ show o ++ " "
-              ++ show pat ++ " "
-              ++ show w ++ " ("
-              ++ show j ++ ") "
-              ++ show cap ++ " "
-              ++ show prims ++ " >>=\n" ++   go next
-  go (Free (Stroke w j cap prims next)) =
-    "stroke " ++ show w ++ " ("
-              ++ show j ++ ") "
-              ++ show cap ++ " "
-              ++ show prims ++ " >>=\n" ++   go next
-  go (Free (WithTransform trans sub next)) =
-    "withTransform (" ++ show trans ++ ") ("
-                      ++ go (fromF sub) ++ ") >>=\n "
-                      ++ go next
-  go (Free (WithCliping clipping draw next)) =
-    "withClipping (" ++ go (fromF $ withTexture clipTexture clipping)
-                     ++ ")\n" ++
-        "         (" ++ go (fromF draw) ++ ")\n >>= " ++
-              go next
-        where clipTexture = uniformTexture (0xFF :: Pixel8)
-
-
-instance Functor (DrawCommand px) where
-    fmap f (TextFill font size pos str next) =
-        TextFill font size pos str $ f next
-    fmap f (Fill method  prims next) = Fill method prims $ f next
-    fmap f (SetTexture t sub next) = SetTexture t sub $ f next
-    fmap f (WithCliping sub com next) =
-        WithCliping sub com $ f next
-    fmap f (Stroke w j caps prims next) =
-        Stroke w j caps prims $ f next
-    fmap f (DashedStroke st pat w j caps prims next) =
-        DashedStroke st pat w j caps prims $ f next
-    fmap f (WithTransform trans draw next) =
-        WithTransform trans draw $ f next
-
-instance Monoid (Drawing px ()) where
-    mempty = return ()
-    mappend a b = a >> b
 
 -- | Define the texture applyied to all the children
 -- draw call.
@@ -243,6 +162,10 @@ withTexture texture subActions =
 withTransformation :: Transformation -> Drawing px () -> Drawing px ()
 withTransformation trans sub =
     liftF $ WithTransform trans sub ()
+
+withPathOrientation :: Path -> Drawing px () -> Drawing px ()
+withPathOrientation path sub =
+    liftF $ WithPathOrientation path sub ()
 
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
@@ -371,6 +294,17 @@ renderDrawing width height background drawing =
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
+    go ctxt (Free (WithPathOrientation path sub next)) rest = final where
+      final = orders <> go ctxt next rest
+      subOrder = go ctxt (fromF sub) []
+      images = [ PathImage order 0 0 | order <- subOrder ]
+
+      drawer trans order = modify $ \lst -> finalOrder : lst
+        where
+          toFinalPos = transform $ applyTransformation trans
+          finalOrder =
+            order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
+      orders = reverse $ execState (drawImageOnPath drawer path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
       trans'

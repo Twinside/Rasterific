@@ -99,6 +99,23 @@ moduleExample = do
   writePng (outFolder </> "module_example.png") img
 
 
+textOnPathExample :: IO ()
+textOnPathExample = do
+  fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+  case fontErr of
+    Left err -> putStrLn err
+    Right font ->
+      let path = Path (V2 100 180) False
+                      [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
+      in
+      produceDocImage (outFolder </> "text_on_path.png") $ do
+          stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+              pathToPrimitives path
+
+          withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+            withPathOrientation path $
+              printTextAt font 24 (V2 0 0) "Text on path"
+
 textExample :: IO ()
 textExample = do
   fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
@@ -399,4 +416,5 @@ main = do
 
     textExample
     coordinateSystem
+    textOnPathExample
 

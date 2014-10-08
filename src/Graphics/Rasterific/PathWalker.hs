@@ -13,6 +13,7 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , drawImageOnPath
                                      ) where
 
+import Data.Foldable( foldMap )
 import Control.Applicative( Applicative, (<$>), (<*>) )
 import Control.Monad.Identity( Identity )
 import Control.Monad.State( StateT
@@ -25,9 +26,10 @@ import Data.Monoid( (<>) )
 
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.StrokeInternal
+import Graphics.Rasterific.PlaneBoundable
+import Graphics.Rasterific.Immediate
 
 -- | The walking transformer monad.
 newtype PathWalkerT m a = PathWalkerT (StateT WalkerState m a)
@@ -88,14 +90,12 @@ currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
     currTangeant (prim:_) = Just . normalize $ firstTangeantOf prim
 
 data PathImage px = PathImage
-  { _pimgPrimitives :: ![[Primitive]]
+  { _pimgOrder      :: !(DrawOrder px)
   , _pimgDeltaX     :: !Float
   , _pimgDeltaY     :: !Float
-  , _pimgTexture    :: Texture px
   }
 
-type PathDrawer m px =
-    Transformation -> Texture px -> [[Primitive]] -> m ()
+type PathDrawer m px = Transformation -> DrawOrder px -> m ()
 
 drawImageOnPath :: Monad m
                 => PathDrawer m px -> Path -> [PathImage px]
@@ -103,7 +103,10 @@ drawImageOnPath :: Monad m
 drawImageOnPath drawer path = runPathWalking path . go where
   go [] = return ()
   go (img : rest) = do
-    let width = 0
+    let bounds =
+          foldMap (foldMap planeBounds) . _orderPrimitives $ _pimgOrder img
+        width = boundWidth bounds
+        corner = boundLowerLeftCorner bounds
         halfWidth = width / 2
     advanceBy halfWidth
     mayPos <- currentPosition
@@ -112,8 +115,10 @@ drawImageOnPath drawer path = runPathWalking path . go where
       Nothing -> return () -- out of path, stop drawing
       Just (pos, dir) -> do
         let imageTransform =
-              translate pos <> toNewXBase dir <> translate (V2 (-halfWidth) 0)
-        lift $ drawer imageTransform (_pimgTexture img) (_pimgPrimitives img)
+                translate pos
+                    <> toNewXBase dir
+                    <> translate (V2 (-halfWidth) 0 ^-^ corner)
+        lift $ drawer imageTransform (_pimgOrder img)
         advanceBy halfWidth
         go rest
 

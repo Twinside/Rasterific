@@ -1,5 +1,14 @@
 language: haskell
 
+ghc:
+  - 7.4
+  - 7.6
+  - 7.8
+  
+global:
+  - SKIP_HADDOCK=1
+
+
 script:
   - cabal install --only-dependencies && cabal configure && cabal build
 

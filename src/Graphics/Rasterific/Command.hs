@@ -33,7 +33,7 @@ data DrawCommand px next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
                   (Drawing px ()) next
     | WithTransform Transformation (Drawing px ()) next
-    | WithPathOrientation Path (Drawing px ()) next
+    | WithPathOrientation Path Float (Drawing px ()) next
 
 -- | This function will spit out drawing instructions to
 -- help debugging.
@@ -55,8 +55,9 @@ dumpDrawing = go . fromF where
 
         ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
-  go (Free (WithPathOrientation path drawing next)) =
+  go (Free (WithPathOrientation path point drawing next)) =
     "withPathOrientation (" ++ show path ++ ") ("
+                            ++ show point ++ ") ("
                             ++ go (fromF drawing) ++ ") >>= "
                             ++ go next
   go (Free (Fill _ prims next)) =
@@ -106,8 +107,8 @@ instance Functor (DrawCommand px) where
         DashedStroke st pat w j caps prims $ f next
     fmap f (WithTransform trans draw next) =
         WithTransform trans draw $ f next
-    fmap f (WithPathOrientation path draw next) =
-        WithPathOrientation path draw $ f next
+    fmap f (WithPathOrientation path point draw next) =
+        WithPathOrientation path point draw $ f next
 
 instance Monoid (Drawing px ()) where
     mempty = return ()

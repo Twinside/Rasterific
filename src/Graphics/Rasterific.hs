@@ -163,9 +163,9 @@ withTransformation :: Transformation -> Drawing px () -> Drawing px ()
 withTransformation trans sub =
     liftF $ WithTransform trans sub ()
 
-withPathOrientation :: Path -> Drawing px () -> Drawing px ()
-withPathOrientation path sub =
-    liftF $ WithPathOrientation path sub ()
+withPathOrientation :: Path -> Float -> Drawing px () -> Drawing px ()
+withPathOrientation path p sub =
+    liftF $ WithPathOrientation path p sub ()
 
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
@@ -294,7 +294,7 @@ renderDrawing width height background drawing =
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
-    go ctxt (Free (WithPathOrientation path sub next)) rest = final where
+    go ctxt (Free (WithPathOrientation path base sub next)) rest = final where
       final = orders <> go ctxt next rest
       subOrder = go ctxt (fromF sub) []
       images = [ PathImage order 0 0 | order <- subOrder ]
@@ -304,7 +304,7 @@ renderDrawing width height background drawing =
           toFinalPos = transform $ applyTransformation trans
           finalOrder =
             order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
-      orders = reverse $ execState (drawImageOnPath drawer path images) []
+      orders = reverse $ execState (drawImageOnPath drawer base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
       trans'

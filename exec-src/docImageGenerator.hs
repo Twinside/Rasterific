@@ -112,8 +112,10 @@ textOnPathExample = do
           stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
               pathToPrimitives path
 
-          withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
-            withPathOrientation path $
+          withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
+            {-printTextAt font 24 (V2 0 50) "Text on path"-}
+
+            withPathOrientation path 0 $
               printTextAt font 24 (V2 0 0) "Text on path"
 
 textExample :: IO ()

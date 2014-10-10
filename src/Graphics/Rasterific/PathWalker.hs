@@ -22,7 +22,7 @@ import Control.Monad.State( StateT
                           , evalStateT
                           , modify
                           , gets )
-import Data.Monoid( (<>) )
+import Data.Monoid( mempty, (<>) )
 
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
@@ -98,27 +98,33 @@ data PathImage px = PathImage
 type PathDrawer m px = Transformation -> DrawOrder px -> m ()
 
 drawImageOnPath :: Monad m
-                => PathDrawer m px -> Path -> [PathImage px]
+                => PathDrawer m px -> Float -> Path -> [PathImage px]
                 -> m ()
-drawImageOnPath drawer path = runPathWalking path . go where
-  go [] = return ()
-  go (img : rest) = do
+drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
+  go _ [] = return ()
+  go prevX (img : rest) = do
     let bounds =
           foldMap (foldMap planeBounds) . _orderPrimitives $ _pimgOrder img
         width = boundWidth bounds
-        corner = boundLowerLeftCorner bounds
+        cx = maybe startX id prevX
+        V2 startX lowY = boundLowerLeftCorner bounds
+        V2 endX _ = _planeMaxBound bounds
         halfWidth = width / 2
-    advanceBy halfWidth
-    mayPos <- currentPosition
-    mayDir <- currentTangeant
-    case (,) <$> mayPos <*> mayDir of
-      Nothing -> return () -- out of path, stop drawing
-      Just (pos, dir) -> do
-        let imageTransform =
-                translate pos
-                    <> toNewXBase dir
-                    <> translate (V2 (-halfWidth) 0 ^-^ corner)
-        lift $ drawer imageTransform (_pimgOrder img)
-        advanceBy halfWidth
-        go rest
+        spaceWidth = abs $ startX - cx
+        baseLineDiff = lowY - baseline
+    if bounds == mempty then go prevX rest
+    else do
+      advanceBy (halfWidth + spaceWidth)
+      mayPos <- currentPosition
+      mayDir <- currentTangeant
+      case (,) <$> mayPos <*> mayDir of
+        Nothing -> return () -- out of path, stop drawing
+        Just (pos, dir) -> do
+          let imageTransform =
+                  translate pos
+                      <> toNewXBase dir
+                      <> translate (V2 (-halfWidth) 0 ^-^ V2 startX baseLineDiff)
+          lift $ drawer imageTransform (_pimgOrder img)
+          advanceBy halfWidth
+          go (Just endX) rest
 

@@ -109,14 +109,32 @@ textOnPathExample = do
                       [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
       in
       produceDocImage (outFolder </> "text_on_path.png") $ do
+        stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+            pathToPrimitives path
+
+        withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
+          withPathOrientation path 24 $
+            printTextAt font 24 (V2 0 0) "Text on path"
+
+geometryOnPath :: IO ()
+geometryOnPath = do
+  fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+  case fontErr of
+    Left err -> putStrLn err
+    Right font ->
+      produceDocImage (outFolder </> "geometry_on_path.png") $ do
+        let path = Path (V2 100 180) False
+                        [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
+        withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
           stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
               pathToPrimitives path
-
-          withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
-            {-printTextAt font 24 (V2 0 50) "Text on path"-}
-
-            withPathOrientation path 0 $
-              printTextAt font 24 (V2 0 0) "Text on path"
+     
+        withPathOrientation path 24 $ do
+          printTextAt font 24 (V2 0 0) "TX"
+          fill $ rectangle (V2 10 10) 30 20
+          fill $ rectangle (V2 45 10) 10 20
+          fill $ rectangle (V2 60 10) 20 20
+          fill $ rectangle (V2 100 (-15)) 20 50
 
 textExample :: IO ()
 textExample = do
@@ -419,4 +437,5 @@ main = do
     textExample
     coordinateSystem
     textOnPathExample
+    geometryOnPath
 

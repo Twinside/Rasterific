@@ -163,7 +163,45 @@ withTransformation :: Transformation -> Drawing px () -> Drawing px ()
 withTransformation trans sub =
     liftF $ WithTransform trans sub ()
 
-withPathOrientation :: Path -> Float -> Drawing px () -> Drawing px ()
+-- | This command allows you to draw primitives on a given curve,
+-- for example, you can draw text on a curve:
+--
+-- > let path = Path (V2 100 180) False
+-- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)] -- > in
+-- > produceDocImage (outFolder </> "text_on_path.png") $ do
+-- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+-- >       pathToPrimitives path
+-- >   withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+-- >     withPathOrientation path 24 $
+-- >       printTextAt font 24 (V2 0 0) "Text on path"
+--
+-- <<docimages/text_on_path.png>>
+--
+-- You can note that the position of the baseline match the size of the
+-- characters.
+--
+-- You are not limited to text drawing while using this function,
+-- you can draw arbitrary geometry like in the following example:
+--
+-- > let path = Path (V2 100 180) False
+-- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
+-- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+-- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+-- >       pathToPrimitives path
+-- > 
+-- > withPathOrientation path 24 $ do
+-- >   printTextAt font 24 (V2 0 0) "TX"
+-- >   fill $ rectangle (V2 10 10) 30 20
+-- >   fill $ rectangle (V2 45 10) 10 20
+-- >   fill $ rectangle (V2 60 10) 20 20
+-- >   fill $ rectangle (V2 100 (-15)) 20 50
+--
+-- <<docimages/geometry_on_path.png>>
+--
+withPathOrientation :: Path          -- ^ Path directing the orientation.
+                    -> Float         -- ^ Basline Y axis position, used to align text properly.
+                    -> Drawing px () -- ^ The sub drawings.
+                    -> Drawing px ()
 withPathOrientation path p sub =
     liftF $ WithPathOrientation path p sub ()
 

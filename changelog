@@ -1,6 +1,6 @@
 -*-change-log-*-
 
-v0.4 September 2014
+v0.4 2014
  * Tried Fast forward differencing for cubic bezier, not worth
    the hassle
  * Further optimized decomposition of all primitives, less
@@ -8,8 +8,15 @@ v0.4 September 2014
  * After optimizing pixel writing, optimized pixel reading,
    yielding non-negligeable speed improvements.
  * Added an "immediate" module to avoid constructing
+   a scene tree.
  * Allowing both IO & (ST s) as drawing monads, enabling
    interleaved drawing with io operations.
+ * Added a "withPathOrientation" function to orient primitives
+   on a path (allow to draw curved text)
+ * Added toNewXBase transformation to create a new basis given
+   a X axis vector.
+ * Added a PathWalker module, to give access to the lower level
+   path orientation facility.
 
 v0.3 June 2014
  * Switching main free monad type to the church encoded one.

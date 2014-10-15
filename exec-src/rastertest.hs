@@ -550,6 +550,22 @@ pledgeTest = do
     renderDrawing 389 89 white $
         drawImage png 0 (V2 0 0)
 
+shouldBeTheSame :: IO ()
+shouldBeTheSame = do
+    writePng (outFolder </> "should_be_same_0.png") $ img prim1
+    writePng (outFolder </> "should_be_same_1.png") $ img prim2
+  where
+    drawColor = PixelRGBA8 0 0x86 0xc1 255
+    prim1 = CubicBezier (V2  10  10) (V2 210 210)
+                        (V2 210 210) (V2  10 410)
+    prim2 = CubicBezier (V2  10  10) (V2 210 210)
+                        (V2 210 210.1) (V2  10 410)
+
+    img bez = renderDrawing 400 200 white $
+      withTexture (uniformTexture drawColor) $
+        stroke 4 JoinRound (CapRound, CapRound) [CubicBezierPrim bez]
+
+  
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -625,6 +641,7 @@ testSuite = do
   strokeCubic stroke radTriGradient "rad_gradient_"
 
   strokeCubicDashed dashedStroke uniform ""
+  shouldBeTheSame
 
   let testText =
         "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"

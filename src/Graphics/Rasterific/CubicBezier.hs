@@ -35,9 +35,6 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
 import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
-{-import Debug.Trace-}
-{-import Text.Printf-}
-
 -- | Create a list of cubic bezier patch from a list of points.
 --
 -- > cubicBezierFromPath [a, b, c, d, e] = [CubicBezier a b c d]
@@ -103,7 +100,6 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
     abbc = ab `midPoint` bc
     bccd = bc `midPoint` cd
     abbcbccd = abbc `midPoint` bccd
-
 
 --               3                    2            2                  3
 -- x(t) = (1 - t) ∙x     + 3∙t∙(1 - t) ∙x     + 3∙t ∙(1 - t)∙x     + t ∙x
@@ -340,7 +336,6 @@ decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dR
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
-  | b `isNearby` c = sanitizeBezier $ Bezier a c d
   | a `isDistingableFrom` b &&
     c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier

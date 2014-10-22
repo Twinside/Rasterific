@@ -51,6 +51,7 @@ module Graphics.Rasterific
     , dashedStroke
     , dashedStrokeWithOffset
     , printTextAt
+    , printTextRanges
 
       -- * Generating images
     , ModulablePixel
@@ -287,7 +288,17 @@ printTextAt :: Font     -- ^ Drawing font
             -> String  -- ^ String to print
             -> Drawing px ()
 printTextAt font pointSize point string =
-    liftF $ TextFill font pointSize point string ()
+    liftF $ TextFill point [description] ()
+  where
+    description = TextRange
+        { _textFont    = font
+        , _textSize    = pointSize
+        , _text        = string
+        , _textTexture = Nothing
+        }
+
+printTextRanges :: Point -> [TextRange px] -> Drawing px ()
+printTextRanges point ranges = liftF $ TextFill point ranges ()
 
 data RenderContext px = RenderContext
     { currentClip           :: Maybe (Texture (PixelBaseComponent px))
@@ -377,12 +388,20 @@ renderDrawing width height background drawing =
         recurse sub =
             go ctxt (liftF $ Fill FillWinding sub ())
 
-    go ctxt (Free (TextFill font size (V2 x y) str next)) rest =
+    go ctxt (Free (TextFill (V2 x y) descriptions next)) rest =
         foldr (go ctxt) (go ctxt next rest) drawCalls 
       where
+        floatCurves =
+          getStringCurveAtPoint 90 (x, y)
+            [(_textFont d, _textSize d, _text d) | d <- descriptions]
+
         drawCalls =
-            beziersOfChar <$> getStringCurveAtPoint 90 (x, y)
-                                    [(font, size, str)]
+            [texturize d $ beziersOfChar curve
+                | (curve, d) <- zip floatCurves descriptions]
+
+        texturize descr sub = case _textTexture descr of
+            Nothing -> fromF sub
+            Just t -> liftF $ SetTexture t sub ()
 
         beziersOfChar curves = liftF $ Fill FillWinding bezierCurves ()
           where

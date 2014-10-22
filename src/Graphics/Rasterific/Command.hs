@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Graphics.Rasterific.Command ( Drawing
                                    , DrawCommand( .. )
+                                   , TextRange( .. )
                                    , dumpDrawing
                                    ) where
 
@@ -23,11 +24,21 @@ import Graphics.Text.TrueType( Font, PointSize )
 -- | Monad used to record the drawing actions.
 type Drawing px = F (DrawCommand px)
 
+-- | Structure defining how to render a text range
+data TextRange px = TextRange
+    { _textFont    :: Font      -- ^ Font used during the rendering
+    , _textSize    :: PointSize -- ^ Size of the text (in pixels)
+    , _text        :: String    -- ^ Text to draw
+      -- | Texture to use for drawing, if Nothing, the currently
+      -- active texture is used.
+    , _textTexture :: Maybe (Texture px)
+    }
+
 data DrawCommand px next
     = Fill FillMethod [Primitive] next
     | Stroke Float Join (Cap, Cap) [Primitive] next
     | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
-    | TextFill Font PointSize Point String next
+    | TextFill Point [TextRange px] next
     | SetTexture (Texture px)
                  (Drawing px ()) next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
@@ -62,8 +73,8 @@ dumpDrawing = go . fromF where
                             ++ go next
   go (Free (Fill _ prims next)) =
     "fill " ++ show prims ++ " >>=\n" ++   go next
-  go (Free (TextFill _ _ _ text next)) =
-    "-- Text : " ++ text ++ "\n" ++   go next
+  go (Free (TextFill _ texts next)) =
+   concat  ["-- Text : " ++ _text t ++ "\n" | t <- texts] ++ go next
   go (Free (SetTexture tx drawing next)) =
     "withTexture (" ++ dumpTexture tx ++ ") (" ++
               go (fromF drawing) ++ ") >>=\n" ++ go next
@@ -95,8 +106,8 @@ dumpDrawing = go . fromF where
 
 
 instance Functor (DrawCommand px) where
-    fmap f (TextFill font size pos str next) =
-        TextFill font size pos str $ f next
+    fmap f (TextFill pos texts next) =
+        TextFill pos texts $ f next
     fmap f (Fill method  prims next) = Fill method prims $ f next
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =

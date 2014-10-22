@@ -33,7 +33,6 @@ import Data.Monoid( mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula
-import Graphics.Rasterific.QuadraticBezier( sanitizeBezier )
 
 -- | Create a list of cubic bezier patch from a list of points.
 --

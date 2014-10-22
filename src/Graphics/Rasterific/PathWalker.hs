@@ -107,11 +107,11 @@ drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
           foldMap (foldMap planeBounds) . _orderPrimitives $ _pimgOrder img
         width = boundWidth bounds
         cx = maybe startX id prevX
-        V2 startX lowY = boundLowerLeftCorner bounds
+        V2 startX _ = boundLowerLeftCorner bounds
         V2 endX _ = _planeMaxBound bounds
         halfWidth = width / 2
         spaceWidth = abs $ startX - cx
-        baseLineDiff = lowY - baseline
+        translation = V2 (negate halfWidth - startX) (- baseline)
     if bounds == mempty then go prevX rest
     else do
       advanceBy (halfWidth + spaceWidth)
@@ -121,9 +121,7 @@ drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
         Nothing -> return () -- out of path, stop drawing
         Just (pos, dir) -> do
           let imageTransform =
-                  translate pos
-                      <> toNewXBase dir
-                      <> translate (V2 (-halfWidth) 0 ^-^ V2 startX baseLineDiff)
+                  translate pos <> toNewXBase dir <> translate translation
           lift $ drawer imageTransform (_pimgOrder img)
           advanceBy halfWidth
           go (Just endX) rest

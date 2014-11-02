@@ -75,12 +75,9 @@ isSufficientlyFlat tol (CubicBezier a b c d) =
         V2 x y = vmax (u ^*^ u) (v ^*^ v)
         tolerance = 16 * tol * tol
 
-flattenCubicBezier :: CubicBezier -> Container Primitive
-flattenCubicBezier bezier@(CubicBezier a b c d)
-    | isSufficientlyFlat 1 bezier = pure $ CubicBezierPrim bezier
-    | otherwise =
-        flattenCubicBezier (CubicBezier a ab abbc abbcbccd) <>
-            flattenCubicBezier (CubicBezier abbcbccd bccd cd d)
+splitCubicBezier :: CubicBezier -> (Point, Point, Point, Point, Point, Point)
+{-# INLINE splitCubicBezier #-}
+splitCubicBezier (CubicBezier a b c d) = (ab, bc, cd, abbc, bccd, abbcbccd)
   where
     --                     BC
     --         B X----------X---------X C
@@ -99,6 +96,15 @@ flattenCubicBezier bezier@(CubicBezier a b c d)
     abbc = ab `midPoint` bc
     bccd = bc `midPoint` cd
     abbcbccd = abbc `midPoint` bccd
+
+flattenCubicBezier :: CubicBezier -> Container Primitive
+flattenCubicBezier bezier@(CubicBezier a _ _ d)
+    | isSufficientlyFlat 1 bezier = pure $ CubicBezierPrim bezier
+    | otherwise =
+        flattenCubicBezier (CubicBezier a ab abbc abbcbccd) <>
+            flattenCubicBezier (CubicBezier abbcbccd bccd cd d)
+  where
+    (ab, _bc, cd, abbc, bccd, abbcbccd) = splitCubicBezier bezier
 
 --               3                    2            2                  3
 -- x(t) = (1 - t) ∙x     + 3∙t∙(1 - t) ∙x     + 3∙t ∙(1 - t)∙x     + t ∙x
@@ -178,23 +184,17 @@ offsetCubicBezier offset bezier@(CubicBezier a b c d)
     --     /                                \
     --    /                                  \
     -- A X                                    X D
-    ab = a `midPoint` b
-    bc = b `midPoint` c
-    cd = c `midPoint` d
+    (ab, bc, cd, abbc, bccd, abbcbccd) = splitCubicBezier bezier
 
     w = ab `normal` bc
     x = bc `normal` cd
-
-    abbc = ab `midPoint` bc
-    bccd = bc `midPoint` cd
-    abbcbccd = abbc `midPoint` bccd
 
     shiftedA = a ^+^ (u ^* offset)
     shiftedD = d ^+^ (v ^* offset)
 
     {-shiftedABBCBCCD = abbcbccd ^+^ (w ^* offset)-}
-    shiftedB = (b ^+^ (w ^* offset))
-    shiftedC = (c ^+^ (x ^* offset))
+    shiftedB = b ^+^ (w ^* offset)
+    shiftedC = c ^+^ (x ^* offset)
 
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
@@ -242,13 +242,7 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
         --     /                                \
         --    /                                  \
         -- A X                                    X D
-        ab = a `midPoint` b
-        bc = b `midPoint` c
-        cd = c `midPoint` d
-
-        abbc = ab `midPoint` bc
-        bccd = bc `midPoint` cd
-        abbcbccd = abbc `midPoint` bccd
+        (ab, _bc, cd, abbc, bccd, abbcbccd) = splitCubicBezier bezier
 
         edgeSeparator = vabs (abbcbccd ^-^ mini) ^<^ vabs (abbcbccd ^-^ maxi)
         edge = vpartition edgeSeparator mini maxi
@@ -338,8 +332,8 @@ sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | a `isDistingableFrom` b &&
     c `isDistingableFrom` d =
        pure . CubicBezierPrim $ bezier
-  | (ac `isDistingableFrom` b &&
-     bd `isDistingableFrom` c) =
+  | ac `isDistingableFrom` b &&
+     bd `isDistingableFrom` c =
       pure . CubicBezierPrim $ bezier
   | ac `isDistingableFrom` b =
       pure . CubicBezierPrim $ CubicBezier a ac c d

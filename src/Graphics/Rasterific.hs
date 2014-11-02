@@ -4,7 +4,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
@@ -561,7 +560,7 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
         withTransformation (translate p <> scale scaleX scaleY) .
             withTexture (sampledImageTexture img) $ fill rect
     | otherwise = do
-        withTransformation (translate p <> scale scaleX scaleY) $ do
+        withTransformation (translate p <> scale scaleX scaleY) $
             withTexture (sampledImageTexture img) $ fill rect
         stroke borderSize (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'

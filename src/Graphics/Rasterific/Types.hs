@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
@@ -169,7 +168,7 @@ data EdgeSample = EdgeSample
 -- | Just to get faster sorting
 instance Storable EdgeSample where
    sizeOf _ = 4 * sizeOf (0 :: Float)
-   alignment v = sizeOf v
+   alignment = sizeOf
 
    {-# INLINE peek #-}
    peek ptr = do
@@ -205,11 +204,11 @@ class PointFoldable a where
 
 instance Transformable Point where
     {-# INLINE transform #-}
-    transform f p = f p
+    transform f = f
 
 instance PointFoldable Point where
     {-# INLINE foldPoints #-}
-    foldPoints f acc p = f acc p
+    foldPoints f = f
 
 -- | Describe a simple 2D line between two points.
 --

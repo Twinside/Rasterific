@@ -157,8 +157,8 @@ shaderFiller shader img tsInfo =
     !(scanCoverage,_) = clampCoverage $_tsCoverage tsInfo
     !maxi = _tsRepeat tsInfo
     !compCount = componentCount (undefined :: px)
-    !(V2 xStart yStart) = _tsStart tsInfo
-    !(V2 dx dy) = _tsDelta tsInfo
+    (V2 xStart yStart) = _tsStart tsInfo
+    (V2 dx dy) = _tsDelta tsInfo
 
     go count  _ _ _ | count >= maxi = return ()
     go !count !idx !x !y = do
@@ -252,7 +252,7 @@ shaderOfTexture trans sampling (ModulateTexture texture modulation) =
 transformTextureToFiller
     :: (RenderablePixel px)
     => Texture px -> CoverageFiller (ST s) px
-transformTextureToFiller texture = go Nothing SamplerPad texture
+transformTextureToFiller = go Nothing SamplerPad
   where
     go _ _ (SolidTexture px) =
         \img -> solidColor px img . prepareInfoNoTransform img
@@ -329,7 +329,7 @@ linearGradientShader :: ModulablePixel px
                      :: Gradient Pixel8 -> Point -> Point -> SamplerRepeat
                      -> ShaderFunction Pixel8 #-}
 linearGradientShader gradient start end repeating =
-    \x y -> colorAt $ ((V2 x y) `dot` d) - s00
+    \x y -> colorAt $ (V2 x y `dot` d) - s00
   where
     colorAt = gradientColorAtRepeat repeating gradArray
     gradArray = V.fromList gradient
@@ -422,7 +422,7 @@ radialGradientShader :: ModulablePixel px
        :: Gradient Pixel8 -> Point -> Float -> SamplerRepeat
        -> ShaderFunction Pixel8 #-}
 radialGradientShader gradient center radius repeating =
-    \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
+    \x y -> colorAt $ norm (V2 x y ^-^ center) / radius
   where
     !colorAt = gradientColorAtRepeat repeating gradArray
     !gradArray = V.fromList gradient
@@ -444,7 +444,7 @@ radialGradientWithFocusShader
         :: Gradient Pixel8 -> Point -> Float -> Point
         -> SamplerRepeat -> ShaderFunction Pixel8 #-}
 radialGradientWithFocusShader gradient center radius focusScreen repeating =
-    \x y -> colorAt . go $ (V2 x y) ^-^ center
+    \x y -> colorAt . go $ V2 x y ^-^ center
   where
     focus@(V2 origFocusX origFocusY) = focusScreen ^-^ center
     colorAt = gradientColorAtRepeat repeating gradArray
@@ -485,6 +485,6 @@ modulateTexture :: ModulablePixel px
                 -> ShaderFunction (PixelBaseComponent px)
                 -> ShaderFunction px
 {-# INLINE modulateTexture #-}
-modulateTexture fullTexture modulator = \x y ->
+modulateTexture fullTexture modulator x y =
     colorMap (modulate $ modulator x y) $ fullTexture x y
 

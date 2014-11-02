@@ -19,8 +19,8 @@ import Data.Word( Word8, Word32 )
 import Codec.Picture.Types( Pixel( .. ), PackeablePixel( .. ) )
 
 type Compositor px =
-    (PixelBaseComponent px) ->
-        (PixelBaseComponent px) -> px -> px -> px
+    PixelBaseComponent px ->
+        PixelBaseComponent px -> px -> px -> px
 
 -- | This constraint ensure that a type is a pixel
 -- and we're allowed to modulate it's color components
@@ -131,7 +131,7 @@ toWord8 r = floor $ r * 255 + 0.5
 
 compositionDestination :: (Pixel px, Modulable (PixelBaseComponent px))
                        => Compositor px
-compositionDestination c _ _ a = colorMap (modulate c) $ a
+compositionDestination c _ _ = colorMap (modulate c)
 
 compositionAlpha :: (Pixel px, Modulable (PixelBaseComponent px))
                  => Compositor px
@@ -143,7 +143,7 @@ compositionAlpha c ic
         let bottomOpacity = pixelOpacity bottom
             alphaOut = alphaCompose c ic bottomOpacity (pixelOpacity top)
             colorComposer _ back fore =
-                (alphaOver c ic (back `modulate` bottomOpacity) fore)
+                alphaOver c ic (back `modulate` bottomOpacity) fore
                     `modiv` alphaOut
         in
         mixWithAlpha colorComposer (\_ _ -> alphaOut) bottom top

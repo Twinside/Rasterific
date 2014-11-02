@@ -39,11 +39,11 @@ firstPointAndNormal (BezierPrim (Bezier a b _)) = (a, a `normal` b)
 firstPointAndNormal (CubicBezierPrim (CubicBezier a b _ _)) = (a, a `normal` b)
 
 reversePrimitive :: Primitive -> Primitive
-reversePrimitive (LinePrim (Line a b)) = (LinePrim (Line b a))
+reversePrimitive (LinePrim (Line a b)) = LinePrim (Line b a)
 reversePrimitive (BezierPrim (Bezier a b c)) =
-    (BezierPrim (Bezier c b a))
+    BezierPrim (Bezier c b a)
 reversePrimitive (CubicBezierPrim (CubicBezier a b c d)) =
-    (CubicBezierPrim (CubicBezier d c b a))
+    CubicBezierPrim (CubicBezier d c b a)
 
 -- | Create a "rounded" join or cap
 roundJoin :: Float -> Point -> Vector -> Vector -> Container Primitive
@@ -187,7 +187,7 @@ strokize width join (capStart, capEnd) beziers =
     offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
   where 
-        sanitized = foldMap (listOfContainer . sanitize) $ beziers
+        sanitized = foldMap (listOfContainer . sanitize) beziers
         offseter = offsetAndJoin (width / 2) join
 
 flattenPrimitive :: Primitive -> Container Primitive
@@ -208,7 +208,7 @@ flatten :: Container Primitive -> Container Primitive
 flatten = foldMap flattenPrimitive
 
 splitPrimitiveUntil :: Float -> [Primitive] -> ([Primitive], [Primitive])
-splitPrimitiveUntil at = go at
+splitPrimitiveUntil = go
   where
     go _ [] = ([], [])
     go left lst
@@ -228,7 +228,7 @@ dropPattern = go
   where
     go _ [] = []
     go offset (x:xs)
-        | x < 0 = (x:xs) -- sanitizing
+        | x < 0 = x:xs -- sanitizing
         | offset < x = x - offset : xs
         | otherwise {- offset >= x -} = go (offset - x) xs
 

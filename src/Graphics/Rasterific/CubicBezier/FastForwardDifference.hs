@@ -106,8 +106,8 @@ decomposeCubicBezierForwardDifference bez = pure initialSample <> lst where
                            , _sampleAlpha = 1.0
                            , _sampleH = 1.0 }
   go !currentStep !xFdCoeff !yFdCoeff
-     !(V2 prevXpx prevYpx)
-     !(V2 xPrev yPrev)
+     (V2 prevXpx prevYpx)
+     (V2 xPrev yPrev)
      !lastWrittenX
     | prevYpx == integerNextY = rest lastWrittenX
 

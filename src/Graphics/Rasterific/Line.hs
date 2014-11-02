@@ -90,7 +90,7 @@ clipLine mini maxi poly@(Line a b)
 
         -- A X-----X-----X B
         --        AB
-        ab = (a `midPoint` b)
+        ab = a `midPoint` b
 
         --  mini
         --     +-------------+

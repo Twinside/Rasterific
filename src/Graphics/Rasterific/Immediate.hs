@@ -89,10 +89,7 @@ runDrawContext width height background drawing = do
   unsafeFreezeImage img
 
 mapExec :: Monad m => (a -> m ()) -> [a] -> m ()
-mapExec f = go
-  where
-    go [] = return ()
-    go (x : xs) = f x >> go xs
+mapExec f = foldr ((>>) . f) (return ())
 
 isCoverageDrawable :: MutableImage s px -> CoverageSpan -> Bool
 isCoverageDrawable img coverage =

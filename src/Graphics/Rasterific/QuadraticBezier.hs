@@ -144,9 +144,7 @@ clipBezier mini maxi bezier@(Bezier a b c)
         --    /         \
         -- A X           X C
         --
-        ab = a `midPoint` b
-        bc = b `midPoint` c
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
         --  mini
         --     +-------------+
@@ -212,6 +210,23 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     bc = lerp t b c
     abbc = lerp t ab bc
 
+splitBezier :: Bezier -> (Point, Point, Point)
+{-# INLINE splitBezier #-}
+splitBezier (Bezier a b c) = (ab, bc, abbc)
+  where
+    --
+    --         X B
+    --        / \
+    --       /   \
+    --   ab X--X--X bc
+    --     / abbc  \
+    --    /         \
+    -- A X           X C
+    --
+    ab = a `midPoint` b
+    bc = b `midPoint` c
+    abbc = ab `midPoint` bc
+
 flattenBezier :: Bezier -> Container Primitive
 flattenBezier bezier@(Bezier a b c)
     -- If the spline is not too curvy, just return the
@@ -234,13 +249,11 @@ flattenBezier bezier@(Bezier a b c)
         u = a `normal` b
         v = b `normal` c
 
-        ab = (a `midPoint` b)
-        bc = (b `midPoint` c)
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
 -- | Move the bezier to a new position with an offset.
 offsetBezier :: Float -> Bezier -> Container Primitive
-offsetBezier offset (Bezier a b c)
+offsetBezier offset bezier@(Bezier a b c)
     -- If the spline is not too curvy, just return the
     -- shifted component
     | u `dot` v >= 0.9 =
@@ -263,9 +276,7 @@ offsetBezier offset (Bezier a b c)
         v = b `normal` c
         w = ab `normal` bc
 
-        ab = (a `midPoint` b)
-        bc = (b `midPoint` c)
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
         shiftedA = a ^+^ (u ^* offset)
         shiftedC = c ^+^ (v ^* offset)

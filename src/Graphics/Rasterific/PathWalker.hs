@@ -23,6 +23,7 @@ import Control.Monad.State( StateT
                           , modify
                           , gets )
 import Data.Monoid( mempty, (<>) )
+import Data.Maybe( fromMaybe )
 
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
@@ -106,7 +107,7 @@ drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
     let bounds =
           foldMap (foldMap planeBounds) . _orderPrimitives $ _pimgOrder img
         width = boundWidth bounds
-        cx = maybe startX id prevX
+        cx = fromMaybe startX prevX
         V2 startX _ = boundLowerLeftCorner bounds
         V2 endX _ = _planeMaxBound bounds
         halfWidth = width / 2

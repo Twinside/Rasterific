@@ -4,13 +4,13 @@
 -- actual orientation.
 module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , PathWalker
+                                     , PathDrawer
                                      , runPathWalking
                                      , advanceBy
                                      , currentPosition
                                      , currentTangeant
 
-                                     , PathImage( .. )
-                                     , drawImageOnPath
+                                     , drawOrdersOnPath
                                      ) where
 
 import Data.Foldable( foldMap )
@@ -43,7 +43,6 @@ type PathWalker a = PathWalkerT Identity a
 data WalkerState = WalkerState
     { _walkerPrims :: ![Primitive]
     }
-    deriving (Eq, Show)
 
 -- | Create a path walker from a given path
 runPathWalking :: (Monad m) => Path -> PathWalkerT m a -> m a
@@ -90,22 +89,18 @@ currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
     currTangeant [] = Nothing
     currTangeant (prim:_) = Just . normalize $ firstTangeantOf prim
 
-data PathImage px = PathImage
-  { _pimgOrder      :: !(DrawOrder px)
-  , _pimgDeltaX     :: !Float
-  , _pimgDeltaY     :: !Float
-  }
-
+-- | Callback function in charge to transform the DrawOrder
+-- given the transformation to place it on the path.
 type PathDrawer m px = Transformation -> DrawOrder px -> m ()
 
-drawImageOnPath :: Monad m
-                => PathDrawer m px -> Float -> Path -> [PathImage px]
-                -> m ()
-drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
+drawOrdersOnPath :: Monad m
+                 => PathDrawer m px -> Float -> Path -> [DrawOrder px]
+                 -> m ()
+drawOrdersOnPath drawer baseline path = runPathWalking path . go Nothing where
   go _ [] = return ()
   go prevX (img : rest) = do
     let bounds =
-          foldMap (foldMap planeBounds) . _orderPrimitives $ _pimgOrder img
+          foldMap (foldMap planeBounds) $ _orderPrimitives img
         width = boundWidth bounds
         cx = fromMaybe startX prevX
         V2 startX _ = boundLowerLeftCorner bounds
@@ -123,7 +118,7 @@ drawImageOnPath drawer baseline path = runPathWalking path . go Nothing where
         Just (pos, dir) -> do
           let imageTransform =
                   translate pos <> toNewXBase dir <> translate translation
-          lift $ drawer imageTransform (_pimgOrder img)
+          lift $ drawer imageTransform img
           advanceBy halfWidth
           go (Just endX) rest
 

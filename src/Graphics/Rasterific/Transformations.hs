@@ -20,7 +20,7 @@ module Graphics.Rasterific.Transformations
 
 import Data.Monoid( Monoid( .. ), (<>) )
 import Graphics.Rasterific.Types
-import Graphics.Rasterific.Linear( V2( .. ), normalize )
+import Graphics.Rasterific.Linear( V2( .. ), (^+^), normalize )
 
 -- | Represent a 3*3 matrix for homogenous coordinates.
 --
@@ -111,6 +111,11 @@ rotateCenter angle p =
 -- <<docimages/transform_scale.png>>
 --
 scale :: Float -> Float -> Transformation
+{-# RULES
+    "scale mappend" forall ax ay bx by.
+       mappend (scale ax ay) (scale bx by) =
+         scale (ax * bx) (ay * by)
+  #-}
 scale scaleX scaleY =
     Transformation scaleX      0 0
                         0 scaleY 0
@@ -123,6 +128,10 @@ scale scaleX scaleY =
 -- <<docimages/transform_translate.png>>
 --
 translate :: Vector -> Transformation
+{-# RULES
+    "translate mappend" forall a b.
+      mappend (translate a) (translate b) = translate (a ^+^ b)
+  #-}
 translate (V2 x y) =
     Transformation 1 0 x
                    0 1 y

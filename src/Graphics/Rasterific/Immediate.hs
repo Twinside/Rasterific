@@ -18,6 +18,7 @@
 module Graphics.Rasterific.Immediate
     ( DrawContext
     , DrawOrder( .. )
+    , orderToDrawing
 
     , runDrawContext
     , fillWithTextureAndMask
@@ -26,6 +27,7 @@ module Graphics.Rasterific.Immediate
     ) where
 
 import qualified Data.Foldable as F
+import Control.Monad.Free( liftF )
 import Control.Monad.ST( ST )
 import Control.Monad.State( StateT, execStateT, get, lift )
 import Codec.Picture.Types( Image( .. )
@@ -44,6 +46,7 @@ import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.Command
 
 -- | Monad used to describe the drawing context.
 type DrawContext m px a =
@@ -61,6 +64,17 @@ data DrawOrder px = DrawOrder
       -- | Optional mask used for clipping.
     , _orderMask       :: !(Maybe (Texture (PixelBaseComponent px)))
     }
+
+-- | Transform back a low level drawing order to a more
+-- high level Drawing
+orderToDrawing :: DrawOrder px -> Drawing px ()
+orderToDrawing order =
+  usingTexture . mapM_ filler $ _orderPrimitives order
+    where
+      usingTexture sub =
+          liftF $ SetTexture (_orderTexture order) sub ()
+      filler prims =
+          liftF $ Fill (_orderFillMethod order) prims ()
 
 -- | Render the drawing orders on the canvas.
 fillOrder :: (PrimMonad m, RenderablePixel px)

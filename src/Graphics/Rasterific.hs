@@ -51,6 +51,7 @@ module Graphics.Rasterific
     , dashedStrokeWithOffset
     , printTextAt
     , printTextRanges
+    , TextRange( .. )
 
       -- * Generating images
     , ModulablePixel
@@ -77,6 +78,9 @@ module Graphics.Rasterific
     , PointFoldable( .. )
     , PlaneBoundable( .. )
     , PlaneBound( .. )
+    , boundWidth
+    , boundHeight
+    , boundLowerLeftCorner
 
       -- * Helpers
     , line
@@ -101,6 +105,7 @@ module Graphics.Rasterific
     , SamplerRepeat( .. )
     , FillMethod( .. )
     , DashPattern
+    , drawOrdersOfDrawing
 
       -- * Debugging helper
     , dumpDrawing
@@ -317,14 +322,23 @@ renderDrawing
     -> Image px
 renderDrawing width height background drawing =
     runST $ runDrawContext width height background
-        $ mapM_ fillOrder
-        $ go initialContext (fromF drawing) []
+          $ mapM_ fillOrder
+          $ drawOrdersOfDrawing width height background drawing
+
+-- | Transform a drawing into a serie of low-level drawing orders.
+drawOrdersOfDrawing
+    :: forall px . (RenderablePixel px) 
+    => Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> px  -- ^ Background color
+    -> Drawing px () -- ^ Rendering action
+    -> [DrawOrder px]
+drawOrdersOfDrawing width height background drawing =
+    go initialContext (fromF drawing) []
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
     clipBackground = emptyValue :: PixelBaseComponent px
     clipForeground = fullValue :: PixelBaseComponent px
-    stupidDefaultTexture =
-        uniformTexture $ colorMap (const clipBackground) background
 
     clipRender =
       renderDrawing width height clipBackground
@@ -338,20 +352,22 @@ renderDrawing width height background drawing =
         transform (applyTransformation trans)
     geometryOf _ = id
 
+    stupidDefaultTexture =
+        uniformTexture $ colorMap (const clipBackground) background
+
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
     go ctxt (Free (WithPathOrientation path base sub next)) rest = final where
       final = orders <> go ctxt next rest
-      subOrder = go ctxt (fromF sub) []
-      images = [ PathImage order 0 0 | order <- subOrder ]
+      images = go ctxt (fromF sub) []
 
       drawer trans order = modify $ \lst -> finalOrder : lst
         where
           toFinalPos = transform $ applyTransformation trans
           finalOrder =
             order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
-      orders = reverse $ execState (drawImageOnPath drawer base path images) []
+      orders = reverse $ execState (drawOrdersOnPath drawer base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
       trans'

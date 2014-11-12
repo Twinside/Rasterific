@@ -17,6 +17,7 @@ v0.4 2014
    a X axis vector.
  * Added a PathWalker module, to give access to the lower level
    path orientation facility.
+ * Added some GHC rules for transformations
 
 v0.3 June 2014
  * Switching main free monad type to the church encoded one.

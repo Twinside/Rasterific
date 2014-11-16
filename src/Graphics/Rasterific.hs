@@ -195,9 +195,9 @@ withTransformation trans sub =
 -- > 
 -- > withPathOrientation path 24 $ do
 -- >   printTextAt font 24 (V2 0 0) "TX"
--- >   fill $ rectangle (V2 10 10) 30 20
--- >   fill $ rectangle (V2 45 10) 10 20
--- >   fill $ rectangle (V2 60 10) 20 20
+-- >   fill $ rectangle (V2 (-10) (-10)) 30 20
+-- >   fill $ rectangle (V2 45 0) 10 20
+-- >   fill $ rectangle (V2 60 (-10)) 20 20
 -- >   fill $ rectangle (V2 100 (-15)) 20 50
 --
 -- <<docimages/geometry_on_path.png>>
@@ -280,16 +280,17 @@ stroke width join caping prims =
 -- >       writePng "text_example.png" .
 -- >           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
 -- >               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >                       printTextAt font 12 (V2 20 40) "A simple text test!"
+-- >                       printTextAt font 12 (V2 20 40)
+-- >                            "A simple text test!"
 --
 -- <<docimages/text_example.png>>
 --
 -- You can use any texture, like a gradient while rendering text.
 --
-printTextAt :: Font     -- ^ Drawing font
-            -> Int      -- ^ font Point size
-            -> Point    -- ^ Baseline begining position
-            -> String  -- ^ String to print
+printTextAt :: Font            -- ^ Drawing font
+            -> Int             -- ^ font Point size
+            -> Point           -- ^ Drawing starting point (base line)
+            -> String          -- ^ String to print
             -> Drawing px ()
 printTextAt font pointSize point string =
     liftF $ TextFill point [description] ()
@@ -301,7 +302,14 @@ printTextAt font pointSize point string =
         , _textTexture = Nothing
         }
 
-printTextRanges :: Point -> [TextRange px] -> Drawing px ()
+-- | Print complex text, using different texture font and
+-- point size for different parts of the text.
+--
+-- <<docimages/text_complex_example.png>>
+--
+printTextRanges :: Point            -- ^ Starting point of the base line
+                -> [TextRange px]   -- ^ Ranges description to be printed
+                -> Drawing px ()
 printTextRanges point ranges = liftF $ TextFill point ranges ()
 
 data RenderContext px = RenderContext
@@ -404,15 +412,18 @@ drawOrdersOfDrawing width height background drawing =
             go ctxt (liftF $ Fill FillWinding sub ())
 
     go ctxt (Free (TextFill (V2 x y) descriptions next)) rest =
-        foldr (go ctxt) (go ctxt next rest) drawCalls 
+        go ctxt (sequence_ drawCalls) $ go ctxt next rest
       where
         floatCurves =
           getStringCurveAtPoint 90 (x, y)
             [(_textFont d, _textSize d, _text d) | d <- descriptions]
 
+        linearDescriptions =
+            concat [map (const d) $ _text d | d <- descriptions]
+
         drawCalls =
             [texturize d $ beziersOfChar curve
-                | (curve, d) <- zip floatCurves descriptions]
+                | (curve, d) <- zip floatCurves linearDescriptions]
 
         texturize descr sub = case _textTexture descr of
             Nothing -> fromF sub

@@ -31,6 +31,7 @@ import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.Command
 
 -- | The walking transformer monad.
 newtype PathWalkerT m a = PathWalkerT (StateT WalkerState m a)
@@ -40,6 +41,9 @@ newtype PathWalkerT m a = PathWalkerT (StateT WalkerState m a)
 -- needed.
 type PathWalker a = PathWalkerT Identity a
 
+-- | State of the path walker, just a bunch of primitives
+-- with continuity guarantee. The continuity is guaranteed
+-- by the Path used to derive this primitives.
 data WalkerState = WalkerState
     { _walkerPrims :: ![Primitive]
     }
@@ -60,7 +64,7 @@ advanceBy by = PathWalkerT . modify $ \s ->
   let (_, leftPrimitives) = splitPrimitiveUntil by $ _walkerPrims s in
   s { _walkerPrims = leftPrimitives }
 
-
+-- | Extract the first point of the primitive.
 firstPointOf :: Primitive -> Point
 firstPointOf p = case p of
   LinePrim (Line p0 _) -> p0
@@ -75,6 +79,8 @@ currentPosition = PathWalkerT $ gets (currPos . _walkerPrims)
     currPos [] = Nothing
     currPos (prim:_) = Just $ firstPointOf prim
 
+-- | Gives the orientation vector for the current point on
+-- the path.
 firstTangeantOf :: Primitive -> Vector
 firstTangeantOf p = case p of
   LinePrim (Line p0 p1) -> p1 ^-^ p0
@@ -93,10 +99,23 @@ currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
 -- given the transformation to place it on the path.
 type PathDrawer m px = Transformation -> DrawOrder px -> m ()
 
+alignFor :: OrderAlignment -> Float -> Point -> Point
+alignFor AlignOnLeft _ p = p
+alignFor AlignOnMiddle halfWidth p =
+    V2 (negate halfWidth) 0 ^+^ p
+
+-- | This function is the workhorse of the placement, it will
+-- walk the path and calculate the appropriate transformation
+-- for every order.
 drawOrdersOnPath :: Monad m
-                 => PathDrawer m px -> Float -> Path -> [DrawOrder px]
+                 => PathDrawer m px  -- ^ Function handling the placement of the order.
+                 -> OrderAlignment   -- ^ How to align the order
+                 -> Float            -- ^ Baseline vertical position in the orders.
+                 -> Path             -- ^ Path on which to place the orders.
+                 -> [DrawOrder px]   -- ^ Orders to place on a path.
                  -> m ()
-drawOrdersOnPath drawer baseline path = runPathWalking path . go Nothing where
+drawOrdersOnPath drawer alignment baseline path =
+        runPathWalking path . go Nothing where
   go _ [] = return ()
   go prevX (img : rest) = do
     let bounds =
@@ -107,7 +126,9 @@ drawOrdersOnPath drawer baseline path = runPathWalking path . go Nothing where
         V2 endX _ = _planeMaxBound bounds
         halfWidth = width / 2
         spaceWidth = abs $ startX - cx
-        translation = V2 (negate halfWidth - startX) (- baseline)
+        translation = alignFor alignment halfWidth
+                    $ V2 (negate startX) (- baseline)
+
     if bounds == mempty then go prevX rest
     else do
       advanceBy (halfWidth + spaceWidth)
@@ -117,7 +138,8 @@ drawOrdersOnPath drawer baseline path = runPathWalking path . go Nothing where
         Nothing -> return () -- out of path, stop drawing
         Just (pos, dir) -> do
           let imageTransform =
-                  translate pos <> toNewXBase dir <> translate translation
+                  translate pos <> toNewXBase dir
+                                <> translate translation
           lift $ drawer imageTransform img
           advanceBy halfWidth
           go (Just endX) rest

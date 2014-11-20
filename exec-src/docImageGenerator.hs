@@ -113,7 +113,7 @@ textOnPathExample = do
             pathToPrimitives path
 
         withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
-          withPathOrientation path 0 $
+          withPathOrientation path AlignOnMiddle 0 $
             printTextAt font 24 (V2 0 0) "Text on path"
 
 geometryOnPath :: IO ()
@@ -129,7 +129,7 @@ geometryOnPath = do
           stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
               pathToPrimitives path
      
-        withPathOrientation path 0 $ do
+        withPathOrientation path AlignOnMiddle 0 $ do
           printTextAt font 24 (V2 0 0) "TX"
           fill $ rectangle (V2 (-10) (-10)) 30 20
           fill $ rectangle (V2 45 0) 10 20

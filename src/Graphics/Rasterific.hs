@@ -372,7 +372,7 @@ drawOrdersOfDrawing width height background drawing =
       final = orders <> go ctxt next rest
       images = go ctxt (fromF sub) []
 
-      drawer trans order = modify $ \lst -> finalOrder : lst
+      drawer trans _ order = modify $ \lst -> finalOrder : lst
         where
           toFinalPos = transform $ applyTransformation trans
           finalOrder =

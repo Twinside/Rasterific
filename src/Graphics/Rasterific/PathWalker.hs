@@ -97,7 +97,8 @@ currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
 
 -- | Callback function in charge to transform the DrawOrder
 -- given the transformation to place it on the path.
-type PathDrawer m px = Transformation -> DrawOrder px -> m ()
+type PathDrawer m px =
+    Transformation -> PlaneBound -> DrawOrder px -> m ()
 
 alignFor :: OrderAlignment -> Float -> Point -> Point
 alignFor AlignOnLeft _ p = p
@@ -140,7 +141,7 @@ drawOrdersOnPath drawer alignment baseline path =
           let imageTransform =
                   translate pos <> toNewXBase dir
                                 <> translate translation
-          lift $ drawer imageTransform img
+          lift $ drawer imageTransform bounds img
           advanceBy halfWidth
           go (Just endX) rest
 

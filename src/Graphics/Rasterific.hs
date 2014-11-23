@@ -46,7 +46,6 @@ module Graphics.Rasterific
     , withClipping
     , withTransformation
     , withPathOrientation
-    , OrderAlignment( .. )
     , stroke
     , dashedStroke
     , dashedStrokeWithOffset
@@ -177,7 +176,7 @@ withTransformation trans sub =
 -- > stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
 -- >     pathToPrimitives path
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >   withPathOrientation path AlignOnMiddle 0 $
+-- >   withPathOrientation path 0 $
 -- >     printTextAt font 24 (V2 0 0) "Text on path"
 --
 -- <<docimages/text_on_path.png>>
@@ -194,7 +193,7 @@ withTransformation trans sub =
 -- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
 -- >       pathToPrimitives path
 -- > 
--- > withPathOrientation path AlignOnMiddle 0 $ do
+-- > withPathOrientation path 0 $ do
 -- >   printTextAt font 24 (V2 0 0) "TX"
 -- >   fill $ rectangle (V2 (-10) (-10)) 30 20
 -- >   fill $ rectangle (V2 45 0) 10 20
@@ -204,12 +203,11 @@ withTransformation trans sub =
 -- <<docimages/geometry_on_path.png>>
 --
 withPathOrientation :: Path            -- ^ Path directing the orientation.
-                    -> OrderAlignment  -- ^ Alignment for sub drawing..
                     -> Float           -- ^ Basline Y axis position, used to align text properly.
                     -> Drawing px ()   -- ^ The sub drawings.
                     -> Drawing px ()
-withPathOrientation path align p sub =
-    liftF $ WithPathOrientation path align p sub ()
+withPathOrientation path p sub =
+    liftF $ WithPathOrientation path p sub ()
 
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
@@ -368,7 +366,7 @@ drawOrdersOfDrawing width height background drawing =
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
-    go ctxt (Free (WithPathOrientation path align base sub next)) rest = final where
+    go ctxt (Free (WithPathOrientation path base sub next)) rest = final where
       final = orders <> go ctxt next rest
       images = go ctxt (fromF sub) []
 
@@ -377,7 +375,7 @@ drawOrdersOfDrawing width height background drawing =
           toFinalPos = transform $ applyTransformation trans
           finalOrder =
             order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
-      orders = reverse $ execState (drawOrdersOnPath drawer align base path images) []
+      orders = reverse $ execState (drawOrdersOnPath drawer base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
       trans'

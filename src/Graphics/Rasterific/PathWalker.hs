@@ -31,7 +31,6 @@ import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.Command
 
 -- | The walking transformer monad.
 newtype PathWalkerT m a = PathWalkerT (StateT WalkerState m a)
@@ -100,22 +99,16 @@ currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
 type PathDrawer m px =
     Transformation -> PlaneBound -> DrawOrder px -> m ()
 
-alignFor :: OrderAlignment -> Float -> Point -> Point
-alignFor AlignOnLeft _ p = p
-alignFor AlignOnMiddle halfWidth p =
-    V2 (negate halfWidth) 0 ^+^ p
-
 -- | This function is the workhorse of the placement, it will
 -- walk the path and calculate the appropriate transformation
 -- for every order.
 drawOrdersOnPath :: Monad m
                  => PathDrawer m px  -- ^ Function handling the placement of the order.
-                 -> OrderAlignment   -- ^ How to align the order
                  -> Float            -- ^ Baseline vertical position in the orders.
                  -> Path             -- ^ Path on which to place the orders.
                  -> [DrawOrder px]   -- ^ Orders to place on a path.
                  -> m ()
-drawOrdersOnPath drawer alignment baseline path =
+drawOrdersOnPath drawer baseline path =
         runPathWalking path . go Nothing where
   go _ [] = return ()
   go prevX (img : rest) = do
@@ -127,8 +120,7 @@ drawOrdersOnPath drawer alignment baseline path =
         V2 endX _ = _planeMaxBound bounds
         halfWidth = width / 2
         spaceWidth = abs $ startX - cx
-        translation = alignFor alignment halfWidth
-                    $ V2 (negate startX) (- baseline)
+        translation = V2 (negate startX - halfWidth) (- baseline)
 
     if bounds == mempty then go prevX rest
     else do

@@ -4,6 +4,7 @@ module Graphics.Rasterific.StrokeInternal
     , strokize
     , dashedStrokize
     , splitPrimitiveUntil
+    , approximatePathLength
     )  where
 
 import Control.Applicative( (<$>), pure )
@@ -117,7 +118,7 @@ lineFromTo a b = LinePrim (Line a b)
 miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
-  | uDotW > l / max 1 l && uDotW > 0.001 =
+  | uDotW > l / max 1 l && uDotW > 0.01 =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c

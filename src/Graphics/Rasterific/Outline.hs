@@ -4,6 +4,7 @@ module Graphics.Rasterific.Outline
     ( StrokeWidth
     , strokize
     , S.dashedStrokize 
+    , S.approximatePathLength
     ) where
 
 import Graphics.Rasterific.Types

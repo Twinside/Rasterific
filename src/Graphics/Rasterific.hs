@@ -375,7 +375,7 @@ drawOrdersOfDrawing width height background drawing =
           toFinalPos = transform $ applyTransformation trans
           finalOrder =
             order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
-      orders = reverse $ execState (drawOrdersOnPath drawer base path images) []
+      orders = reverse $ execState (drawOrdersOnPath drawer 0 base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
       trans'

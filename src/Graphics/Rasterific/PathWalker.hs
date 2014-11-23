@@ -104,12 +104,13 @@ type PathDrawer m px =
 -- for every order.
 drawOrdersOnPath :: Monad m
                  => PathDrawer m px  -- ^ Function handling the placement of the order.
+                 -> Float            -- ^ Starting offset
                  -> Float            -- ^ Baseline vertical position in the orders.
                  -> Path             -- ^ Path on which to place the orders.
                  -> [DrawOrder px]   -- ^ Orders to place on a path.
                  -> m ()
-drawOrdersOnPath drawer baseline path =
-        runPathWalking path . go Nothing where
+drawOrdersOnPath drawer startOffset baseline path orders =
+    runPathWalking path $ advanceBy startOffset >> go Nothing orders where
   go _ [] = return ()
   go prevX (img : rest) = do
     let bounds =

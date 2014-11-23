@@ -239,6 +239,15 @@ linearizePrimitives :: [Primitive] -> [Primitive]
 linearizePrimitives =
   listOfContainer . foldMap flattenPrimitive . foldMap sanitize
 
+-- | Return an approximation of the length of a given path.
+-- It's results is not precise but should be enough for
+-- rough calculations
+approximatePathLength :: Path -> Float
+approximatePathLength = approximatePrimitivesLength . pathToPrimitives
+
+approximatePrimitivesLength :: [Primitive] -> Float
+approximatePrimitivesLength prims =
+  sum $ approximateLength <$> linearizePrimitives prims
 
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
 dashize offset pattern = taker infinitePattern . linearizePrimitives 

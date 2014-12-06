@@ -42,6 +42,7 @@ infixl 7 ^*, ^/
 data V2 a = V2 !a !a
     deriving (Eq, Show)
 
+-- | A 1-dimensional vector
 newtype V1 a = V1 a
     deriving (Eq, Show)
 

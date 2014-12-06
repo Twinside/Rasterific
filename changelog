@@ -1,44 +1,68 @@
 -*-change-log-*-
 
-v0.3 2014
- * Switching main free monad type to the church encoded one.
- * Optimized the bezier decomposition, strictness annotations
+v0.4 2014
+ * Breaking change: Changed the original position scheme for
+   text, allowing to specify baseline or upper left corner
+
+ * Tried: Fast forward differencing for cubic bezier, not worth
+   the hassle
+ * Enhancement: Further optimized decomposition of all primitives,
+   less alocated memory.
+ * Enhancement: After optimizing pixel writing, optimized pixel
+   reading, yielding non-negligeable speed improvements.
+ * Added: an "immediate" module to avoid constructing
+   a scene tree.
+ * Enhancement: Allowing both IO & (ST s) as drawing monads, enabling
+   interleaved drawing with io operations.
+ * Added: a "withPathOrientation" function to orient primitives
+   on a path (allow to draw curved text)
+ * Added: toNewXBase transformation to create a new basis given
+   a X axis vector.
+ * Added: a PathWalker module, to give access to the lower level
+   path orientation facility.
+ * Added: some GHC rules for transformations
+ * Added: a new text function: 'printTextRanges' to allow
+   easier complex text rendering
+
+v0.3 June 2014
+ * Enhancement: Switching main free monad type to the church encoded one.
+ * Enhancement: Optimized the bezier decomposition, strictness annotations
    made wonders. May require forward differencing in the future.
- * Implementing specific decomposition for lines.
- * Reworked texture system, now allowing some specialized
+ * Enhancement: Implementing specific decomposition for lines.
+ * Enhancement: Reworked texture system, now allowing some specialized
    filler (hoping faster computation). For now only the
    solid color has been optimized, and all the transformed
    textures.
- * Fixing space leak in combineEdgeSamples, avoiding many
-   allocations.
- * Adding bounding box calculation facility.
- * Exposing outline creation capability
- * Adding a skewX & skewY transformation function.
- * Fixing some numerical stability with the mitter join.
+ * Enhancement: Fixing space leak in combineEdgeSamples, avoiding
+   many allocations.
+ * Adding: bounding box calculation facility.
+ * Adding: Exposing outline creation capability
+ * Adding: a skewX & skewY transformation function.
+ * Fixing: some numerical stability with the mitter join.
 
 v0.2.1 April 2014
- * Fixing transparency in gradients.
- * Fixing alpha composition on top of translucent
+ * Fixing: transparency in gradients.
+ * Fixing: alpha composition on top of translucent
    background.
 
 v0.2 April 2014
- * Adding an ellipse helper.
- * Adding a polyline helper.
- * Adding a polygon helper.
- * Adding monoid instance for Drawing.
- * Fixing some stroking bug with cubic bezier curve.
- * Fixing some documentation snippets.
- * Adding a rounded rectangle helper.
- * Added a even-odd filling rule.
- * Added an offset for dashed stroking.
- * Added a transformation module.
- * Changed the Transformable typeclass, splitted
+ * Adding: an ellipse helper.
+ * Adding: a polyline helper.
+ * Adding: a polygon helper.
+ * Adding: monoid instance for Drawing.
+ * Fixing: some stroking bug with cubic bezier curve.
+ * Fixing: some documentation snippets.
+ * Adding: a rounded rectangle helper.
+ * Added: a even-odd filling rule.
+ * Added: an offset for dashed stroking.
+ * Added: a transformation module.
+ * Change: Changed the Transformable typeclass, splitted
    it in two.
- * Added a dumping function for the constructed
+ * Added: a dumping function for the constructed
    drawing.
- * Adding an image texture with bilinear filtering.
- * Adding an image helper.
- * Made some modest performance enhancements.
+ * Adding: an image texture with bilinear filtering.
+ * Adding: an image helper.
+ * Enhancement: Some modest performance gain.
 
 v0.1 February 2014
  * Initial version.

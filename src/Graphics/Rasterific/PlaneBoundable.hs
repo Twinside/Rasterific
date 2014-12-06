@@ -3,7 +3,11 @@
 -- | Module implementing types used for geometry
 -- bound calculations.
 module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
-                                          , PlaneBoundable( .. ) ) where
+                                          , PlaneBoundable( .. )
+                                          , boundWidth
+                                          , boundHeight
+                                          , boundLowerLeftCorner
+                                          ) where
 
 import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( Monoid( .. ), (<>) )
@@ -26,6 +30,19 @@ data PlaneBound = PlaneBound
     , _planeMaxBound :: !Point
     }
     deriving (Eq, Show)
+
+-- | Extract the width of the bounds
+boundWidth :: PlaneBound -> Float
+boundWidth (PlaneBound (V2 x0 _) (V2 x1 _)) = x1 - x0
+
+-- | Extract the height of the bound
+boundHeight :: PlaneBound -> Float
+boundHeight (PlaneBound (V2 _ y0) (V2 _ y1)) = y1 - y0
+
+-- | Extract the position of the lower left corner of the
+-- bounds.
+boundLowerLeftCorner :: PlaneBound -> Point
+boundLowerLeftCorner (PlaneBound (V2 x _) (V2 _ y)) = V2 x y
 
 instance Monoid PlaneBound where
   mempty = PlaneBound infPoint negInfPoint

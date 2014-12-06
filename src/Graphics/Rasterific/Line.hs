@@ -11,11 +11,10 @@ module Graphics.Rasterific.Line
     , offsetLine
     ) where
 
-import Control.Applicative( (<$>), (<*>), pure )
+import Control.Applicative( (<$>), pure )
 import Data.Monoid( (<>), mempty )
 import Graphics.Rasterific.Linear
-             ( V1( .. )
-             , V2( .. )
+             ( V2( .. )
              , (^-^)
              , (^+^)
              , (^*)
@@ -91,7 +90,7 @@ clipLine mini maxi poly@(Line a b)
 
         -- A X-----X-----X B
         --        AB
-        ab = (a `midPoint` b)
+        ab = a `midPoint` b
 
         --  mini
         --     +-------------+
@@ -117,33 +116,42 @@ clipLine mini maxi poly@(Line a b)
 
 -- TODO: implement better algorithm for lines, should
 -- be doable.
-decomposeLine :: Line -> Container EdgeSample
-decomposeLine (Line aRoot bRoot) = go aRoot bRoot where
-  go !a@(V2 ax ay) !b@(V2 bx by)
-    | insideX && insideY = pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
+decomposeLine :: Line -> Producer EdgeSample
+decomposeLine (Line (V2 aRx aRy) (V2 bRx bRy)) = go aRx aRy bRx bRy where
+  go !ax !ay !bx !by cont
+    | insideX && insideY =
+      let !px = fromIntegral $ min floorAx floorBx
+          !py = fromIntegral $ min floorAy floorBy
+          !w = px + 1 - (bx `middle` ax)
+          !h = by - ay
+      in
+      EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
       where
-        !floorA = vfloor a
-        !floorB = vfloor b
-        !(V2 insideX insideY) =
-            floorA ^==^ floorB ^||^ vceil a ^==^ vceil b
+        floorAx, floorAy :: Int
+        !floorAx = floor ax
+        !floorAy = floor ay
 
-        !(V2 px py)  = fromIntegral <$> vmin floorA floorB
-        !(V1 w) = (px + 1 -) <$>  (V1 bx `midPoint` V1 ax)
-        !h = by - ay
+        !floorBx = floor bx
+        !floorBy = floor by
 
-  go a b = go a m <> go m b
+        !insideX = floorAx == floorBx || ceiling ax == (ceiling bx :: Int)
+        !insideY = floorAy == floorBy || ceiling ay == (ceiling by :: Int)
+
+
+  go !ax !ay !bx !by cont = go ax ay mx my $ go mx my bx by cont
     where
-      !ab = a `midPoint` b
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
 
-      !mini = fromIntegral <$> vfloor ab
-      !maxi = fromIntegral <$> vceil ab
-      !nearmin = vabs (ab ^-^ mini) ^< 0.1
-      !nearmax = vabs (ab ^-^ maxi) ^< 0.1
+      !mx | abs (abx - mini) < 0.1 = mini
+          | abs (abx - maxi) < 0.1 = maxi
+          | otherwise = abx
+         where !mini = fromIntegral (floor abx :: Int)
+               !maxi = fromIntegral (ceiling abx :: Int)
 
-      minMaxing mi nearmi ma nearma p
-        | nearmi = mi
-        | nearma = ma
-        | otherwise = p
-
-      !m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax <*> ab
+      !my | abs (aby - mini) < 0.1 = mini
+          | abs (aby - maxi) < 0.1 = maxi
+          | otherwise = aby
+         where !mini = fromIntegral (floor aby :: Int)
+               !maxi = fromIntegral (ceiling aby :: Int)
 

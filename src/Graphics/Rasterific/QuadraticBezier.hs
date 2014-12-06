@@ -16,10 +16,9 @@ module Graphics.Rasterific.QuadraticBezier
     , bezierLengthApproximation
     ) where
 
-import Control.Applicative( (<$>), (<*>), pure )
+import Control.Applicative( pure )
 import Graphics.Rasterific.Linear
              ( V2( .. )
-             , V1( .. )
              , (^-^)
              , (^+^)
              , (^*)
@@ -48,37 +47,53 @@ bezierLengthApproximation :: Bezier -> Float
 bezierLengthApproximation (Bezier a _ c) =
     norm $ c ^-^ a
 
-decomposeBeziers :: Bezier -> Container EdgeSample
-decomposeBeziers (Bezier aRoot bRoot cRoot) = go aRoot bRoot cRoot where
-  go !a@(V2 ax ay) !_ !c@(V2 cx cy)
-    | insideX && insideY = pure $ EdgeSample (px + 0.5) (py + 0.5) (w * h) h
+decomposeBeziers :: Bezier -> Producer EdgeSample
+decomposeBeziers (Bezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy)) =
+    go aRx aRy bRx bRy cRx cRy where
+  go ax ay _bx _by cx cy cont
+    | insideX && insideY =
+      let !px = fromIntegral $ min floorAx floorCx
+          !py = fromIntegral $ min floorAy floorCy
+          !w = px + 1 - cx `middle` ax
+          !h = cy - ay
+      in
+      EdgeSample (px + 0.5) (py + 0.5) (w * h) h : cont
       where
-        !floorA = vfloor a
-        !floorC = vfloor c
-        !(V2 insideX insideY) =
-            floorA ^==^ floorC ^||^ vceil a ^==^ vceil c
+        floorAx, floorAy :: Int
+        !floorAx = floor ax
+        !floorAy = floor ay
 
-        !(V2 px py)  = fromIntegral <$> vmin floorA floorC
-        !(V1 w) = (px + 1 -) <$>  (V1 cx `midPoint` V1 ax)
-        !h = cy - ay
+        !floorCx = floor cx
+        !floorCy = floor cy
 
-  go a b c = go a ab m <> go m bc c
+        !insideX = floorAx == floorCx || ceiling ax == (ceiling cx :: Int)
+        !insideY = floorAy == floorCy || ceiling ay == (ceiling cy :: Int)
+
+
+  go !ax !ay !bx !by !cx !cy cont =
+      go ax ay abx aby mx my $ go mx my bcx bcy cx cy cont
     where
-      !ab = a `midPoint` b
-      !bc = b `midPoint` c
-      !abbc = ab `midPoint` bc
+      !abx = ax `middle` bx
+      !aby = ay `middle` by
 
-      !mini = fromIntegral <$> vfloor abbc
-      !maxi = fromIntegral <$> vceil abbc
-      !nearmin = vabs (abbc ^-^ mini) ^< 0.1
-      !nearmax = vabs (abbc ^-^ maxi) ^< 0.1
+      !bcx = bx `middle` cx
+      !bcy = by `middle` cy
 
-      minMaxing mi nearmi ma nearma p
-        | nearmi = mi
-        | nearma = ma
-        | otherwise = p
+      !abbcx = abx `middle` bcx
+      !abbcy = aby `middle` bcy
 
-      !m = minMaxing <$> mini <*> nearmin <*> maxi <*> nearmax <*> abbc
+      !mx | abs (abbcx - mini) < 0.1 = mini
+          | abs (abbcx - maxi) < 0.1 = maxi
+          | otherwise = abbcx
+         where !mini = fromIntegral (floor abbcx :: Int)
+               !maxi = fromIntegral (ceiling abbcx :: Int)
+
+      !my | abs (abbcy - mini) < 0.1 = mini
+          | abs (abbcy - maxi) < 0.1 = maxi
+          | otherwise = abbcy
+         where !mini = fromIntegral (floor abbcy :: Int)
+               !maxi = fromIntegral (ceiling abbcy :: Int)
+
 
 -- | Create a quadratic bezier curve representing
 -- a straight line.
@@ -129,9 +144,7 @@ clipBezier mini maxi bezier@(Bezier a b c)
         --    /         \
         -- A X           X C
         --
-        ab = a `midPoint` b
-        bc = b `midPoint` c
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
         --  mini
         --     +-------------+
@@ -197,6 +210,23 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     bc = lerp t b c
     abbc = lerp t ab bc
 
+splitBezier :: Bezier -> (Point, Point, Point)
+{-# INLINE splitBezier #-}
+splitBezier (Bezier a b c) = (ab, bc, abbc)
+  where
+    --
+    --         X B
+    --        / \
+    --       /   \
+    --   ab X--X--X bc
+    --     / abbc  \
+    --    /         \
+    -- A X           X C
+    --
+    ab = a `midPoint` b
+    bc = b `midPoint` c
+    abbc = ab `midPoint` bc
+
 flattenBezier :: Bezier -> Container Primitive
 flattenBezier bezier@(Bezier a b c)
     -- If the spline is not too curvy, just return the
@@ -219,13 +249,11 @@ flattenBezier bezier@(Bezier a b c)
         u = a `normal` b
         v = b `normal` c
 
-        ab = (a `midPoint` b)
-        bc = (b `midPoint` c)
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
 -- | Move the bezier to a new position with an offset.
 offsetBezier :: Float -> Bezier -> Container Primitive
-offsetBezier offset (Bezier a b c)
+offsetBezier offset bezier@(Bezier a b c)
     -- If the spline is not too curvy, just return the
     -- shifted component
     | u `dot` v >= 0.9 =
@@ -248,9 +276,7 @@ offsetBezier offset (Bezier a b c)
         v = b `normal` c
         w = ab `normal` bc
 
-        ab = (a `midPoint` b)
-        bc = (b `midPoint` c)
-        abbc = ab `midPoint` bc
+        (ab, bc, abbc) = splitBezier bezier
 
         shiftedA = a ^+^ (u ^* offset)
         shiftedC = c ^+^ (v ^* offset)

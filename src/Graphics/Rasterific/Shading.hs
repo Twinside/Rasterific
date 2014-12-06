@@ -11,6 +11,10 @@ module Graphics.Rasterific.Shading
     , dumpTexture
     ) where
 
+import Control.Monad.Primitive( PrimState
+                              -- one day (GHC >= 7.10 ?)
+                              {-, PrimMonad-}
+                              )
 import Data.Fixed( mod' )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific.Linear
@@ -21,6 +25,7 @@ import Graphics.Rasterific.Linear
              , norm
              )
 
+
 import Control.Monad.ST( ST )
 import qualified Data.Vector as V
 
@@ -29,7 +34,11 @@ import Codec.Picture.Types( Pixel( .. )
                           , MutableImage( .. )
                           , Pixel8
                           , PixelRGBA8
+                          , unsafeWritePixelBetweenAt
+                          , readPackedPixelAt
+                          , writePackedPixelAt
                           )
+
 import Graphics.Rasterific.Types( Point
                                 , Vector
                                 , Line( .. )
@@ -90,18 +99,20 @@ data TextureSpaceInfo = TextureSpaceInfo
     }
     deriving (Eq, Show)
 
-type CoverageFiller s px =
-    MutableImage s px -> CoverageSpan -> ST s ()
+type CoverageFiller m px =
+    MutableImage (PrimState m) px -> CoverageSpan -> m ()
 
-type Filler s =
-    TextureSpaceInfo -> ST s ()
+type Filler m =
+    TextureSpaceInfo -> m ()
 
-solidColor :: forall s px . ModulablePixel px
-           => px -> MutableImage s px -> Filler s
+-- | Right now, we must stick to ST, due to the fact that
+-- we can't specialize with parameterized monad :(
+solidColor :: forall s px . (ModulablePixel px)
+           => px -> MutableImage s px -> Filler (ST s)
 {-# SPECIALIZE solidColor :: PixelRGBA8 -> MutableImage s PixelRGBA8
-                          -> Filler s #-}
+                          -> TextureSpaceInfo -> ST s () #-}
 {-# SPECIALIZE solidColor :: Pixel8 -> MutableImage s Pixel8
-                          -> Filler s #-}
+                          -> TextureSpaceInfo -> ST s () #-}
 solidColor color _ tsInfo
     | pixelOpacity color == emptyValue || _tsCoverage tsInfo <= 0 =
         return ()
@@ -109,17 +120,11 @@ solidColor color img tsInfo
     -- We are in the case fully opaque, so we can
     -- just overwrite what was there before
     | pixelOpacity color == fullOpacity && _tsCoverage tsInfo >= 1 =
-        go 0 $ _tsBaseIndex tsInfo
+        unsafeWritePixelBetweenAt img color (_tsBaseIndex tsInfo) maxi
+        {-go 0 $ _tsBaseIndex tsInfo-}
   where
     !fullOpacity = fullValue :: PixelBaseComponent px
     !maxi = _tsRepeat tsInfo
-    !compCount = componentCount (undefined :: px)
-    !vectorData = mutableImageData img
-
-    go count _ | count >= maxi = return ()
-    go count writeIndex = do
-      (vectorData `unsafeWritePixel` writeIndex) color
-      go (count + 1) $ writeIndex + compCount
 
 -- We can be transparent, so perform alpha blending.
 solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
@@ -128,42 +133,40 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
     !(scanCoverage,_) = clampCoverage $_tsCoverage tsInfo
     !(cov, icov) = coverageModulate scanCoverage opacity
     !maxi = _tsRepeat tsInfo
-    !imgData = mutableImageData img
     !compCount = componentCount (undefined :: px)
 
     go count  _ | count >= maxi = return ()
     go !count !idx = do
-      oldPixel <- unsafeReadPixel imgData idx
-      unsafeWritePixel imgData idx
+      oldPixel <- readPackedPixelAt img idx
+      writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
 
-shaderFiller :: forall s px . ModulablePixel px
+shaderFiller :: forall s px . (ModulablePixel px)
              => ShaderFunction px -> MutableImage s px
-             -> Filler s
+             -> Filler (ST s)
 {-# SPECIALIZE shaderFiller :: ShaderFunction PixelRGBA8
                             -> MutableImage s PixelRGBA8
-                            -> Filler s #-}
+                            -> Filler (ST s) #-}
 {-# SPECIALIZE shaderFiller :: ShaderFunction Pixel8
                             -> MutableImage s Pixel8
-                            -> Filler s #-}
+                            -> Filler (ST s) #-}
 shaderFiller shader img tsInfo =
     go 0 (_tsBaseIndex tsInfo) xStart yStart
   where
     !(scanCoverage,_) = clampCoverage $_tsCoverage tsInfo
     !maxi = _tsRepeat tsInfo
-    !imgData = mutableImageData img
     !compCount = componentCount (undefined :: px)
-    !(V2 xStart yStart) = _tsStart tsInfo
-    !(V2 dx dy) = _tsDelta tsInfo
+    (V2 xStart yStart) = _tsStart tsInfo
+    (V2 dx dy) = _tsDelta tsInfo
 
     go count  _ _ _ | count >= maxi = return ()
     go !count !idx !x !y = do
       let !color = shader x y
           !opacity = pixelOpacity color
           (cov, icov) = coverageModulate scanCoverage opacity
-      oldPixel <- unsafeReadPixel imgData idx
-      unsafeWritePixel imgData idx
+      oldPixel <- readPackedPixelAt img idx
+      writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) (idx + compCount) (x + dx) (y + dy)
 
@@ -213,6 +216,12 @@ withTrans (Just v) shader = \x y ->
 shaderOfTexture :: forall px . RenderablePixel px
                 => Maybe Transformation -> SamplerRepeat -> Texture px
                 -> ShaderFunction px
+{-# SPECIALIZE
+    shaderOfTexture :: Maybe Transformation -> SamplerRepeat -> Texture PixelRGBA8
+                    -> ShaderFunction PixelRGBA8 #-}
+{-# SPECIALIZE
+    shaderOfTexture :: Maybe Transformation -> SamplerRepeat -> Texture Pixel8
+                    -> ShaderFunction Pixel8 #-}
 shaderOfTexture _ _ (SolidTexture px) = \_ _ -> px
 shaderOfTexture trans sampling (LinearGradientTexture grad (Line a b)) =
   withTrans trans $ linearGradientShader grad a b sampling
@@ -241,11 +250,9 @@ shaderOfTexture trans sampling (ModulateTexture texture modulation) =
 -- | This function will interpret the texture description, helping
 -- prepare and optimize the real calculation
 transformTextureToFiller
-    :: RenderablePixel px
-    => Texture px -> CoverageFiller s px
-{-# SPECIALIZE transformTextureToFiller
-        :: Texture PixelRGBA8 -> CoverageFiller s PixelRGBA8 #-}
-transformTextureToFiller texture = go Nothing SamplerPad texture
+    :: (RenderablePixel px)
+    => Texture px -> CoverageFiller (ST s) px
+transformTextureToFiller = go Nothing SamplerPad
   where
     go _ _ (SolidTexture px) =
         \img -> solidColor px img . prepareInfoNoTransform img
@@ -279,6 +286,8 @@ gradientColorAt :: ModulablePixel px
                 => GradientArray px -> Float -> px
 {-# SPECIALIZE
  	gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
+{-# SPECIALIZE
+ 	gradientColorAt :: GradientArray Pixel8 -> Float -> Pixel8 #-}
 gradientColorAt grad at
     | at <= 0 = snd $ V.head grad
     | at >= 1.0 = snd $ V.last grad
@@ -298,6 +307,9 @@ gradientColorAtRepeat :: ModulablePixel px
 {-# SPECIALIZE INLINE
 	gradientColorAtRepeat ::
 		SamplerRepeat -> GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
+{-# SPECIALIZE INLINE
+	gradientColorAtRepeat ::
+		SamplerRepeat -> GradientArray Pixel8 -> Float -> Pixel8 #-}
 gradientColorAtRepeat SamplerPad grad = gradientColorAt grad
 gradientColorAtRepeat SamplerRepeat grad =
     gradientColorAt grad . repeatGradient
@@ -310,8 +322,14 @@ linearGradientShader :: ModulablePixel px
                      -> Point       -- ^ Linear gradient end point.
                      -> SamplerRepeat
                      -> ShaderFunction px
+{-# SPECIALIZE linearGradientShader
+                     :: Gradient PixelRGBA8 -> Point -> Point -> SamplerRepeat
+                     -> ShaderFunction PixelRGBA8 #-}
+{-# SPECIALIZE linearGradientShader
+                     :: Gradient Pixel8 -> Point -> Point -> SamplerRepeat
+                     -> ShaderFunction Pixel8 #-}
 linearGradientShader gradient start end repeating =
-    \x y -> colorAt $ ((V2 x y) `dot` d) - s00
+    \x y -> colorAt $ (V2 x y `dot` d) - s00
   where
     colorAt = gradientColorAtRepeat repeating gradArray
     gradArray = V.fromList gradient
@@ -395,8 +413,16 @@ radialGradientShader :: ModulablePixel px
                      -> Float       -- ^ Radial gradient radius
                      -> SamplerRepeat
                      -> ShaderFunction px
+{-# SPECIALIZE 
+    radialGradientShader
+       :: Gradient PixelRGBA8 -> Point -> Float -> SamplerRepeat
+       -> ShaderFunction PixelRGBA8 #-}
+{-# SPECIALIZE 
+    radialGradientShader
+       :: Gradient Pixel8 -> Point -> Float -> SamplerRepeat
+       -> ShaderFunction Pixel8 #-}
 radialGradientShader gradient center radius repeating =
-    \x y -> colorAt $ norm ((V2 x y) ^-^ center) / radius
+    \x y -> colorAt $ norm (V2 x y ^-^ center) / radius
   where
     !colorAt = gradientColorAtRepeat repeating gradArray
     !gradArray = V.fromList gradient
@@ -409,8 +435,16 @@ radialGradientWithFocusShader
     -> Point      -- ^ Radial gradient focus point
     -> SamplerRepeat
     -> ShaderFunction px
+{-# SPECIALIZE
+    radialGradientWithFocusShader
+        :: Gradient PixelRGBA8 -> Point -> Float -> Point
+        -> SamplerRepeat -> ShaderFunction PixelRGBA8 #-}
+{-# SPECIALIZE
+    radialGradientWithFocusShader
+        :: Gradient Pixel8 -> Point -> Float -> Point
+        -> SamplerRepeat -> ShaderFunction Pixel8 #-}
 radialGradientWithFocusShader gradient center radius focusScreen repeating =
-    \x y -> colorAt . go $ (V2 x y) ^-^ center
+    \x y -> colorAt . go $ V2 x y ^-^ center
   where
     focus@(V2 origFocusX origFocusY) = focusScreen ^-^ center
     colorAt = gradientColorAtRepeat repeating gradArray
@@ -450,6 +484,7 @@ modulateTexture :: ModulablePixel px
                 => ShaderFunction px
                 -> ShaderFunction (PixelBaseComponent px)
                 -> ShaderFunction px
-modulateTexture fullTexture modulator = \x y ->
+{-# INLINE modulateTexture #-}
+modulateTexture fullTexture modulator x y =
     colorMap (modulate $ modulator x y) $ fullTexture x y
 

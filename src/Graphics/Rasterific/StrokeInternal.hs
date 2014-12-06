@@ -3,6 +3,8 @@ module Graphics.Rasterific.StrokeInternal
     , dashize
     , strokize
     , dashedStrokize
+    , splitPrimitiveUntil
+    , approximatePathLength
     )  where
 
 import Control.Applicative( (<$>), pure )
@@ -38,11 +40,11 @@ firstPointAndNormal (BezierPrim (Bezier a b _)) = (a, a `normal` b)
 firstPointAndNormal (CubicBezierPrim (CubicBezier a b _ _)) = (a, a `normal` b)
 
 reversePrimitive :: Primitive -> Primitive
-reversePrimitive (LinePrim (Line a b)) = (LinePrim (Line b a))
+reversePrimitive (LinePrim (Line a b)) = LinePrim (Line b a)
 reversePrimitive (BezierPrim (Bezier a b c)) =
-    (BezierPrim (Bezier c b a))
+    BezierPrim (Bezier c b a)
 reversePrimitive (CubicBezierPrim (CubicBezier a b c d)) =
-    (CubicBezierPrim (CubicBezier d c b a))
+    CubicBezierPrim (CubicBezier d c b a)
 
 -- | Create a "rounded" join or cap
 roundJoin :: Float -> Point -> Vector -> Vector -> Container Primitive
@@ -116,7 +118,7 @@ lineFromTo a b = LinePrim (Line a b)
 miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
-  | uDotW > l / max 1 l && uDotW > 0.001 =
+  | uDotW > l / max 1 l && uDotW > 0.01 =
       pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
@@ -186,7 +188,7 @@ strokize width join (capStart, capEnd) beziers =
     offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
   where 
-        sanitized = foldMap (listOfContainer . sanitize) $ beziers
+        sanitized = foldMap (listOfContainer . sanitize) beziers
         offseter = offsetAndJoin (width / 2) join
 
 flattenPrimitive :: Primitive -> Container Primitive
@@ -207,7 +209,7 @@ flatten :: Container Primitive -> Container Primitive
 flatten = foldMap flattenPrimitive
 
 splitPrimitiveUntil :: Float -> [Primitive] -> ([Primitive], [Primitive])
-splitPrimitiveUntil at = go at
+splitPrimitiveUntil = go
   where
     go _ [] = ([], [])
     go left lst
@@ -227,15 +229,28 @@ dropPattern = go
   where
     go _ [] = []
     go offset (x:xs)
-        | x < 0 = (x:xs) -- sanitizing
+        | x < 0 = x:xs -- sanitizing
         | offset < x = x - offset : xs
         | otherwise {- offset >= x -} = go (offset - x) xs
 
+-- | Don't make them completly flat, but suficiently
+-- to assume they are.
+linearizePrimitives :: [Primitive] -> [Primitive]
+linearizePrimitives =
+  listOfContainer . foldMap flattenPrimitive . foldMap sanitize
+
+-- | Return an approximation of the length of a given path.
+-- It's results is not precise but should be enough for
+-- rough calculations
+approximatePathLength :: Path -> Float
+approximatePathLength = approximatePrimitivesLength . pathToPrimitives
+
+approximatePrimitivesLength :: [Primitive] -> Float
+approximatePrimitivesLength prims =
+  sum $ approximateLength <$> linearizePrimitives prims
+
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
-dashize offset pattern =
-    taker infinitePattern . listOfContainer 
-                          . foldMap flattenPrimitive
-                          . foldMap sanitize
+dashize offset pattern = taker infinitePattern . linearizePrimitives 
   where
     realOffset | offset >= 0 = offset
                | otherwise = offset + sum pattern

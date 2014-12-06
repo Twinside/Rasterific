@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
@@ -12,9 +11,11 @@ module Graphics.Rasterific.Types
     , Bezier( .. )
     , CubicBezier( .. )
     , Primitive( .. )
+    , Producer
     , Container
     , containerOfList
     , listOfContainer
+    , containerOfFunction
     , PathCommand( .. )
     , Path( .. )
     , Transformable( .. )
@@ -36,6 +37,14 @@ module Graphics.Rasterific.Types
 import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable, foldl' )
 import Graphics.Rasterific.Linear( V2( .. ) )
+
+import Foreign.Ptr( castPtr )
+import Foreign.Storable( Storable( sizeOf
+                       , alignment
+                       , peek
+                       , poke
+                       , peekElemOff
+                       , pokeElemOff ) )
 
 -- | Represent a vector
 type Vector = V2 Float
@@ -156,6 +165,28 @@ data EdgeSample = EdgeSample
   }
   deriving Show
 
+-- | Just to get faster sorting
+instance Storable EdgeSample where
+   sizeOf _ = 4 * sizeOf (0 :: Float)
+   alignment = sizeOf
+
+   {-# INLINE peek #-}
+   peek ptr = do
+     let q = castPtr ptr
+     sx <- peekElemOff q 0
+     sy <- peekElemOff q 1
+     sa <- peekElemOff q 2
+     sh <- peekElemOff q 3
+     return $ EdgeSample sx sy sa sh
+      
+   {-# INLINE poke #-}
+   poke ptr (EdgeSample sx sy sa sh) = do
+     let q = castPtr ptr
+     pokeElemOff q 0 sx
+     pokeElemOff q 1 sy
+     pokeElemOff q 2 sa
+     pokeElemOff q 3 sh
+
 -- | This typeclass is there to help transform the geometry,
 -- by applying a transformation on every point of a geometric
 -- element.
@@ -173,11 +204,11 @@ class PointFoldable a where
 
 instance Transformable Point where
     {-# INLINE transform #-}
-    transform f p = f p
+    transform f = f
 
 instance PointFoldable Point where
     {-# INLINE foldPoints #-}
-    foldPoints f acc p = f acc p
+    foldPoints f = f
 
 -- | Describe a simple 2D line between two points.
 --
@@ -318,7 +349,12 @@ instance (Foldable f, PointFoldable a)
       => PointFoldable (f a) where
     foldPoints f = foldl' (foldPoints f)
 
+type Producer a = [a] -> [a]
+
 type Container a = DList a
+
+containerOfFunction :: ([a] -> [a]) -> Container a
+containerOfFunction f = fromList $ f []
 
 containerOfList :: [a] -> Container a
 containerOfList = fromList

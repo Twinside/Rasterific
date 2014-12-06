@@ -51,8 +51,8 @@ toPrimitives
      bottomLine@(CubicBezier p30 _31 _32 p33) _ _ _ _) =
     CubicBezierPrim <$> [
         topLine,
-        (CubicBezier p03 p13 p23 p33),
-        (CubicBezier p30 p20 p10 p00),
+        CubicBezier p03 p13 p23 p33,
+        CubicBezier p30 p20 p10 p00,
         bottomLine
     ]
 
@@ -65,12 +65,12 @@ transposePatch
         (CubicBezier p30 p31 p32 p33)
         w00 w01 w10 w11) =
 
-    (TensorPatchInternal
+    TensorPatchInternal
             (CubicBezier p00 p10 p20 p30)
             (CubicBezier p01 p11 p21 p31)
             (CubicBezier p02 p12 p22 p32)
             (CubicBezier p03 p13 p23 p33)
-            w00 w10 w01 w11)
+            w00 w10 w01 w11
 
 lerp :: Num a => a -> a -> a -> a
 lerp = undefined
@@ -97,7 +97,7 @@ splitTensorPatchInUDirection
                     middleBottom w11
 
 subdividePatch :: TensorPatchInternal -> Float -> Float -> TensorPatchSubdivision
-subdividePatch patch atU atV = mapSubdivision transposePatch $ TensorPatchSubdivision 
+subdividePatch patch atU atV = mapSubdivision transposePatch TensorPatchSubdivision 
     { _subdivTopLeft     = topLeft
     , _subdivTopRight    = topRight
     , _subdivBottomLeft  = bottomLeft
@@ -116,7 +116,7 @@ maxCoefficientDeviation TensorPatchInternal
     { _w00 = w00, _w01 = w01, _w10 = w10, _w11 = w11 } =
         max w00 . max w01 $ max w10 w11
 
-:: ModulablePixel px => (px, px, px, px) -> 
+{-a :: ModulablePixel px => (px, px, px, px) -> -}
 
 subdivideDraw :: Float -> Int -> TensorPatchInternal -> Drawing s px
 subdivideDraw maxCoeffcient maxDepth = go 0 where

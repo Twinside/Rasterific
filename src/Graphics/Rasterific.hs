@@ -4,7 +4,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
@@ -46,10 +45,13 @@ module Graphics.Rasterific
     , withTexture
     , withClipping
     , withTransformation
+    , withPathOrientation
     , stroke
     , dashedStroke
     , dashedStrokeWithOffset
     , printTextAt
+    , printTextRanges
+    , TextRange( .. )
 
       -- * Generating images
     , ModulablePixel
@@ -76,6 +78,9 @@ module Graphics.Rasterific
     , PointFoldable( .. )
     , PlaneBoundable( .. )
     , PlaneBound( .. )
+    , boundWidth
+    , boundHeight
+    , boundLowerLeftCorner
 
       -- * Helpers
     , line
@@ -100,32 +105,25 @@ module Graphics.Rasterific
     , SamplerRepeat( .. )
     , FillMethod( .. )
     , DashPattern
+    , drawOrdersOfDrawing
 
       -- * Debugging helper
     , dumpDrawing
 
     ) where
 
-import qualified Data.Foldable as F
 import Control.Applicative( (<$>) )
-import Control.Monad( forM_ )
 import Control.Monad.Free( Free( .. ), liftF )
-import Control.Monad.Free.Church( F, fromF )
-import Control.Monad.ST( ST, runST )
-import Control.Monad.State( StateT, execStateT, get, lift )
+import Control.Monad.Free.Church( fromF )
+import Control.Monad.ST( runST )
+import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Data.Monoid( Monoid( .. ), (<>) )
-import Codec.Picture.Types( Image( .. )
-                          , Pixel( .. )
-                          , Pixel8
-                          , PixelRGBA8
-                          , MutableImage( .. )
-                          , createMutableImage
-                          , unsafeFreezeImage )
+import Codec.Picture.Types( Image( .. ), Pixel( .. ) )
 
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^*) )
+import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading
@@ -136,104 +134,19 @@ import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.StrokeInternal
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
+import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.PathWalker
+import Graphics.Rasterific.Command
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font, PointSize, getStringCurveAtPoint )
+import Graphics.Text.TrueType( Font, getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
 
--- | Monad used to describe the drawing context.
-type DrawContext s px a =
-    StateT (MutableImage s px) (ST s) a
-
 ------------------------------------------------
 ----    Free Monad DSL section
 ------------------------------------------------
-
--- | Monad used to record the drawing actions.
-type Drawing px = F (DrawCommand px)
-
-data DrawCommand px next
-    = Fill FillMethod [Primitive] next
-    | Stroke Float Join (Cap, Cap) [Primitive] next
-    | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
-    | TextFill Font PointSize Point String next
-    | SetTexture (Texture px)
-                 (Drawing px ()) next
-    | WithCliping (forall innerPixel. Drawing innerPixel ())
-                  (Drawing px ()) next
-    | WithTransform Transformation (Drawing px ()) next
-
--- | This function will spit out drawing instructions to
--- help debugging.
---
--- The outputted code looks like Haskell, but there is no
--- guarantee that it is compilable.
-dumpDrawing :: ( Show px
-               , Show (PixelBaseComponent px)
-               , PixelBaseComponent (PixelBaseComponent px)
-                    ~ (PixelBaseComponent px)
-
-               ) => Drawing px () -> String
-dumpDrawing = go . fromF where
-  go ::
-        ( Show px
-        , Show (PixelBaseComponent px)
-        , PixelBaseComponent (PixelBaseComponent px)
-                    ~ (PixelBaseComponent px)
-
-        ) => Free (DrawCommand px) () -> String
-  go (Pure ()) = "return ()"
-  go (Free (Fill _ prims next)) =
-    "fill " ++ show prims ++ " >>=\n" ++   go next
-  go (Free (TextFill _ _ _ text next)) =
-    "-- Text : " ++ text ++ "\n" ++   go next
-  go (Free (SetTexture tx drawing next)) =
-    "withTexture (" ++ dumpTexture tx ++ ") (" ++
-              go (fromF drawing) ++ ") >>=\n" ++ go next
-  go (Free (DashedStroke o pat w j cap prims next)) =
-    "dashedStrokeWithOffset "
-              ++ show o ++ " "
-              ++ show pat ++ " "
-              ++ show w ++ " ("
-              ++ show j ++ ") "
-              ++ show cap ++ " "
-              ++ show prims ++ " >>=\n" ++   go next
-  go (Free (Stroke w j cap prims next)) =
-    "stroke " ++ show w ++ " ("
-              ++ show j ++ ") "
-              ++ show cap ++ " "
-              ++ show prims ++ " >>=\n" ++   go next
-  go (Free (WithTransform trans sub next)) =
-    "withTransform (" ++ show trans ++ ") ("
-                      ++ go (fromF sub) ++ ") >>=\n "
-                      ++ go next
-  go (Free (WithCliping clipping draw next)) =
-    "withClipping (" ++ go (fromF $ withTexture clipTexture clipping)
-                     ++ ")\n" ++
-        "         (" ++ go (fromF draw) ++ ")\n >>= " ++
-              go next
-        where clipTexture = uniformTexture (0xFF :: Pixel8)
-
-
-instance Functor (DrawCommand px) where
-    fmap f (TextFill font size pos str next) =
-        TextFill font size pos str $ f next
-    fmap f (Fill method  prims next) = Fill method prims $ f next
-    fmap f (SetTexture t sub next) = SetTexture t sub $ f next
-    fmap f (WithCliping sub com next) =
-        WithCliping sub com $ f next
-    fmap f (Stroke w j caps prims next) =
-        Stroke w j caps prims $ f next
-    fmap f (DashedStroke st pat w j caps prims next) =
-        DashedStroke st pat w j caps prims $ f next
-    fmap f (WithTransform trans draw next) =
-        WithTransform trans draw $ f next
-
-instance Monoid (Drawing px ()) where
-    mempty = return ()
-    mappend a b = a >> b
 
 -- | Define the texture applyied to all the children
 -- draw call.
@@ -254,6 +167,47 @@ withTexture texture subActions =
 withTransformation :: Transformation -> Drawing px () -> Drawing px ()
 withTransformation trans sub =
     liftF $ WithTransform trans sub ()
+
+-- | This command allows you to draw primitives on a given curve,
+-- for example, you can draw text on a curve:
+--
+-- > let path = Path (V2 100 180) False
+-- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)] in
+-- > stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+-- >     pathToPrimitives path
+-- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+-- >   withPathOrientation path 0 $
+-- >     printTextAt font 24 (V2 0 0) "Text on path"
+--
+-- <<docimages/text_on_path.png>>
+--
+-- You can note that the position of the baseline match the size of the
+-- characters.
+--
+-- You are not limited to text drawing while using this function,
+-- you can draw arbitrary geometry like in the following example:
+--
+-- > let path = Path (V2 100 180) False
+-- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
+-- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+-- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
+-- >       pathToPrimitives path
+-- > 
+-- > withPathOrientation path 0 $ do
+-- >   printTextAt font 24 (V2 0 0) "TX"
+-- >   fill $ rectangle (V2 (-10) (-10)) 30 20
+-- >   fill $ rectangle (V2 45 0) 10 20
+-- >   fill $ rectangle (V2 60 (-10)) 20 20
+-- >   fill $ rectangle (V2 100 (-15)) 20 50
+--
+-- <<docimages/geometry_on_path.png>>
+--
+withPathOrientation :: Path            -- ^ Path directing the orientation.
+                    -> Float           -- ^ Basline Y axis position, used to align text properly.
+                    -> Drawing px ()   -- ^ The sub drawings.
+                    -> Drawing px ()
+withPathOrientation path p sub =
+    liftF $ WithPathOrientation path p sub ()
 
 -- | Fill some geometry. The geometry should be "looping",
 -- ie. the last point of the last primitive should
@@ -326,19 +280,37 @@ stroke width join caping prims =
 -- >       writePng "text_example.png" .
 -- >           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
 -- >               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >                       printTextAt font 12 (V2 20 40) "A simple text test!"
+-- >                       printTextAt font 12 (V2 20 40)
+-- >                            "A simple text test!"
 --
 -- <<docimages/text_example.png>>
 --
 -- You can use any texture, like a gradient while rendering text.
 --
-printTextAt :: Font     -- ^ Drawing font
-            -> Int      -- ^ font Point size
-            -> Point    -- ^ Baseline begining position
-            -> String  -- ^ String to print
+printTextAt :: Font            -- ^ Drawing font
+            -> Int             -- ^ font Point size
+            -> Point           -- ^ Drawing starting point (base line)
+            -> String          -- ^ String to print
             -> Drawing px ()
 printTextAt font pointSize point string =
-    liftF $ TextFill font pointSize point string ()
+    liftF $ TextFill point [description] ()
+  where
+    description = TextRange
+        { _textFont    = font
+        , _textSize    = pointSize
+        , _text        = string
+        , _textTexture = Nothing
+        }
+
+-- | Print complex text, using different texture font and
+-- point size for different parts of the text.
+--
+-- <<docimages/text_complex_example.png>>
+--
+printTextRanges :: Point            -- ^ Starting point of the base line
+                -> [TextRange px]   -- ^ Ranges description to be printed
+                -> Drawing px ()
+printTextRanges point ranges = liftF $ TextFill point ranges ()
 
 data RenderContext px = RenderContext
     { currentClip           :: Maybe (Texture (PixelBaseComponent px))
@@ -356,16 +328,25 @@ renderDrawing
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderDrawing width height background drawing = runST $
-  createMutableImage width height background
-        >>= execStateT (go initialContext $ fromF drawing)
-        >>= unsafeFreezeImage
+renderDrawing width height background drawing =
+    runST $ runDrawContext width height background
+          $ mapM_ fillOrder
+          $ drawOrdersOfDrawing width height background drawing
+
+-- | Transform a drawing into a serie of low-level drawing orders.
+drawOrdersOfDrawing
+    :: forall px . (RenderablePixel px) 
+    => Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> px  -- ^ Background color
+    -> Drawing px () -- ^ Rendering action
+    -> [DrawOrder px]
+drawOrdersOfDrawing width height background drawing =
+    go initialContext (fromF drawing) []
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
     clipBackground = emptyValue :: PixelBaseComponent px
     clipForeground = fullValue :: PixelBaseComponent px
-    stupidDefaultTexture =
-        uniformTexture $ colorMap (const clipBackground) background
 
     clipRender =
       renderDrawing width height clipBackground
@@ -379,48 +360,74 @@ renderDrawing width height background drawing = runST $
         transform (applyTransformation trans)
     geometryOf _ = id
 
-    go :: RenderContext px
-       -> Free (DrawCommand px) ()
-       -> DrawContext s px ()
-    go _ (Pure ()) = return ()
-    go ctxt (Free (WithTransform trans sub next)) = do
-        let trans'
-              | Just (t, _) <- currentTransformation ctxt = t <> trans
-              | otherwise = trans
-            invTrans = 
-                fromMaybe mempty $ inverseTransformation trans'
-        go ctxt { currentTransformation =
-                        Just (trans', invTrans) } $ fromF sub
-        go ctxt next
-    go ctxt@RenderContext { currentClip = Nothing }
-       (Free (Fill method prims next)) = do
-        fillWithTexture method (textureOf ctxt) $ geometryOf ctxt prims
-        go ctxt next
-    go ctxt@RenderContext { currentClip = Just moduler }
-       (Free (Fill method prims next)) = do
-        fillWithTextureAndMask method (textureOf ctxt)
-            moduler $ geometryOf ctxt prims
-        go ctxt next
+    stupidDefaultTexture =
+        uniformTexture $ colorMap (const clipBackground) background
 
-    go ctxt (Free (Stroke w j cap prims next)) =
-        go ctxt . Free $ Fill FillWinding prim' next
+    go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
+       -> [DrawOrder px]
+    go _ (Pure ()) rest = rest
+    go ctxt (Free (WithPathOrientation path base sub next)) rest = final where
+      final = orders <> go ctxt next rest
+      images = go ctxt (fromF sub) []
+
+      drawer trans _ order = modify $ \lst -> finalOrder : lst
+        where
+          toFinalPos = transform $ applyTransformation trans
+          finalOrder =
+            order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
+      orders = reverse $ execState (drawOrdersOnPath drawer 0 base path images) []
+
+    go ctxt (Free (WithTransform trans sub next)) rest = final where
+      trans'
+        | Just (t, _) <- currentTransformation ctxt = t <> trans
+        | otherwise = trans
+      invTrans = fromMaybe mempty $ inverseTransformation trans'
+      after = go ctxt next rest
+      subContext =
+          ctxt { currentTransformation = Just (trans', invTrans) }
+
+      final = go subContext (fromF sub) after
+
+    go ctxt (Free (Fill method prims next)) rest = order : after where
+      after = go ctxt next rest
+      order = DrawOrder 
+            { _orderPrimitives = [geometryOf ctxt prims]
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = method
+            , _orderMask       = currentClip ctxt
+            }
+
+    go ctxt (Free (Stroke w j cap prims next)) rest =
+        go ctxt (Free $ Fill FillWinding prim' next) rest
             where prim' = listOfContainer $ strokize w j cap prims
-    go ctxt (Free (SetTexture tx sub next)) = do
-        go (ctxt { currentTexture = tx }) $ fromF sub
-        go ctxt next
-    go ctxt (Free (DashedStroke o d w j cap prims next)) = do
-        let recurse sub =
-                go ctxt . liftF $ Fill FillWinding sub ()
-        mapM_ recurse $ dashedStrokize o d w j cap prims
-        go ctxt next
 
-    go ctxt (Free (TextFill font size (V2 x y) str next)) = do
-        forM_ drawCalls (go ctxt)
-        go ctxt next
+    go ctxt (Free (SetTexture tx sub next)) rest =
+        go (ctxt { currentTexture = tx }) (fromF sub) $ go ctxt next rest
+
+    go ctxt (Free (DashedStroke o d w j cap prims next)) rest =
+        foldr recurse after $ dashedStrokize o d w j cap prims
       where
+        after = go ctxt next rest
+        recurse sub =
+            go ctxt (liftF $ Fill FillWinding sub ())
+
+    go ctxt (Free (TextFill (V2 x y) descriptions next)) rest =
+        go ctxt (sequence_ drawCalls) $ go ctxt next rest
+      where
+        floatCurves =
+          getStringCurveAtPoint 90 (x, y)
+            [(_textFont d, _textSize d, _text d) | d <- descriptions]
+
+        linearDescriptions =
+            concat [map (const d) $ _text d | d <- descriptions]
+
         drawCalls =
-            beziersOfChar <$> getStringCurveAtPoint 90 (x, y)
-                                    [(font, size, str)]
+            [texturize d $ beziersOfChar curve
+                | (curve, d) <- zip floatCurves linearDescriptions]
+
+        texturize descr sub = case _textTexture descr of
+            Nothing -> fromF sub
+            Just t -> liftF $ SetTexture t sub ()
 
         beziersOfChar curves = liftF $ Fill FillWinding bezierCurves ()
           where
@@ -428,9 +435,9 @@ renderDrawing width height background drawing = runST $
               [map BezierPrim . bezierFromPath . map (uncurry V2)
                               $ VU.toList c | c <- curves]
 
-    go ctxt (Free (WithCliping clipPath path next)) = do
-        go (ctxt { currentClip = newModuler }) $ fromF path
-        go ctxt next
+    go ctxt (Free (WithCliping clipPath path next)) rest =
+        go (ctxt { currentClip = newModuler }) (fromF path) $
+            go ctxt next rest
       where
         modulationTexture :: Texture (PixelBaseComponent px)
         modulationTexture = RawTexture $ clipRender clipPath
@@ -479,70 +486,6 @@ dashedStrokeWithOffset _ [] width join caping prims =
     stroke width join caping prims
 dashedStrokeWithOffset offset dashing width join caping prims =
     liftF $ DashedStroke offset dashing width join caping prims ()
-
--- | Clip the geometry to a rectangle.
-clip :: Point     -- ^ Minimum point (corner upper left)
-     -> Point     -- ^ Maximum point (corner bottom right)
-     -> Primitive -- ^ Primitive to be clipped
-     -> Container Primitive
-clip mini maxi (LinePrim l) = clipLine mini maxi l
-clip mini maxi (BezierPrim b) = clipBezier mini maxi b
-clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
-
-isCoverageDrawable :: MutableImage s px -> CoverageSpan -> Bool
-isCoverageDrawable img coverage =
-    _coverageVal coverage > 0 && x >= 0 && y >= 0 && x < imgWidth && y < imgHeight
-  where
-    !imgWidth = fromIntegral $ mutableImageWidth img
-    !imgHeight = fromIntegral $ mutableImageHeight img
-    x = _coverageX coverage
-    y = _coverageY coverage
-
--- | Fill some geometry. The geometry should be "looping",
--- ie. the last point of the last primitive should
--- be equal to the first point of the first primitive.
---
--- The primitive should be connected.
-fillWithTexture :: RenderablePixel px
-                => FillMethod
-                -> Texture px  -- ^ Color/Texture used for the filling
-                -> [Primitive] -- ^ Primitives to fill
-                -> DrawContext s px ()
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture PixelRGBA8 -> [Primitive]
-    -> DrawContext s PixelRGBA8 () #-}
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture Pixel8 -> [Primitive]
-    -> DrawContext s Pixel8 () #-}
-fillWithTexture fillMethod texture els = do
-    img@(MutableImage width height _) <- get
-    let !mini = V2 0 0
-        !maxi = V2 (fromIntegral width) (fromIntegral height)
-        !filler = transformTextureToFiller texture img
-        clipped = F.foldMap (clip mini maxi) els
-        spans = rasterize fillMethod clipped
-    lift . mapExec filler $ filter (isCoverageDrawable img) spans
-
-mapExec :: Monad m => (a -> m ()) -> [a] -> m ()
-mapExec f = go
-  where
-    go [] = return ()
-    go (x : xs) = f x >> go xs
-
-fillWithTextureAndMask
-    :: RenderablePixel px
-    => FillMethod
-    -> Texture px  -- ^ Color/Texture used for the filling
-    -> Texture (PixelBaseComponent px)
-    -> [Primitive] -- ^ Primitives to fill
-    -> DrawContext s px ()
-fillWithTextureAndMask fillMethod texture mask els = do
-    img@(MutableImage width height _) <- get
-    let !mini = V2 0 0
-        !maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod $ F.foldMap (clip mini maxi) els
-        !shader = transformTextureToFiller (modulateTexture texture mask) img
-    lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 
 -- | Generate a list of primitive representing a circle.
 --
@@ -638,17 +581,18 @@ drawImageAtSize :: (Pixel px, Modulable (PixelBaseComponent px))
                 -> Float -- ^ Width of the drawn image
                 -> Float -- ^ Height of the drawn image
                 -> Drawing px ()
-drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize p
+drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
             reqWidth reqHeight
     | borderSize <= 0 =
         withTransformation (translate p <> scale scaleX scaleY) .
             withTexture (sampledImageTexture img) $ fill rect
     | otherwise = do
-        withTransformation (translate p <> scale scaleX scaleY) $ do
+        withTransformation (translate p <> scale scaleX scaleY) $
             withTexture (sampledImageTexture img) $ fill rect
         stroke borderSize (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'
         where
+          p = ip ^-^ V2 0.5 0.5
           rect = rectangle (V2 0 0) rw rh
           rect' = rectangle p reqWidth reqHeight
 

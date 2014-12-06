@@ -14,6 +14,7 @@ import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.Immediate
 
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
@@ -25,6 +26,7 @@ import Criterion.Main( parseArgs
                      , defaultMainWith
                      , bench
                      )
+{-import Text.Groom( groom )-}
 import qualified Sample as Sample
 
 type Stroker =
@@ -83,7 +85,7 @@ drawBoundingBox prims = do
 stroke :: Float -> Join -> (Cap, Cap) -> [Primitive]
        -> Drawing PixelRGBA8 ()
 stroke w j cap prims =
-    R.stroke w j cap prims >> drawBoundingBox prims
+    R.stroke w j cap prims -- >> drawBoundingBox prims
 
 dashedStroke :: DashPattern -> Float -> Join -> (Cap, Cap) -> [Primitive]
             -> Drawing PixelRGBA8 ()
@@ -321,6 +323,21 @@ textAlignStringTest fontName filename txt = do
                 . withTexture (uniformTexture black) $
                         printTextAt font 12 (V2 20 40) txt
 
+textStrokeTest :: String -> String -> String -> IO ()
+textStrokeTest fontName filename txt = do
+    putStrLn $ "Rendering " ++ fontName
+    fontErr <- loadFontFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    case fontErr of
+      Left err -> putStrLn err
+      Right font -> do
+        let drawing = printTextAt font 20 (V2 30 30) txt
+            orders = drawOrdersOfDrawing 300 300 (PixelRGBA8 0 0 0 0) drawing
+        writePng (outFolder </> filename) .
+            renderDrawing 300 70 white .
+                withTexture (uniformTexture black) .
+                    mapM_ (mapM_ (stroke 1 (JoinMiter 0) (CapRound, CapRound)
+                            ) . _orderPrimitives) $ orders
+
 strokeTest :: Stroker -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
@@ -346,6 +363,23 @@ strokeTest stroker texture prefix =
                    logo 100 False $ V2 240 240]
           ]
         img = renderDrawing 500 500 background drawing
+
+orientationAxisText :: IO ()
+orientationAxisText =
+    let trans = translate (V2 200 200) <> toNewXBase (V2 1 (-0.5)) in
+    writePng (outFolder </> "axis_transform.png")
+        . renderDrawing 400 400 white
+        . withTexture (uniformTexture blue)
+        . fill . transform (applyTransformation trans)
+        . pathToPrimitives
+        $ Path (V2 (-100) (-10)) True
+              [ PathLineTo (V2 (-20) (-10))
+              , PathLineTo (V2 0 5)
+              , PathLineTo (V2 20 (-10))
+              , PathLineTo (V2 100 (-10))
+              , PathLineTo (V2 100 10)
+              , PathLineTo (V2 (-100) 10)
+              ]
 
 complexEvenOddTest :: Int -> Texture PixelRGBA8 -> IO ()
 complexEvenOddTest size texture = mapM_ tester [(filling, ix)
@@ -498,6 +532,49 @@ gradientRadial name back =
             ,(0.75, PixelRGBA8 0 128 128 255)
             ,(1, PixelRGBA8 0 128 128 255)
             ]
+
+strokeBad2 :: IO ()
+strokeBad2 =
+    writePng (outFolder </> ("bad_stroke_letter.png")) $
+        renderDrawing 70 70 white drawing
+  where 
+    drawing =
+      withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
+        stroke 1.0 (JoinMiter 0.0) (CapRound
+                                   ,CapRound) $
+            BezierPrim <$>
+                [
+                {-
+                 Bezier (V2 44.958496 23.413086) (V2 39.9292 23.413086) (V2 34.91211 23.413086)
+                ,Bezier (V2 34.91211 23.413086) (V2 34.91211 24.67041) (V2 35.290527 25.610352)
+                ,Bezier (V2 35.290527 25.610352) (V2 35.668945 26.538086) (V2 36.328125 27.13623)
+                ,Bezier (V2 36.328125 27.13623) (V2 36.96289 27.722168) (V2 37.82959 28.015137)
+                ,Bezier (V2 37.82959 28.015137) (V2 38.708496 28.308105) (V2 39.7583 28.308105)
+                ,Bezier (V2 39.7583 28.308105) (V2 41.149902 28.308105) (V2 42.55371 27.75879)
+                ,Bezier (V2 42.55371 27.75879) (V2 43.969727 27.197266) (V2 44.56787 26.660156)
+                ,Bezier (V2 44.56787 26.660156) (V2 44.628906 26.660156) (V2 44.68994 26.660156)
+                ,Bezier (V2 44.68994 26.660156) (V2 44.68994 27.91748) (V2 44.68994 29.162598)
+                ,Bezier (V2 44.68994 29.162598) (V2 43.530273 29.650879) (V2 42.321777 29.980469)
+                 -}
+                {-
+                 Bezier (V2 42.321777 29.980469) (V2 41.11328 30.310059) (V2 39.782715 30.310059)
+                ,Bezier (V2 39.782715 30.310059) (V2 36.38916 30.310059) (V2 34.484863 28.479004)
+                ,Bezier (V2 34.484863 28.479004) (V2 32.580566 26.635742) (V2 32.580566 23.254395)
+                ,Bezier (V2 32.580566 23.254395) (V2 32.580566 19.909668) (V2 34.399414 17.944336)
+                ,Bezier (V2 34.399414 17.944336) (V2 36.23047 15.979004) (V2 39.208984 15.979004)
+                ,Bezier (V2 39.208984 15.979004) (V2 41.967773 15.979004) (V2 43.45703 17.590332)
+                -}
+                -- Bezier (V2 43.45703 17.590332) (V2 44.958496 19.20166) (V2 44.958496 22.167969)
+                 Bezier (V2 44.958496 22.167969) (V2 44.958496 22.790527) (V2 44.958496 23.413086)
+                ,Bezier (V2 42.72461 21.655273) (V2 42.712402 19.848633) (V2 41.809082 18.859863)
+                {-
+                 Bezier (V2 41.809082 18.859863) (V2 40.91797 17.871094) (V2 39.086914 17.871094)
+                ,Bezier (V2 39.086914 17.871094) (V2 37.243652 17.871094) (V2 36.14502 18.95752)
+                ,Bezier (V2 36.14502 18.95752) (V2 35.058594 20.043945) (V2 34.91211 21.655273)
+                ,Bezier (V2 34.91211 21.655273) (V2 38.81836 21.655273) (V2 42.72461 21.655273)
+                -- -}
+                ]
+
 strokeBad :: IO ()
 strokeBad =
     writePng (outFolder </> ("bad_stroke_tiger.png")) $
@@ -526,7 +603,29 @@ strokeBad =
                                      (V2 (-43.8) 58.199997)
                                      (V2 (-56.0) 64.2)
                                      (V2 (-61.4) 74.399994)]
+pledgeTest :: IO ()
+pledgeTest = do
+  (Right (ImageRGBA8 png)) <- readImage "exec-src/test_img.png"
+  writePng (outFolder </> "pledge_render.png") .
+    renderDrawing 389 89 white $
+        drawImage png 0 (V2 0 0)
 
+shouldBeTheSame :: IO ()
+shouldBeTheSame = do
+    writePng (outFolder </> "should_be_same_0.png") $ img prim1
+    writePng (outFolder </> "should_be_same_1.png") $ img prim2
+  where
+    drawColor = PixelRGBA8 0 0x86 0xc1 255
+    prim1 = CubicBezier (V2  10  10) (V2 210 210)
+                        (V2 210 210) (V2  10 410)
+    prim2 = CubicBezier (V2  10  10) (V2 210 210)
+                        (V2 210 210.1) (V2  10 410)
+
+    img bez = renderDrawing 400 200 white $
+      withTexture (uniformTexture drawColor) $
+        stroke 4 JoinRound (CapRound, CapRound) [CubicBezierPrim bez]
+
+  
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -548,8 +647,11 @@ testSuite = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  pledgeTest
   strokeBad 
+  strokeBad2
   evenOddTest uniform
+  orientationAxisText 
   complexEvenOddTest 700 uniform
   complexEvenOddTest 350 uniform
 
@@ -600,6 +702,7 @@ testSuite = do
   strokeCubic stroke radTriGradient "rad_gradient_"
 
   strokeCubicDashed dashedStroke uniform ""
+  shouldBeTheSame
 
   let testText =
         "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"
@@ -607,6 +710,7 @@ testSuite = do
   textAlignStringTest "CONSOLA" "alignedConsola.png" testText
   textAlignStringTest "arial" "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
+  textStrokeTest "verdana" "stroke_verdana.png" "e"
   -- -}
 
 benchTest :: [String] -> IO ()

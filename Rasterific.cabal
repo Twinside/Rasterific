@@ -114,7 +114,7 @@ Test-Suite test
                  , binary
                  , QuickCheck
                  , deepseq
-                 , criterion
+                 , criterion >= 1.0
                  , statistics
                  --, groom
 

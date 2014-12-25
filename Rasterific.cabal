@@ -46,6 +46,7 @@ library
                  , Graphics.Rasterific.Outline
                  , Graphics.Rasterific.Texture
                  , Graphics.Rasterific.Linear
+                 , Graphics.Rasterific.Lenses
                  , Graphics.Rasterific.Transformations
                  , Graphics.Rasterific.Immediate
                  , Graphics.Rasterific.PathWalker

@@ -12,8 +12,8 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
 
 #if !MIN_VERSION_base(4,8,0)
 -- to be removed with GHC 7.12 ?
-import Control.Applicative( (<$>), (<*>) )
-import Data.Monoid( Monoid( .. ), (<>) )
+import Control.Applicative( (<*>) )
+import Data.Monoid( Monoid( .. ) )
 import Data.Foldable( foldMap )
 #endif
 

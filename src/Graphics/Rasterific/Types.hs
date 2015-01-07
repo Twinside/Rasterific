@@ -38,7 +38,7 @@ module Graphics.Rasterific.Types
 import Data.DList( DList, fromList, toList  )
 
 #if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( Foldable, foldl' )
+import Data.Foldable( Foldable )
 #endif
 import Data.Foldable( foldl' )
 import Graphics.Rasterific.Linear( V2( .. ) )

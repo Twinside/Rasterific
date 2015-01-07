@@ -13,8 +13,8 @@ module Graphics.Rasterific.Line
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<$>), pure )
-import Data.Monoid( (<>), mempty )
+import Control.Applicative( pure )
+import Data.Monoid( mempty )
 #endif
 
 import Data.Monoid( (<>) )

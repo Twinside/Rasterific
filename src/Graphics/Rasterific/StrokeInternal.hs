@@ -56,30 +56,27 @@ reversePrimitive (CubicBezierPrim (CubicBezier a b c d)) =
 -- | Create a "rounded" join or cap
 roundJoin :: Float -> Point -> Vector -> Vector -> Container Primitive
 roundJoin offset p = go
-  where go u v =
-          --     ^
-          --     |w
-          -- a X---X c
-          --    \ /
-          --     Xp
-          -- ^  / \  ^
-          -- u\/   \/v
-          --  /     \
-          let a = p ^+^ u ^* offset
-              c = p ^+^ v ^* offset
-
-              w = (a `normal` c) `ifZero` u
-
-              -- Same as offseting
-              n = p ^+^ w ^* offset
-              b = n ^* 2 ^-^ (a `midPoint` c)
-          in
+  where go u v
           -- If we're already on a nice curvature,
           -- don't bother doing anything
-          if u `dot` w >= 0.9 then
-            pure . BezierPrim $ Bezier a b c
-          else
-            go u w <> go w v
+          | u `dot` w >= 0.9 = pure . BezierPrim $ Bezier a b c
+          | otherwise = go u w <> go w v
+          where --     ^
+                --     |w
+                -- a X---X c
+                --    \ /
+                --     Xp
+                -- ^  / \  ^
+                -- u\/   \/v
+                --  /     \
+                a = p ^+^ u ^* offset
+                c = p ^+^ v ^* offset
+
+                w = (a `normal` c) `ifZero` u
+
+                -- Same as offseting
+                n = p ^+^ w ^* offset
+                b = n ^* 2 ^-^ (a `midPoint` c)
 
 -- | Put a cap at the end of a bezier curve, depending
 -- on the kind of cap wanted.

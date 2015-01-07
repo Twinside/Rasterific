@@ -28,12 +28,10 @@ module Graphics.Rasterific.Immediate
 
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
-import Control.Monad.ST( ST )
 import Control.Monad.State( StateT, execStateT, get, lift )
+import Control.Monad.State.Class(MonadState)
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
-                          , Pixel8
-                          , PixelRGBA8
                           , MutableImage( .. )
                           , unsafeFreezeImage
                           , fillImageWith )
@@ -49,8 +47,8 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.Command
 
 -- | Monad used to describe the drawing context.
-type DrawContext m px a =
-    StateT (MutableImage (PrimState m) px) m a
+type DrawContext m px =
+    StateT (MutableImage (PrimState m) px) m
 
 -- | Reify a filling function call, to be able to manipulate
 -- them in a simpler fashion.
@@ -127,17 +125,14 @@ isCoverageDrawable img coverage =
 --
 -- <<docimages/immediate_fill.png>>
 --
-fillWithTexture :: (PrimMonad m, RenderablePixel px)
+fillWithTexture :: (PrimMonad m, RenderablePixel px,
+                    MonadState (MutableImage (PrimState m) px)
+                               (DrawContext m px)
+                   )
                 => FillMethod
                 -> Texture px  -- ^ Color/Texture used for the filling
                 -> [Primitive] -- ^ Primitives to fill
                 -> DrawContext m px ()
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture PixelRGBA8 -> [Primitive]
-    -> DrawContext (ST s) PixelRGBA8 () #-}
-{-# SPECIALIZE fillWithTexture
-    :: FillMethod -> Texture Pixel8 -> [Primitive]
-    -> DrawContext (ST s) Pixel8 () #-}
 fillWithTexture fillMethod texture els = do
     img@(MutableImage width height _) <- get
     let !mini = V2 0 0
@@ -168,7 +163,11 @@ fillWithTexture fillMethod texture els = do
 -- <<docimages/immediate_mask.png>>
 --
 fillWithTextureAndMask
-    :: (PrimMonad m, RenderablePixel px)
+    :: ( PrimMonad m
+       , RenderablePixel px
+       , MonadState (MutableImage (PrimState m) px)
+                    (DrawContext m px)
+       )
     => FillMethod
     -> Texture px  -- ^ Color/Texture used for the filling of the geometry
     -> Texture (PixelBaseComponent px) -- ^ Texture used for the mask.

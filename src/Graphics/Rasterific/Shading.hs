@@ -285,9 +285,9 @@ reflectGradient s =
 gradientColorAt :: ModulablePixel px
                 => GradientArray px -> Float -> px
 {-# SPECIALIZE
- 	gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
+     gradientColorAt :: GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 {-# SPECIALIZE
- 	gradientColorAt :: GradientArray Pixel8 -> Float -> Pixel8 #-}
+     gradientColorAt :: GradientArray Pixel8 -> Float -> Pixel8 #-}
 gradientColorAt grad at
     | at <= 0 = snd $ V.head grad
     | at >= 1.0 = snd $ V.last grad
@@ -305,11 +305,11 @@ gradientColorAt grad at
 gradientColorAtRepeat :: ModulablePixel px
                       => SamplerRepeat -> GradientArray px -> Float -> px
 {-# SPECIALIZE INLINE
-	gradientColorAtRepeat ::
-		SamplerRepeat -> GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
+    gradientColorAtRepeat ::
+        SamplerRepeat -> GradientArray PixelRGBA8 -> Float -> PixelRGBA8 #-}
 {-# SPECIALIZE INLINE
-	gradientColorAtRepeat ::
-		SamplerRepeat -> GradientArray Pixel8 -> Float -> Pixel8 #-}
+    gradientColorAtRepeat ::
+        SamplerRepeat -> GradientArray Pixel8 -> Float -> Pixel8 #-}
 gradientColorAtRepeat SamplerPad grad = gradientColorAt grad
 gradientColorAtRepeat SamplerRepeat grad =
     gradientColorAt grad . repeatGradient
@@ -344,11 +344,11 @@ linearGradientShader gradient start end repeating =
 sampledImageShader :: forall px.  ModulablePixel px
                    => Image px -> SamplerRepeat -> ShaderFunction px
 {-# SPECIALIZE
- 	sampledImageShader :: Image Pixel8 -> SamplerRepeat
- 	                   -> ShaderFunction Pixel8 #-}
+     sampledImageShader :: Image Pixel8 -> SamplerRepeat
+                        -> ShaderFunction Pixel8 #-}
 {-# SPECIALIZE
- 	sampledImageShader :: Image PixelRGBA8 -> SamplerRepeat
- 	                   -> ShaderFunction PixelRGBA8 #-}
+     sampledImageShader :: Image PixelRGBA8 -> SamplerRepeat
+                        -> ShaderFunction PixelRGBA8 #-}
 sampledImageShader img sampling x y =
   (at px  py `interpX` at pxn py)
              `interpY`
@@ -394,9 +394,9 @@ sampledImageShader img sampling x y =
 -- filtering at all.
 imageShader :: forall px. (Pixel px) => Image px -> ShaderFunction px
 {-# SPECIALIZE
-	imageShader :: Image PixelRGBA8 -> ShaderFunction PixelRGBA8 #-}
+    imageShader :: Image PixelRGBA8 -> ShaderFunction PixelRGBA8 #-}
 {-# SPECIALIZE
-	imageShader :: Image Pixel8 -> ShaderFunction Pixel8 #-}
+    imageShader :: Image Pixel8 -> ShaderFunction Pixel8 #-}
 imageShader img x y =
     unsafePixelAt rawData $ (clampedY * w + clampedX) * compCount
   where

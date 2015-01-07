@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 module Sample where
 
 import Data.Monoid
@@ -9,9 +11,9 @@ import Graphics.Rasterific.Transformations
 
 triangles :: IO ()
 triangles =
-	case writeGifImages "triangles.gif" LoopingForever images of
-		Left err -> putStrLn err
-		Right v -> v
+    case writeGifImages "triangles.gif" LoopingForever images of
+        Left err -> putStrLn err
+        Right v -> v
 
   where
     frameCount = 140
@@ -23,9 +25,9 @@ triangles =
 
     render angle n =
       withTransformation
-		( translate (V2 200 180) <>
+        ( translate (V2 200 180) <>
           scale (1 / n + 1) (1 / n + 1) <>
-		  rotate (angle + 0.1 * angle * n) ) $
+          rotate (angle + 0.1 * angle * n) ) $
 
          withTexture (uniformTexture (155 + 4 * floor n)) $
           stroke 2 (JoinMiter 0)

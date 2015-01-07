@@ -2,6 +2,7 @@ language: haskell
 
 ghc:
   - 7.8
+  - 7.10
   
 global:
   - SKIP_HADDOCK=1

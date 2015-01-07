@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
@@ -16,10 +17,14 @@ module Graphics.Rasterific.CubicBezier
     ) where
 
 import Prelude hiding( or )
-import Control.Applicative( liftA2
-                          , (<$>)
-                          , pure
-                          )
+
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+import Control.Applicative( pure )
+import Data.Monoid( mempty )
+#endif
+
+import Data.Monoid( (<>) )
+import Control.Applicative( liftA2, (<$>))
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)
@@ -29,7 +34,6 @@ import Graphics.Rasterific.Linear
              , lerp
              )
 import Data.List( nub )
-import Data.Monoid( mempty, (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticFormula

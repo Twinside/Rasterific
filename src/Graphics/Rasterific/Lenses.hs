@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 -- | This module provide lenses compatible with the `lens`
 -- module but without the dependency to it.
 module Graphics.Rasterific.Lenses
@@ -34,8 +35,12 @@ module Graphics.Rasterific.Lenses
     , Traversal'
     ) where
 
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
 import Data.Traversable( traverse )
-import Control.Applicative( Applicative, (<$>), (<*>), pure )
+import Control.Applicative( Applicative, (<*>), pure )
+#endif
+
+import Control.Applicative( (<$>) )
 import Graphics.Rasterific.Types
 
 -- | Does it look familiar? yes it's the official

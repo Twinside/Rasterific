@@ -1,13 +1,17 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Rasterize
     ( CoverageSpan( .. )
     , rasterize
     , clip
     ) where
 
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+import Data.Foldable( foldMap )
+#endif
+
 import Control.Monad.ST( runST )
 import Data.Fixed( mod' )
-import Data.Foldable( foldMap )
 import Data.Monoid( Endo( Endo, appEndo ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.QuadraticBezier

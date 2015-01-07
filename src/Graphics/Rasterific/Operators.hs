@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Module providing basic helper functions to help
 -- build vector/point calculations.
 module Graphics.Rasterific.Operators
@@ -26,8 +27,10 @@ module Graphics.Rasterific.Operators
     , isDistingableFrom
     ) where
 
-import Control.Applicative( Applicative
-                          , liftA2
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+import Control.Applicative( Applicative )
+#endif
+import Control.Applicative( liftA2
                           , liftA3
                           , (<$>)
                           )

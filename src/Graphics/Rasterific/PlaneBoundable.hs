@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 -- | Module implementing types used for geometry
 -- bound calculations.
 module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
@@ -9,9 +10,15 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
                                           , boundLowerLeftCorner
                                           ) where
 
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+-- to be removed with GHC 7.12 ?
 import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( Monoid( .. ), (<>) )
 import Data.Foldable( foldMap )
+#endif
+
+import Control.Applicative( (<$>) )
+import Data.Monoid( (<>) )
 
 import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Types

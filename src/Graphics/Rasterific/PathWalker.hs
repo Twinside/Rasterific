@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 -- | This module help the walking of path of any shape,
 -- being able to return the current position and the
 -- actual orientation.
@@ -13,8 +14,15 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , drawOrdersOnPath
                                      ) where
 
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
 import Data.Foldable( foldMap )
-import Control.Applicative( Applicative, (<$>), (<*>) )
+import Data.Monoid( mempty, (<>) )
+import Control.Applicative( Applicative, (<*>) )
+#endif
+
+import Data.Monoid( (<>) )
+import Control.Applicative( (<$>) )
+
 import Control.Monad.Identity( Identity )
 import Control.Monad.State( StateT
                           , MonadTrans
@@ -22,7 +30,6 @@ import Control.Monad.State( StateT
                           , evalStateT
                           , modify
                           , gets )
-import Data.Monoid( mempty, (<>) )
 import Data.Maybe( fromMaybe )
 
 import Graphics.Rasterific.Types

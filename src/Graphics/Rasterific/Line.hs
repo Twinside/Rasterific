@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 -- | Handle straight lines polygon.
 module Graphics.Rasterific.Line
     ( lineFromPath
@@ -11,8 +12,14 @@ module Graphics.Rasterific.Line
     , offsetLine
     ) where
 
+#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
 import Control.Applicative( (<$>), pure )
 import Data.Monoid( (<>), mempty )
+#endif
+
+import Data.Monoid( (<>) )
+import Control.Applicative( (<$>) )
+
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)

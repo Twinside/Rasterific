@@ -8,7 +8,7 @@ module Graphics.Rasterific.StrokeInternal
     , approximatePathLength
     )  where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<$>), pure )
 import Data.Monoid( (<>), mempty )
 import Data.Foldable( foldMap )
@@ -68,7 +68,7 @@ roundJoin offset p = go
                 --     Xp
                 -- ^  / \  ^
                 -- u\/   \/v
-                --  /     \
+                --  /     \   .
                 a = p ^+^ u ^* offset
                 c = p ^+^ v ^* offset
 
@@ -137,7 +137,7 @@ miterJoin offset l point u v
         --     Xp
         -- ^  / \  ^
         -- u\/   \/v
-        --  /     \
+        --  /     \     .
         a = point ^+^ u ^* offset
         c = point ^+^ v ^* offset
         w = (a `normal` c) `ifZero` u

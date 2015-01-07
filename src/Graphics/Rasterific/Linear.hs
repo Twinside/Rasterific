@@ -21,7 +21,7 @@ module Graphics.Rasterific.Linear
 import Linear
 #else
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( Applicative, pure, (<*>) )
 #endif
 

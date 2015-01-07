@@ -14,7 +14,7 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , drawOrdersOnPath
                                      ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( foldMap )
 import Data.Monoid( mempty, (<>) )
 import Control.Applicative( Applicative, (<*>) )

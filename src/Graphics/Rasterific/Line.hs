@@ -12,7 +12,7 @@ module Graphics.Rasterific.Line
     , offsetLine
     ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<$>), pure )
 import Data.Monoid( (<>), mempty )
 #endif

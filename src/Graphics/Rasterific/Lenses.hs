@@ -35,7 +35,7 @@ module Graphics.Rasterific.Lenses
     , Traversal'
     ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Traversable( traverse )
 import Control.Applicative( Applicative, (<*>), pure )
 #endif

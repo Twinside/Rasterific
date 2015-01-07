@@ -17,8 +17,9 @@ module Graphics.Rasterific.QuadraticBezier
     , bezierLengthApproximation
     ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( pure )
+import Data.Monoid( Monoid( mempty ) )
 #endif
 import Graphics.Rasterific.Linear
              ( V2( .. )
@@ -29,9 +30,6 @@ import Graphics.Rasterific.Linear
              , norm
              , lerp
              )
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
-import Data.Monoid( Monoid( mempty ), (<>) )
-#endif
 
 import Data.Monoid( (<>) )
 import Graphics.Rasterific.Operators

@@ -10,7 +10,7 @@ module Graphics.Rasterific.Command ( Drawing
                                    , dumpDrawing
                                    ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid( Monoid( .. ) )
 #endif
 

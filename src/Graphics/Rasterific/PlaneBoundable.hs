@@ -10,7 +10,7 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
                                           , boundLowerLeftCorner
                                           ) where
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 -- to be removed with GHC 7.12 ?
 import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( Monoid( .. ), (<>) )

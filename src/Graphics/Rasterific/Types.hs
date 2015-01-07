@@ -37,7 +37,7 @@ module Graphics.Rasterific.Types
 
 import Data.DList( DList, fromList, toList  )
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable, foldl' )
 #endif
 import Data.Foldable( foldl' )

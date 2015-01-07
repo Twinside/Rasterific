@@ -1,9 +1,12 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.QuadraticFormula( QuadraticFormula( .. )
                                            , discriminant
                                            , formulaRoots
                                            ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( Applicative( .. ) )
+#endif
 
 -- | Represent an equation `a * x^2 + b * x + c = 0`
 data QuadraticFormula a = QuadraticFormula

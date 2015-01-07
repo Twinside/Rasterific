@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Compositor handle the pixel composition, which
 -- leads to texture composition.
 -- Very much a work in progress

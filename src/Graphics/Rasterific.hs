@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
 -- Creating an image is rather simple, here is a simple example
@@ -112,13 +113,18 @@ module Graphics.Rasterific
 
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( Monoid( .. ) )
+#endif
+
+import Data.Monoid( (<>) )
+
 import Control.Applicative( (<$>) )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( fromF )
 import Control.Monad.ST( runST )
 import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
-import Data.Monoid( Monoid( .. ), (<>) )
 import Codec.Picture.Types( Image( .. ), Pixel( .. ) )
 
 import qualified Data.Vector.Unboxed as VU

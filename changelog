@@ -1,6 +1,9 @@
 -*-change-log-*-
 
-v0.4 2014
+v0.4.1 January 2015
+ * Fix: GHC 7.10 compilation
+
+v0.4 December 2014
  * Breaking change: Changed the original position scheme for
    text, allowing to specify baseline or upper left corner
 

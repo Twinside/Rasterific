@@ -3,15 +3,19 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Command ( Drawing
                                    , DrawCommand( .. )
                                    , TextRange( .. )
                                    , dumpDrawing
                                    ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( Monoid( .. ) )
+#endif
+
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
-import Data.Monoid( Monoid( .. ) )
 import Codec.Picture.Types( Pixel( .. ), Pixel8 )
 
 import Graphics.Rasterific.Types

@@ -21,7 +21,9 @@ module Graphics.Rasterific.Linear
 import Linear
 #else
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( Applicative, pure, (<*>) )
+#endif
 
 infixl 6 ^+^, ^-^
 infixl 7 ^*, ^/

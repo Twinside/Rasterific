@@ -20,11 +20,10 @@ import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 import Arbitrary
 import System.Environment( getArgs )
-import Criterion.Config( defaultConfig )
-import Criterion.Main( parseArgs
-                     , defaultOptions
-                     , defaultMainWith
+import Criterion.Main.Options( defaultConfig )
+import Criterion.Main( defaultMainWith
                      , bench
+                     , nfIO
                      )
 {-import Text.Groom( groom )-}
 import qualified Sample as Sample
@@ -714,12 +713,10 @@ testSuite = do
   -- -}
 
 benchTest :: [String] -> IO ()
-benchTest args = do
-  (config, _) <-
-      parseArgs defaultConfig defaultOptions args
-  defaultMainWith config (return ())
-        [bench "testsuite" testSuite,
-         bench "Triangles" Sample.triangles]
+benchTest _args = do
+  defaultMainWith defaultConfig
+        [bench "testsuite" $ nfIO testSuite,
+         bench "Triangles" $ nfIO Sample.triangles]
 
 main :: IO ()
 main = do

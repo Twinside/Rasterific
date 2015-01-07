@@ -4,6 +4,7 @@
 --
 -- You can combine the transformation is `mappend` or
 -- the `(\<\>)` operator from "Data.Monoid" .
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Transformations
     ( Transformation( .. )
     , applyTransformation
@@ -18,7 +19,10 @@ module Graphics.Rasterific.Transformations
     , inverseTransformation
     ) where
 
-import Data.Monoid( Monoid( .. ), (<>) )
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( Monoid( .. )  )
+#endif
+import Data.Monoid( (<>) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), normalize )
 

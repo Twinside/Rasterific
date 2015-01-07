@@ -1,7 +1,13 @@
+{-# LANGUAGE CPP #-}
+
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
 
 import Control.Monad( forM_ )
 import Control.Monad.ST( runST )
-import Control.Applicative( (<$>), (<*>) )
 import Data.Monoid( (<>) )
 import Codec.Picture
 import Codec.Picture.Types( promoteImage )

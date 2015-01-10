@@ -58,6 +58,7 @@ module Graphics.Rasterific
     , ModulablePixel
     , RenderablePixel
     , renderDrawing
+    , renderDrawingAtDpi
     , pathToPrimitives
 
       -- * Rasterization types
@@ -145,7 +146,7 @@ import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font, getStringCurveAtPoint )
+import Graphics.Text.TrueType( Font, Dpi, getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -327,6 +328,7 @@ data RenderContext px = RenderContext
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
 -- in other colorspace will probably produce weird results.
+-- Default DPI is 96
 renderDrawing
     :: forall px . (RenderablePixel px)
     => Int -- ^ Rendering width
@@ -334,20 +336,34 @@ renderDrawing
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderDrawing width height background drawing =
+renderDrawing width height = renderDrawingAtDpi width height 96
+
+-- | Function to call in order to start the image creation.
+-- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
+-- in other colorspace will probably produce weird results.
+renderDrawingAtDpi
+    :: forall px . (RenderablePixel px)
+    => Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> px  -- ^ Background color
+    -> Drawing px () -- ^ Rendering action
+    -> Image px
+renderDrawingAtDpi width height dpi background drawing =
     runST $ runDrawContext width height background
           $ mapM_ fillOrder
-          $ drawOrdersOfDrawing width height background drawing
+          $ drawOrdersOfDrawing width height dpi background drawing
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
     :: forall px . (RenderablePixel px) 
     => Int -- ^ Rendering width
     -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current assumed DPI
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> [DrawOrder px]
-drawOrdersOfDrawing width height background drawing =
+drawOrdersOfDrawing width height dpi background drawing =
     go initialContext (fromF drawing) []
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
@@ -421,7 +437,7 @@ drawOrdersOfDrawing width height background drawing =
         go ctxt (sequence_ drawCalls) $ go ctxt next rest
       where
         floatCurves =
-          getStringCurveAtPoint 90 (x, y)
+          getStringCurveAtPoint dpi (x, y)
             [(_textFont d, _textSize d, _text d) | d <- descriptions]
 
         linearDescriptions =

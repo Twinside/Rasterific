@@ -330,7 +330,7 @@ textStrokeTest fontName filename txt = do
       Left err -> putStrLn err
       Right font -> do
         let drawing = printTextAt font 20 (V2 30 30) txt
-            orders = drawOrdersOfDrawing 300 300 (PixelRGBA8 0 0 0 0) drawing
+            orders = drawOrdersOfDrawing 300 300 96 (PixelRGBA8 0 0 0 0) drawing
         writePng (outFolder </> filename) .
             renderDrawing 300 70 white .
                 withTexture (uniformTexture black) .

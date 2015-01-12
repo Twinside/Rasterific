@@ -1,9 +1,10 @@
 -*-change-log-*-
 
-v0.4.2 January 2015
+v0.5 January 2015
  * Allowing to specify DPI at the top level of the rendering
    request.
- * Adding an helper function to retrieve the distance to the
+ * Adding: an helper function to retrieve the distance to the
+ * Changed: font size switched to float.
 
 
 v0.4.1 January 2015

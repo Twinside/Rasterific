@@ -53,6 +53,7 @@ module Graphics.Rasterific
     , printTextAt
     , printTextRanges
     , TextRange( .. )
+    , PointSize
 
       -- * Generating images
     , ModulablePixel
@@ -146,7 +147,10 @@ import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font, Dpi, getStringCurveAtPoint )
+import Graphics.Text.TrueType( Font
+                             , Dpi
+                             , PointSize
+                             , getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -295,7 +299,7 @@ stroke width join caping prims =
 -- You can use any texture, like a gradient while rendering text.
 --
 printTextAt :: Font            -- ^ Drawing font
-            -> Int             -- ^ font Point size
+            -> PointSize       -- ^ font Point size
             -> Point           -- ^ Drawing starting point (base line)
             -> String          -- ^ String to print
             -> Drawing px ()

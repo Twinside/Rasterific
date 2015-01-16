@@ -53,7 +53,7 @@ module Graphics.Rasterific
     , printTextAt
     , printTextRanges
     , TextRange( .. )
-    , PointSize
+    , PointSize( .. )
 
       -- * Generating images
     , ModulablePixel
@@ -149,7 +149,7 @@ import Graphics.Rasterific.Command
 
 import Graphics.Text.TrueType( Font
                              , Dpi
-                             , PointSize
+                             , PointSize( .. )
                              , getStringCurveAtPoint )
 
 {-import Debug.Trace-}
@@ -188,7 +188,7 @@ withTransformation trans sub =
 -- >     pathToPrimitives path
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
 -- >   withPathOrientation path 0 $
--- >     printTextAt font 24 (V2 0 0) "Text on path"
+-- >     printTextAt font (PointSize 24) (V2 0 0) "Text on path"
 --
 -- <<docimages/text_on_path.png>>
 --
@@ -205,7 +205,7 @@ withTransformation trans sub =
 -- >       pathToPrimitives path
 -- > 
 -- > withPathOrientation path 0 $ do
--- >   printTextAt font 24 (V2 0 0) "TX"
+-- >   printTextAt font (PointSize 24) (V2 0 0) "TX"
 -- >   fill $ rectangle (V2 (-10) (-10)) 30 20
 -- >   fill $ rectangle (V2 45 0) 10 20
 -- >   fill $ rectangle (V2 60 (-10)) 20 20
@@ -291,7 +291,7 @@ stroke width join caping prims =
 -- >       writePng "text_example.png" .
 -- >           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
 -- >               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >                       printTextAt font 12 (V2 20 40)
+-- >                       printTextAt font (PointSize 12) (V2 20 40)
 -- >                            "A simple text test!"
 --
 -- <<docimages/text_example.png>>
@@ -315,6 +315,15 @@ printTextAt font pointSize point string =
 
 -- | Print complex text, using different texture font and
 -- point size for different parts of the text.
+--
+-- > let blackTexture =
+-- >       Just . uniformTexture $ PixelRGBA8 0 0 0 255
+-- >     redTexture =
+-- >       Just . uniformTexture $ PixelRGBA8 255 0 0 255
+-- > in
+-- > printTextRanges (V2 20 40)
+-- >   [ TextRange font1 (PointSize 12) "A complex " blackTexture
+-- >   , TextRange font2 (PointSize 8) "text test" redTexture]
 --
 -- <<docimages/text_complex_example.png>>
 --

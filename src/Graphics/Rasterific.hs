@@ -101,6 +101,10 @@ module Graphics.Rasterific
     , bezierFromPath
     , lineFromPath
     , cubicBezierFromPath
+    , firstTangeantOf
+    , lastTangeantOf
+    , firstPointOf
+    , lastPointOf
 
       -- * Rasterization control
     , Join( .. )

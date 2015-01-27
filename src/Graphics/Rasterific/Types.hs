@@ -33,6 +33,12 @@ module Graphics.Rasterific.Types
       -- * Internal type
     , EdgeSample( .. )
     , pathToPrimitives
+
+      -- * Little geometry helpers
+    , firstTangeantOf
+    , lastTangeantOf
+    , firstPointOf
+    , lastPointOf
     ) where
 
 import Data.DList( DList, fromList, toList  )
@@ -41,7 +47,7 @@ import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable )
 #endif
 import Data.Foldable( foldl' )
-import Graphics.Rasterific.Linear( V2( .. ) )
+import Graphics.Rasterific.Linear( V2( .. ), (^-^) )
 
 import Foreign.Ptr( castPtr )
 import Foreign.Storable( Storable( sizeOf
@@ -438,4 +444,34 @@ pathToPrimitives (Path origin needClosing commands) = go origin commands
         BezierPrim (Bezier prev c1 to) : go to xs
     go prev (PathCubicBezierCurveTo c1 c2 to : xs) =
         CubicBezierPrim (CubicBezier prev c1 c2 to) : go to xs
+
+-- | Gives the orientation vector for the start of the
+-- primitive.
+firstTangeantOf :: Primitive -> Vector
+firstTangeantOf p = case p of
+  LinePrim (Line p0 p1) -> p1 ^-^ p0
+  BezierPrim (Bezier p0 p1 _) -> p1 ^-^ p0
+  CubicBezierPrim (CubicBezier p0 p1 _ _) -> p1 ^-^ p0
+
+-- | Gives the orientation vector at the end of the
+-- primitive.
+lastTangeantOf :: Primitive -> Vector
+lastTangeantOf p = case p of
+  LinePrim (Line p0 p1) -> p1 ^-^ p0
+  BezierPrim (Bezier _ p1 p2) -> p2 ^-^ p1
+  CubicBezierPrim (CubicBezier _ _ p2 p3) -> p3 ^-^ p2
+
+-- | Extract the first point of the primitive.
+firstPointOf :: Primitive -> Point
+firstPointOf p = case p of
+  LinePrim (Line p0 _) -> p0
+  BezierPrim (Bezier p0 _ _) -> p0
+  CubicBezierPrim (CubicBezier p0 _ _ _) -> p0
+
+-- | Return the last point of a given primitive.
+lastPointOf :: Primitive -> Point
+lastPointOf p = case p of
+  LinePrim (Line _ p0) -> p0
+  BezierPrim (Bezier _ _ p0) -> p0
+  CubicBezierPrim (CubicBezier _ _ _ p0) -> p0
 

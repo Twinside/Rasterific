@@ -10,7 +10,6 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , advanceBy
                                      , currentPosition
                                      , currentTangeant
-
                                      , drawOrdersOnPath
                                      ) where
 
@@ -70,13 +69,6 @@ advanceBy by = PathWalkerT . modify $ \s ->
   let (_, leftPrimitives) = splitPrimitiveUntil by $ _walkerPrims s in
   s { _walkerPrims = leftPrimitives }
 
--- | Extract the first point of the primitive.
-firstPointOf :: Primitive -> Point
-firstPointOf p = case p of
-  LinePrim (Line p0 _) -> p0
-  BezierPrim (Bezier p0 _ _) -> p0
-  CubicBezierPrim (CubicBezier p0 _ _ _) -> p0
-
 -- | Obtain the current position if we are still on the
 -- path, if not, return Nothing.
 currentPosition :: (Monad m) => PathWalkerT m (Maybe Point)
@@ -84,14 +76,6 @@ currentPosition = PathWalkerT $ gets (currPos . _walkerPrims)
   where
     currPos [] = Nothing
     currPos (prim:_) = Just $ firstPointOf prim
-
--- | Gives the orientation vector for the current point on
--- the path.
-firstTangeantOf :: Primitive -> Vector
-firstTangeantOf p = case p of
-  LinePrim (Line p0 p1) -> p1 ^-^ p0
-  BezierPrim (Bezier p0 p1 _) -> p1 ^-^ p0
-  CubicBezierPrim (CubicBezier p0 p1 _ _) -> p1 ^-^ p0
 
 -- | Obtain the current tangeant of the path if we're still
 -- on it. Return Nothing otherwise.

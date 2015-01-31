@@ -47,7 +47,7 @@ import Data.DList( DList, fromList, toList  )
 import Data.Foldable( Foldable )
 #endif
 import Data.Foldable( foldl' )
-import Graphics.Rasterific.Linear( V2( .. ), (^-^) )
+import Graphics.Rasterific.Linear( V2( .. ), (^-^), nearZero )
 
 import Foreign.Ptr( castPtr )
 import Foreign.Storable( Storable( sizeOf
@@ -450,8 +450,13 @@ pathToPrimitives (Path origin needClosing commands) = go origin commands
 firstTangeantOf :: Primitive -> Vector
 firstTangeantOf p = case p of
   LinePrim (Line p0 p1) -> p1 ^-^ p0
-  BezierPrim (Bezier p0 p1 _) -> p1 ^-^ p0
-  CubicBezierPrim (CubicBezier p0 p1 _ _) -> p1 ^-^ p0
+  BezierPrim (Bezier p0 p1 p2) ->
+      (p1 ^-^ p0) `ifBigEnough` (p2 ^-^ p1)
+  CubicBezierPrim (CubicBezier p0 p1 p2 _) -> 
+       (p1 ^-^ p0) `ifBigEnough` (p2 ^-^ p1)
+ where
+   ifBigEnough a b | nearZero a = b
+                   | otherwise = a
 
 -- | Gives the orientation vector at the end of the
 -- primitive.

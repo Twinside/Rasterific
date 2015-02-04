@@ -225,7 +225,7 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
             recurse (CubicBezier m bccd cd d)
   where -- Minimal & maximal dimension of the bezier curve
         bmin = vmin a . vmin b $ vmin c d
-        bmax = vmax a . vmax b $ vmin c d
+        bmax = vmax a . vmax b $ vmax c d
 
         recurse = clipCubicBezier mini maxi
 

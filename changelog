@@ -1,7 +1,11 @@
 -*-change-log-*-
 
+v0.4.2 February 2015
+ * Fix: Cubic bezier clipping
+
 v0.4.1 January 2015
  * Fix: GHC 7.10 compilation
+ * Adding: Various lens to access some primitive informations.
 
 v0.4 December 2014
  * Breaking change: Changed the original position scheme for

@@ -1,9 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+
+#if !MIN_VERSION_base(4,8,0)
+import Data.Foldable( foldMap )
+#endif
+
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Data.Foldable( foldMap )
 import Data.Monoid( (<>) )
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific hiding ( fill

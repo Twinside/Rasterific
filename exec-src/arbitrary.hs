@@ -1,8 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Arbitrary( randomTests ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>), pure )
+#endif
+
 import Control.DeepSeq
-import Control.Applicative( (<$>), (<*>), pure )
+import Control.Applicative( (<$>) )
 import Test.QuickCheck
 import Codec.Picture
 import Graphics.Rasterific

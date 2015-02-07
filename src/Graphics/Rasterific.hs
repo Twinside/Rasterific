@@ -53,11 +53,13 @@ module Graphics.Rasterific
     , printTextAt
     , printTextRanges
     , TextRange( .. )
+    , PointSize( .. )
 
       -- * Generating images
     , ModulablePixel
     , RenderablePixel
     , renderDrawing
+    , renderDrawingAtDpi
     , pathToPrimitives
 
       -- * Rasterization types
@@ -99,6 +101,10 @@ module Graphics.Rasterific
     , bezierFromPath
     , lineFromPath
     , cubicBezierFromPath
+    , firstTangeantOf
+    , lastTangeantOf
+    , firstPointOf
+    , lastPointOf
 
       -- * Rasterization control
     , Join( .. )
@@ -145,7 +151,10 @@ import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font, getStringCurveAtPoint )
+import Graphics.Text.TrueType( Font
+                             , Dpi
+                             , PointSize( .. )
+                             , getStringCurveAtPoint )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -183,7 +192,7 @@ withTransformation trans sub =
 -- >     pathToPrimitives path
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
 -- >   withPathOrientation path 0 $
--- >     printTextAt font 24 (V2 0 0) "Text on path"
+-- >     printTextAt font (PointSize 24) (V2 0 0) "Text on path"
 --
 -- <<docimages/text_on_path.png>>
 --
@@ -200,7 +209,7 @@ withTransformation trans sub =
 -- >       pathToPrimitives path
 -- > 
 -- > withPathOrientation path 0 $ do
--- >   printTextAt font 24 (V2 0 0) "TX"
+-- >   printTextAt font (PointSize 24) (V2 0 0) "TX"
 -- >   fill $ rectangle (V2 (-10) (-10)) 30 20
 -- >   fill $ rectangle (V2 45 0) 10 20
 -- >   fill $ rectangle (V2 60 (-10)) 20 20
@@ -286,7 +295,7 @@ stroke width join caping prims =
 -- >       writePng "text_example.png" .
 -- >           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
 -- >               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >                       printTextAt font 12 (V2 20 40)
+-- >                       printTextAt font (PointSize 12) (V2 20 40)
 -- >                            "A simple text test!"
 --
 -- <<docimages/text_example.png>>
@@ -294,7 +303,7 @@ stroke width join caping prims =
 -- You can use any texture, like a gradient while rendering text.
 --
 printTextAt :: Font            -- ^ Drawing font
-            -> Int             -- ^ font Point size
+            -> PointSize       -- ^ font Point size
             -> Point           -- ^ Drawing starting point (base line)
             -> String          -- ^ String to print
             -> Drawing px ()
@@ -310,6 +319,15 @@ printTextAt font pointSize point string =
 
 -- | Print complex text, using different texture font and
 -- point size for different parts of the text.
+--
+-- > let blackTexture =
+-- >       Just . uniformTexture $ PixelRGBA8 0 0 0 255
+-- >     redTexture =
+-- >       Just . uniformTexture $ PixelRGBA8 255 0 0 255
+-- > in
+-- > printTextRanges (V2 20 40)
+-- >   [ TextRange font1 (PointSize 12) "A complex " blackTexture
+-- >   , TextRange font2 (PointSize 8) "text test" redTexture]
 --
 -- <<docimages/text_complex_example.png>>
 --
@@ -327,6 +345,7 @@ data RenderContext px = RenderContext
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
 -- in other colorspace will probably produce weird results.
+-- Default DPI is 96
 renderDrawing
     :: forall px . (RenderablePixel px)
     => Int -- ^ Rendering width
@@ -334,20 +353,34 @@ renderDrawing
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> Image px
-renderDrawing width height background drawing =
+renderDrawing width height = renderDrawingAtDpi width height 96
+
+-- | Function to call in order to start the image creation.
+-- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
+-- in other colorspace will probably produce weird results.
+renderDrawingAtDpi
+    :: forall px . (RenderablePixel px)
+    => Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> px  -- ^ Background color
+    -> Drawing px () -- ^ Rendering action
+    -> Image px
+renderDrawingAtDpi width height dpi background drawing =
     runST $ runDrawContext width height background
           $ mapM_ fillOrder
-          $ drawOrdersOfDrawing width height background drawing
+          $ drawOrdersOfDrawing width height dpi background drawing
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
     :: forall px . (RenderablePixel px) 
     => Int -- ^ Rendering width
     -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current assumed DPI
     -> px  -- ^ Background color
     -> Drawing px () -- ^ Rendering action
     -> [DrawOrder px]
-drawOrdersOfDrawing width height background drawing =
+drawOrdersOfDrawing width height dpi background drawing =
     go initialContext (fromF drawing) []
   where
     initialContext = RenderContext Nothing stupidDefaultTexture Nothing
@@ -421,7 +454,7 @@ drawOrdersOfDrawing width height background drawing =
         go ctxt (sequence_ drawCalls) $ go ctxt next rest
       where
         floatCurves =
-          getStringCurveAtPoint 90 (x, y)
+          getStringCurveAtPoint dpi (x, y)
             [(_textFont d, _textSize d, _text d) | d <- descriptions]
 
         linearDescriptions =

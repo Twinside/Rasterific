@@ -120,7 +120,7 @@ textOnPathExample = do
 
         withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
           withPathOrientation path 0 $
-            printTextAt font 24 (V2 0 0) "Text on path"
+            printTextAt font (PointSize 24) (V2 0 0) "Text on path"
 
 geometryOnPath :: IO ()
 geometryOnPath = do
@@ -136,7 +136,7 @@ geometryOnPath = do
               pathToPrimitives path
      
         withPathOrientation path 0 $ do
-          printTextAt font 24 (V2 0 0) "TX"
+          printTextAt font (PointSize 24) (V2 0 0) "TX"
           fill $ rectangle (V2 (-10) (-10)) 30 20
           fill $ rectangle (V2 45 0) 10 20
           fill $ rectangle (V2 60 (-10)) 20 20
@@ -151,7 +151,7 @@ textExample = do
       writePng (outFolder </> "text_example.png") .
           renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
               . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
-                      printTextAt font 12 (V2 20 40) "A simple text test!"
+                      printTextAt font (PointSize 12) (V2 20 40) "A simple text test!"
 
 textMultipleExample :: IO ()
 textMultipleExample = do
@@ -168,8 +168,8 @@ textMultipleExample = do
                     Just . uniformTexture $ PixelRGBA8 255 0 0 255
               in
               printTextRanges (V2 20 40)
-                [ TextRange font1 12 "A complex " blackTexture
-                , TextRange font2 8 "text test" redTexture]
+                [ TextRange font1 (PointSize 12) "A complex " blackTexture
+                , TextRange font2 (PointSize 8) "text test" redTexture]
                     
                     
 
@@ -190,9 +190,9 @@ coordinateSystem = do
     create font = withTexture (uniformTexture black) $ do
         stroker $ line (V2 10 40) (V2 190 40)
         stroker $ line (V2 40 10) (V2 40 190)
-        printTextAt font 12 (V2 4 37) "(0,0)"
-        printTextAt font 12 (V2 100 37) "(width, 0)"
-        printTextAt font 12 (V2 57 190) "(0, height)"
+        printTextAt font (PointSize 12) (V2 4 37) "(0,0)"
+        printTextAt font (PointSize 12) (V2 100 37) "(width, 0)"
+        printTextAt font (PointSize 12) (V2 57 190) "(0, height)"
         filler $ Path (V2 170 30) True
             [PathLineTo (V2 195 40), PathLineTo (V2 170 50)]
         filler $ Path (V2 30 170) True

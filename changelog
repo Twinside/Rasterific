@@ -1,5 +1,13 @@
 -*-change-log-*-
 
+v0.5 February 2015
+ * Breaking Change: Font size is now a newtype in FontyFruity,
+   propagating the changes.
+ * Allowing to specify DPI at the top level of the rendering
+   request.
+ * Adding: an helper function to retrieve the distance to the
+ * Changed: font size switched to float.
+
 v0.4.2 February 2015
  * Fix: Cubic bezier clipping
 

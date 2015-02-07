@@ -1,9 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+
+#if !MIN_VERSION_base(4,8,0)
+import Data.Foldable( foldMap )
+#endif
+
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Data.Foldable( foldMap )
 import Data.Monoid( (<>) )
 import Control.Applicative( (<$>) )
 import Graphics.Rasterific hiding ( fill
@@ -320,7 +325,7 @@ textAlignStringTest fontName filename txt = do
         writePng (outFolder </> filename) .
             renderDrawing 300 70 white
                 . withTexture (uniformTexture black) $
-                        printTextAt font 12 (V2 20 40) txt
+                        printTextAt font (PointSize 12) (V2 20 40) txt
 
 textStrokeTest :: String -> String -> String -> IO ()
 textStrokeTest fontName filename txt = do
@@ -329,8 +334,8 @@ textStrokeTest fontName filename txt = do
     case fontErr of
       Left err -> putStrLn err
       Right font -> do
-        let drawing = printTextAt font 20 (V2 30 30) txt
-            orders = drawOrdersOfDrawing 300 300 (PixelRGBA8 0 0 0 0) drawing
+        let drawing = printTextAt font (PointSize 20) (V2 30 30) txt
+            orders = drawOrdersOfDrawing 300 300 96 (PixelRGBA8 0 0 0 0) drawing
         writePng (outFolder </> filename) .
             renderDrawing 300 70 white .
                 withTexture (uniformTexture black) .
@@ -624,6 +629,21 @@ shouldBeTheSame = do
       withTexture (uniformTexture drawColor) $
         stroke 4 JoinRound (CapRound, CapRound) [CubicBezierPrim bez]
 
+clipFail :: IO ()
+clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
+  where
+    trans = applyTransformation $ translate (V2 0 (-20))
+    img = renderDrawing 512 256 white .
+            withTexture (uniformTexture red) $ fill geometry
+
+    geometry = transform trans $ CubicBezierPrim <$>
+      [ CubicBezier (V2 104.707344 88.55418) (V2 153.00671 140.66666)
+                    (V2 201.30609 192.77914) (V2 249.60547 244.89162)
+      , CubicBezier (V2 249.60547 244.89162) (V2 349.59445 206.46687)
+                    (V2 449.58347 168.04214) (V2 549.57245 129.6174)
+      , CubicBezier (V2 549.57245 129.6174)  (V2 401.28406 115.92966)
+                    (V2 252.99573 102.24192) (V2 104.707344 88.55418)
+      ]
   
 testSuite :: IO ()
 testSuite = do
@@ -646,6 +666,7 @@ testSuite = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  clipFail
   pledgeTest
   strokeBad 
   strokeBad2

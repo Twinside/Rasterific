@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.5.0.1 February 2015
+ * Fix: adding missing Arbitrary file in the distribution.
+
 v0.5 February 2015
  * Breaking Change: Font size is now a newtype in FontyFruity,
    propagating the changes.

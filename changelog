@@ -1,5 +1,11 @@
 -*-change-log-*-
 
+v0.5.0.3 February 2015
+ * Fix: hackage documentation
+
+v0.5.0.2 February 2015
+ * Removing test-suite as it's dependent of some repository-local files
+
 v0.5.0.1 February 2015
  * Fix: adding missing Arbitrary file in the distribution.
 

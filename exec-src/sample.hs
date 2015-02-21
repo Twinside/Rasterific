@@ -35,7 +35,7 @@ triangles =
               triangle
 
 
-    triangle = pathToPrimitives $
+    triangle =
         Path (V2 0 50) True
           [ PathLineTo (V2 50 (-30))
           , PathLineTo (V2 (-50) (-30))

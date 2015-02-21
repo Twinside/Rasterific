@@ -12,6 +12,10 @@ module Graphics.Rasterific.Types
     , Bezier( .. )
     , CubicBezier( .. )
     , Primitive( .. )
+
+    , Primitivable( .. )
+    , Geometry( .. )
+
     , Producer
     , Container
     , containerOfList
@@ -39,14 +43,16 @@ module Graphics.Rasterific.Types
     , lastTangeantOf
     , firstPointOf
     , lastPointOf
+
     ) where
 
-import Data.DList( DList, fromList, toList  )
+import Data.DList( DList, fromList )
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable )
 #endif
-import Data.Foldable( foldl' )
+import Data.Foldable( foldl', toList )
+import qualified Data.Foldable as F
 import Graphics.Rasterific.Linear( V2( .. ), (^-^), nearZero )
 
 import Foreign.Ptr( castPtr )
@@ -116,7 +122,6 @@ data Join
 -- > fillingSample fillMethod = fillWithMethod fillMethod geometry where
 -- >   geometry = transform (applyTransformation $ scale 0.35 0.4
 -- >                                            <> translate (V2 (-80) (-180)))
--- >            $ concatMap pathToPrimitives
 -- >      [ Path (V2 484 499) True
 -- >          [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
 -- >          , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
@@ -213,19 +218,21 @@ class PointFoldable a where
     -- the primitive.
     foldPoints :: (b -> Point -> b) -> b -> a -> b
 
+-- | Just apply the function
 instance Transformable Point where
     {-# INLINE transform #-}
     transform f = f
 
+-- | Just apply the function
 instance PointFoldable Point where
     {-# INLINE foldPoints #-}
     foldPoints f = f
 
 -- | Describe a simple 2D line between two points.
 --
--- > fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
--- >                     , Line (V2 190 10) (V2 95 170)
--- >                     , Line (V2 95 170) (V2 10 10)]
+-- > fill [ Line (V2 10 10) (V2 190 10)
+-- >      , Line (V2 190 10) (V2 95 170)
+-- >      , Line (V2 95 170) (V2 10 10)]
 --
 -- <<docimages/simple_line.png>>
 --
@@ -251,9 +258,9 @@ instance PointFoldable Line where
 -- | Describe a quadratic bezier spline, described
 -- using 3 points.
 --
--- > fill $ BezierPrim <$> [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
--- >                       ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
--- >                       ,Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
+-- > fill [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
+-- >      ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
+-- >      ,Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
 --
 -- <<docimages/quadratic_bezier.png>>
 --
@@ -286,8 +293,7 @@ instance PointFoldable Bezier where
 -- using 4 points.
 --
 -- > stroke 4 JoinRound (CapRound, CapRound) $
--- >    [CubicBezierPrim $ CubicBezier (V2 0 10) (V2 205 250)
--- >                                   (V2 (-10) 250) (V2 160 35)]
+-- >    CubicBezier (V2 0 10) (V2 205 250) (V2 (-10) 250) (V2 160 35)
 --
 -- <<docimages/cubic_bezier.png>>
 --
@@ -325,11 +331,10 @@ instance PointFoldable CubicBezier where
 -- on some specific algorithms. You can mix the different
 -- primitives in a single call :
 --
--- > fill
--- >    [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
--- >                                    (V2  5 100) (V2 50 140)
--- >    , LinePrim $ Line (V2 50 140) (V2 120 80)
--- >    , LinePrim $ Line (V2 120 80) (V2 50 20) ]
+-- > fill [ toPrim $ CubicBezier (V2 50 20) (V2 90 60)
+-- >                             (V2  5 100) (V2 50 140)
+-- >      , toPrim $ Line (V2 50 140) (V2 120 80)
+-- >      , toPrim $ Line (V2 120 80) (V2 50 20) ]
 --
 -- <<docimages/primitive_mixed.png>>
 --
@@ -338,6 +343,70 @@ data Primitive
   | BezierPrim !Bezier  -- ^ Primitive used for quadratic beziers curves
   | CubicBezierPrim !CubicBezier -- ^ Primitive used for cubic bezier curve
   deriving (Eq, Show)
+
+-- | Generalizing constructors of the `Primitive` type to work
+-- generically.
+class Primitivable a where
+  toPrim :: a -> Primitive
+
+-- | @toPrim = id@
+instance Primitivable Primitive where toPrim = id
+
+-- | @toPrim = LinePrim@
+instance Primitivable Line where toPrim = LinePrim
+
+-- | @toPrim = BezierPrim@
+instance Primitivable Bezier where toPrim = BezierPrim
+
+-- | @toPrim = CubicBezierPrim@
+instance Primitivable CubicBezier where toPrim = CubicBezierPrim
+
+-- | All the rasterization works on lists of primitives,
+-- in order to ease the use of the library, the Geometry
+-- type class provides conversion facility, which help
+-- generalising the geometry definition and avoid applying
+-- Primitive constructor.
+--
+-- Also streamline the Path conversion.
+class Geometry a where
+  -- | Convert an element to a list of primitives
+  -- to be rendered.
+  toPrimitives :: a -> [Primitive]
+
+  -- | Helper method to avoid overlaping instances.
+  -- You shouldn't use it directly.
+  listToPrims :: (Foldable f) => f a -> [Primitive]
+  {-# INLINE listToPrims #-}
+  listToPrims = F.concatMap toPrimitives . F.toList
+
+instance Geometry Path where
+  {-# INLINE toPrimitives #-}
+  toPrimitives = pathToPrimitives
+
+instance Geometry Primitive where
+  toPrimitives e = [e]
+  {-# INLINE listToPrims #-}
+  listToPrims = F.toList -- Open question, is it optimised as `id`?
+
+instance Geometry Line where
+  {-# INLINE toPrimitives #-}
+  toPrimitives e = [toPrim e]
+
+instance Geometry Bezier where
+  {-# INLINE toPrimitives #-}
+  toPrimitives e = [toPrim e]
+
+instance Geometry CubicBezier where
+  {-# INLINE toPrimitives #-}
+  toPrimitives e = [toPrim e]
+
+-- | Generalize the geometry to any foldable container,
+-- so you can throw any container to the the 'fill' or
+-- 'stroke' function.
+instance (Foldable f, Geometry a) => Geometry (f a) where
+  {-# INLINE toPrimitives #-}
+  toPrimitives = listToPrims
+
 
 instance Transformable Primitive where
     {-# INLINE transform #-}
@@ -378,7 +447,7 @@ listOfContainer = toList
 -- it for the next "move"
 -- For example the example from Primitive could be rewritten:
 --
--- > fill . pathToPrimitives $ Path (V2 50 20) True
+-- > fill $ Path (V2 50 20) True
 -- >    [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
 -- >    , PathLineTo (V2 120 80) ]
 --

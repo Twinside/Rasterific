@@ -189,13 +189,14 @@ sanitize (LinePrim l) = sanitizeLine l
 sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 
-strokize :: StrokeWidth -> Join -> (Cap, Cap) -> [Primitive]
+strokize :: Geometry geom
+         => StrokeWidth -> Join -> (Cap, Cap) -> geom
          -> Container Primitive
-strokize width join (capStart, capEnd) beziers =
+strokize width join (capStart, capEnd) geom =
     offseter capEnd sanitized <>
         offseter capStart (reverse $ reversePrimitive <$> sanitized)
   where 
-        sanitized = foldMap (listOfContainer . sanitize) beziers
+        sanitized = foldMap (listOfContainer . sanitize) $ toPrimitives geom
         offseter = offsetAndJoin (width / 2) join
 
 flattenPrimitive :: Primitive -> Container Primitive
@@ -280,21 +281,20 @@ dashize offset pattern = taker infinitePattern . linearizePrimitives
 --
 -- > mapM_ (stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0)) $
 -- >     dashedStrokize 0 [10, 5]
--- >                    40 JoinRound (CapStraight 0, CapStraight 0)
--- >       [CubicBezierPrim $
--- >            CubicBezier (V2  40 160) (V2 40   40)
--- >                        (V2 160  40) (V2 160 160)]
+-- >                    40 JoinRound (CapStraight 0, CapStraight 0) $
+-- >         CubicBezier (V2  40 160) (V2 40   40) (V2 160  40) (V2 160 160)
 --
 -- <<docimages/strokize_dashed_path.png>>
 --
-dashedStrokize :: Float       -- ^ Starting offset
+dashedStrokize :: Geometry geom
+               => Float       -- ^ Starting offset
                -> DashPattern -- ^ Dashing pattern to use for stroking
                -> StrokeWidth -- ^ Stroke width
                -> Join        -- ^ Which kind of join will be used
                -> (Cap, Cap)  -- ^ Start and end capping.
-               -> [Primitive] -- ^ List of elements to transform
+               -> geom        -- ^ Elements to transform
                -> [[Primitive]]
-dashedStrokize offset dashPattern width join capping beziers =
+dashedStrokize offset dashPattern width join capping geom =
     listOfContainer . strokize width join capping
-        <$> dashize offset dashPattern beziers
+        <$> dashize offset dashPattern (toPrimitives geom)
 

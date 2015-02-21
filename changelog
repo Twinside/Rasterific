@@ -1,5 +1,10 @@
 -*-change-log-*-
 
+v0.5.1 ??? 2015
+ * Enhancement: Generalizing geometry description, with automatic
+   conversion, reducing the need of type constructor from Primitive,
+   and directly filling Path.
+
 v0.5.0.3 February 2015
  * Fix: hackage documentation
 

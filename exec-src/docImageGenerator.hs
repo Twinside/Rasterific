@@ -24,7 +24,7 @@ import Graphics.Rasterific.Linear( (^+^) )
 
 logo :: Int -> Bool -> Vector -> [Primitive]
 logo size inv offset =
-    map BezierPrim . bezierFromPath . way $ map (^+^ offset)
+    toPrimitives . bezierFromPath . way $ map (^+^ offset)
     [ (V2   0  is)
     , (V2   0   0)
     , (V2  is   0)
@@ -71,7 +71,7 @@ joinTester (filename, join) =
         withTexture accentTexture $
             stroke 2 join (CapRound, CapRound) base_stroke
   where 
-    base_stroke = LinePrim <$>
+    base_stroke =
         [ Line (V2 0 200) (V2 100 100)
         , Line (V2 100 100) (V2 200 200)
         ]
@@ -130,8 +130,7 @@ textOnPathExample = do
                       [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
       in
       produceDocImage (outFolder </> "text_on_path.png") $ do
-        stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
-            pathToPrimitives path
+        stroke 3 JoinRound (CapStraight 0, CapStraight 0) path
 
         withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $ do
           withPathOrientation path 0 $
@@ -147,8 +146,7 @@ geometryOnPath = do
         let path = Path (V2 100 180) False
                         [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
         withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
-          stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
-              pathToPrimitives path
+          stroke 3 JoinRound (CapStraight 0, CapStraight 0) path
      
         withPathOrientation path 0 $ do
           printTextAt font (PointSize 24) (V2 0 0) "TX"
@@ -201,23 +199,21 @@ coordinateSystem = do
     white = PixelRGBA8 255 255 255 255
     black = PixelRGBA8   0   0   0 255
     stroker = stroke 4 JoinRound (CapStraight 0, CapStraight 0)
-    filler = fill . pathToPrimitives
     create font = withTexture (uniformTexture black) $ do
         stroker $ line (V2 10 40) (V2 190 40)
         stroker $ line (V2 40 10) (V2 40 190)
         printTextAt font (PointSize 12) (V2 4 37) "(0,0)"
         printTextAt font (PointSize 12) (V2 100 37) "(width, 0)"
         printTextAt font (PointSize 12) (V2 57 190) "(0, height)"
-        filler $ Path (V2 170 30) True
+        fill $ Path (V2 170 30) True
             [PathLineTo (V2 195 40), PathLineTo (V2 170 50)]
-        filler $ Path (V2 30 170) True
+        fill $ Path (V2 30 170) True
             [PathLineTo (V2 40 195), PathLineTo (V2 50 170)]
 
 fillingSample :: FillMethod -> Drawing px ()
 fillingSample fillMethod = fillWithMethod fillMethod geometry where
   geometry = transform (applyTransformation $ scale 0.35 0.4
                                            <> translate (V2 (-80) (-180)))
-           $ concatMap pathToPrimitives
      [ Path (V2 484 499) True
          [ PathCubicBezierCurveTo (V2 681 452) (V2 639 312) (V2 541 314)
          , PathCubicBezierCurveTo (V2 327 337) (V2 224 562) (V2 484 499)
@@ -313,18 +309,16 @@ main = do
 
     produceDocImage (outFolder </> "strokize_path.png") $
       stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
-          strokize 40 JoinRound (CapRound, CapRound)
-            [CubicBezierPrim $
-                 CubicBezier (V2  40 160) (V2 40   40)
-                             (V2 160  40) (V2 160 160)]
+          strokize 40 JoinRound (CapRound, CapRound) $
+            CubicBezier (V2  40 160) (V2 40   40)
+                        (V2 160  40) (V2 160 160)
 
     produceDocImage (outFolder </> "strokize_dashed_path.png") $
       mapM_ (stroke 3 (JoinMiter 0) (CapStraight 0, CapStraight 0)) $
           dashedStrokize 0 [10, 5]
                          40 JoinRound (CapStraight 0, CapStraight 0)
-            [CubicBezierPrim $
-                 CubicBezier (V2  40 160) (V2 40   40)
-                             (V2 160  40) (V2 160 160)]
+            [CubicBezier (V2  40 160) (V2 40   40)
+                         (V2 160  40) (V2 160 160)]
 
     produceDocImage (outFolder </> "with_clipping.png") $
       withClipping (fill $ circle (V2 100 100) 75) $
@@ -371,28 +365,28 @@ main = do
 
     produceDocImage (outFolder </> "cubic_bezier.png") $
         stroke 5 JoinRound (CapRound, CapRound) $
-            [CubicBezierPrim $ CubicBezier (V2 0 10) (V2 205 250)
-                                           (V2 (-10) 250) (V2 160 35)]
+            CubicBezier (V2 0 10) (V2 205 250)
+                        (V2 (-10) 250) (V2 160 35)
 
     produceDocImage (outFolder </> "quadratic_bezier.png") $
-        fill $ BezierPrim <$> [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
-                            ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
-                            ,Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
+        fill [ Bezier (V2 10 10) (V2 200 50) (V2 200 100)
+             , Bezier (V2 200 100) (V2 150 200) (V2 120 175)
+             , Bezier (V2 120 175) (V2 30 100) (V2 10 10)]
 
     produceDocImage (outFolder </> "simple_line.png") $
-        fill $ LinePrim <$> [ Line (V2 10 10) (V2 190 10)
-                            , Line (V2 190 10) (V2 95 170)
-                            , Line (V2 95 170) (V2 10 10)]
+        fill [ Line (V2 10 10) (V2 190 10)
+             , Line (V2 190 10) (V2 95 170)
+             , Line (V2 95 170) (V2 10 10) ]
 
     produceDocImage (outFolder </> "primitive_mixed.png") $
         fill
-            [ CubicBezierPrim $ CubicBezier (V2 50 20) (V2 90 60)
-                                            (V2  5 100) (V2 50 140)
-            , LinePrim $ Line (V2 50 140) (V2 120 80)
-            , LinePrim $ Line (V2 120 80) (V2 50 20) ]
+            [ toPrim $ CubicBezier (V2 50 20) (V2 90 60)
+                                   (V2  5 100) (V2 50 140)
+            , toPrim $ Line (V2 50 140) (V2 120 80)
+            , toPrim $ Line (V2 120 80) (V2 50 20) ]
 
     produceDocImage (outFolder </> "path_example.png") $
-       fill . pathToPrimitives $ Path (V2 50 20) True
+       fill $ Path (V2 50 20) True
           [ PathCubicBezierCurveTo (V2 90 60) (V2  5 100) (V2 50 140)
           , PathLineTo (V2 120 80) ]
 

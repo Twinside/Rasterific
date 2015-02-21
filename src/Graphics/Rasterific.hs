@@ -77,6 +77,12 @@ module Graphics.Rasterific
     , Primitive( .. )
     , Path( .. )
     , PathCommand( .. )
+
+      -- * Generic geometry description
+    , Primitivable( .. )
+    , Geometry( .. )
+
+      -- * Generic geometry manipulation
     , Transformable( .. )
     , PointFoldable( .. )
     , PlaneBoundable( .. )
@@ -116,7 +122,6 @@ module Graphics.Rasterific
 
       -- * Debugging helper
     , dumpDrawing
-
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -188,8 +193,7 @@ withTransformation trans sub =
 --
 -- > let path = Path (V2 100 180) False
 -- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)] in
--- > stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
--- >     pathToPrimitives path
+-- > stroke 3 JoinRound (CapStraight 0, CapStraight 0) path
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
 -- >   withPathOrientation path 0 $
 -- >     printTextAt font (PointSize 24) (V2 0 0) "Text on path"
@@ -205,8 +209,7 @@ withTransformation trans sub =
 -- > let path = Path (V2 100 180) False
 -- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
--- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) $
--- >       pathToPrimitives path
+-- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) path
 -- > 
 -- > withPathOrientation path 0 $ do
 -- >   printTextAt font (PointSize 24) (V2 0 0) "TX"
@@ -234,15 +237,16 @@ withPathOrientation path p sub =
 --
 -- <<docimages/fill_circle.png>>
 --
-fill :: [Primitive] -> Drawing px ()
-fill prims = liftF $ Fill FillWinding prims ()
+fill :: Geometry geom => geom -> Drawing px ()
+fill prims = liftF $ Fill FillWinding (toPrimitives prims) ()
 
 -- | This function let you choose how to fill the primitives
 -- in case of self intersection. See `FillMethod` documentation
 -- for more information.
-fillWithMethod :: FillMethod -> [Primitive] -> Drawing px ()
+fillWithMethod :: Geometry geom
+               => FillMethod -> geom -> Drawing px ()
 fillWithMethod method prims =
-    liftF $ Fill method prims ()
+    liftF $ Fill method (toPrimitives prims) ()
 
 -- | Draw some geometry using a clipping path.
 --
@@ -268,13 +272,14 @@ withClipping clipPath drawing =
 --
 -- <<docimages/stroke_circle.png>>
 --
-stroke :: Float       -- ^ Stroke width
+stroke :: (Geometry geom)
+       => Float       -- ^ Stroke width
        -> Join        -- ^ Which kind of join will be used
        -> (Cap, Cap)  -- ^ Start and end capping.
-       -> [Primitive] -- ^ List of elements to render
+       -> geom        -- ^ List of elements to render
        -> Drawing px ()
 stroke width join caping prims =
-    liftF $ Stroke width join caping prims ()
+    liftF $ Stroke width join caping (toPrimitives prims) ()
 
 -- | Draw a string at a given position.
 -- Text printing imply loading a font, there is no default
@@ -490,17 +495,18 @@ drawOrdersOfDrawing width height dpi background drawing =
 -- | With stroke geometry with a given stroke width, using
 -- a dash pattern.
 --
--- > dashedStroke [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0)
--- >        [line (V2 0 100) (V2 200 100)]
+-- > dashedStroke [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
+-- >     line (V2 0 100) (V2 200 100)
 --
 -- <<docimages/dashed_stroke.png>>
 --
 dashedStroke
-    :: DashPattern -- ^ Dashing pattern to use for stroking
+    :: Geometry geom
+    => DashPattern -- ^ Dashing pattern to use for stroking
     -> Float       -- ^ Stroke width
     -> Join        -- ^ Which kind of join will be used
     -> (Cap, Cap)  -- ^ Start and end capping.
-    -> [Primitive] -- ^ List of elements to render
+    -> geom        -- ^ List of elements to render
     -> Drawing px ()
 dashedStroke = dashedStrokeWithOffset 0.0
 
@@ -508,23 +514,24 @@ dashedStroke = dashedStrokeWithOffset 0.0
 -- a dash pattern. The offset is there to specify the starting
 -- point into the pattern, the value can be negative.
 --
--- > dashedStrokeWithOffset 3 [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0)
--- >        [line (V2 0 100) (V2 200 100)]
+-- > dashedStrokeWithOffset 3 [5, 10, 5] 3 JoinRound (CapRound, CapStraight 0) $
+-- >     line (V2 0 100) (V2 200 100)
 --
 -- <<docimages/dashed_stroke_with_offset.png>>
 --
 dashedStrokeWithOffset
-    :: Float       -- ^ Starting offset
+    :: Geometry geom
+    => Float       -- ^ Starting offset
     -> DashPattern -- ^ Dashing pattern to use for stroking
     -> Float       -- ^ Stroke width
     -> Join        -- ^ Which kind of join will be used
     -> (Cap, Cap)  -- ^ Start and end capping.
-    -> [Primitive] -- ^ List of elements to render
+    -> geom        -- ^ List of elements to render
     -> Drawing px ()
 dashedStrokeWithOffset _ [] width join caping prims =
     stroke width join caping prims
 dashedStrokeWithOffset offset dashing width join caping prims =
-    liftF $ DashedStroke offset dashing width join caping prims ()
+    liftF $ DashedStroke offset dashing width join caping (toPrimitives prims) ()
 
 -- | Generate a list of primitive representing a circle.
 --

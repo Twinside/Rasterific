@@ -1,6 +1,6 @@
 -*-change-log-*-
 
-v0.5.1 ??? 2015
+v0.5.1 March 2015
  * Enhancement: Generalizing geometry description, with automatic
    conversion, reducing the need of type constructor from Primitive,
    and directly filling Path.

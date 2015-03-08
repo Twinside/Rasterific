@@ -33,17 +33,17 @@ import Criterion.Main( defaultMainWith
 {-import Text.Groom( groom )-}
 import qualified Sample as Sample
 
-type Stroker =
-    Float -> Join -> (Cap, Cap) -> [Primitive]
-        -> Drawing PixelRGBA8 ()
+type Stroker g =
+  (Geometry g) =>
+      Float -> Join -> (Cap, Cap) -> g -> Drawing PixelRGBA8 ()
 
-type DashStroker = DashPattern -> Stroker
+type DashStroker g = DashPattern -> Stroker g
 
 outFolder :: FilePath
 outFolder = "test_results"
 
-logo :: Int -> Bool -> Vector -> [Primitive]
-logo size inv offset = map BezierPrim . bezierFromPath . way $ map (^+^ offset)
+logo :: Int -> Bool -> Vector -> [Bezier]
+logo size inv offset = bezierFromPath . way $ map (^+^ offset)
     [ (V2   0  is)
     , (V2   0   0)
     , (V2  is   0)
@@ -75,34 +75,38 @@ biColor, triColor :: Gradient PixelRGBA8
 biColor = [ (0.0, black) , (1.0, yellow) ]
 triColor = [ (0.0, blue), (0.5, white) , (1.0, red) ]
 
-fill :: [Primitive] -> Drawing PixelRGBA8 ()
+fill :: Geometry g => g -> Drawing PixelRGBA8 ()
 fill = fillWithMethod FillWinding
 
-drawBoundingBox :: [Primitive] -> Drawing PixelRGBA8 ()
-drawBoundingBox prims = do
-  let PlaneBound mini maxi = foldMap planeBounds prims
+drawBoundingBox :: Geometry g => g -> Drawing PixelRGBA8 ()
+drawBoundingBox geom = do
+  let prims = toPrimitives geom
+      PlaneBound mini maxi = foldMap planeBounds prims
       V2 width height = maxi ^-^ mini
   withTexture (uniformTexture red) $
       R.stroke 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
         rectangle mini width height
 
-stroke :: Float -> Join -> (Cap, Cap) -> [Primitive]
+stroke :: Geometry g
+       => Float -> Join -> (Cap, Cap) -> g
        -> Drawing PixelRGBA8 ()
 stroke w j cap prims =
     R.stroke w j cap prims -- >> drawBoundingBox prims
 
-dashedStroke :: DashPattern -> Float -> Join -> (Cap, Cap) -> [Primitive]
-            -> Drawing PixelRGBA8 ()
+dashedStroke :: Geometry g
+             => DashPattern -> Float -> Join -> (Cap, Cap) -> g
+             -> Drawing PixelRGBA8 ()
 dashedStroke p w j c prims =
     R.dashedStroke p w j c prims >> drawBoundingBox prims
 
 dashedStrokeWithOffset
-    :: Float -> DashPattern -> Float -> Join -> (Cap, Cap) -> [Primitive]
+    :: Geometry g
+    => Float -> DashPattern -> Float -> Join -> (Cap, Cap) -> g
     -> Drawing PixelRGBA8 ()
 dashedStrokeWithOffset o p w j c prims =
     R.dashedStrokeWithOffset o p w j c prims >> drawBoundingBox prims
 
-fillWithMethod :: FillMethod -> [Primitive] -> Drawing PixelRGBA8 ()
+fillWithMethod :: Geometry g => FillMethod -> g -> Drawing PixelRGBA8 ()
 fillWithMethod method prims =
   R.fillWithMethod method prims >> drawBoundingBox prims
 
@@ -138,8 +142,8 @@ circleTest texture prefix =
     drawing = withTexture texture . fill $ circle (V2 100 100) 90
     img = renderDrawing 200 200 background drawing
 
-cubicTest :: [Primitive]
-cubicTest = map CubicBezierPrim $ cubicBezierFromPath 
+cubicTest :: [CubicBezier]
+cubicTest = cubicBezierFromPath 
     [ V2 50 20 
     , V2 90 60
     , V2  5 100
@@ -173,7 +177,7 @@ clipTest = writePng (outFolder </> "clip.png") img
         drawing = withTexture texture $ mapM_ fill beziers
         img = renderDrawing 100 100 background drawing
 
-strokeTest2 :: Stroker -> String -> IO ()
+strokeTest2 :: (forall g. Stroker g) -> String -> IO ()
 strokeTest2 stroker prefix =
     writePng (outFolder </> (prefix ++ "stroke2.png")) img
   where texture = uniformTexture blue
@@ -184,18 +188,18 @@ strokeTest2 stroker prefix =
         drawing = withTexture texture . sequence_ . concat $
             [ []
             , [stroker 9 JoinRound (CapRound, CapStraight 0)
-                    . map LinePrim . lineFromPath $
+                    . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
             , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
-                . map LinePrim . lineFromPath $
+                . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             ]
 
         img = renderDrawing 500 500 background drawing
 
-strokeTestCliping :: Stroker -> String -> IO ()
+strokeTestCliping :: (forall g. Stroker g) -> String -> IO ()
 strokeTestCliping stroker prefix =
     writePng (outFolder </> (prefix ++ "stroke_clipping.png")) img
   where texture = uniformTexture blue
@@ -210,11 +214,11 @@ strokeTestCliping stroker prefix =
             withTexture texture . sequence_ . concat $
             [ []
             , [stroker 9 JoinRound (CapRound, CapStraight 0)
-                    . map LinePrim . lineFromPath $
+                    . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [-5 .. -1] ]
             , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
-                . map LinePrim . lineFromPath $
+                . lineFromPath $
                 (^+^ (V2 15 (20 * (ix + 5)))) <$> points
                     | ix <- [0 .. 5] ]
             ]
@@ -223,7 +227,7 @@ strokeTestCliping stroker prefix =
 
         img = renderDrawing 500 500 background drawing
 
-strokeLogo :: Stroker -> String -> IO ()
+strokeLogo :: (forall g. Stroker g) -> String -> IO ()
 strokeLogo stroker prefix =
   writePng (outFolder </> (prefix ++ "stroke_logo.png")) img
     where texture = uniformTexture blue
@@ -234,14 +238,13 @@ strokeLogo stroker prefix =
               . stroker 4 JoinRound (CapRound, CapRound)
               $ beziers ++ inverse
 
-strokeQuadraticIntersection ::
-    Stroker -> Texture PixelRGBA8 -> String -> IO ()
+strokeQuadraticIntersection
+    :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String -> IO ()
 strokeQuadraticIntersection stroker texture prefix =
   writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
     where img = renderDrawing 500 500 background 
               . withTexture texture
               . stroker 40 JoinRound (CapRound, CapRound)
-              . map BezierPrim
               $ bezierFromPath
                 [ V2 30 30
                 , V2 150 200
@@ -251,7 +254,7 @@ strokeQuadraticIntersection stroker texture prefix =
                 , V2 30  450
                 ]
 
-strokeCubic :: Stroker -> Texture PixelRGBA8 -> String
+strokeCubic :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String
             -> IO ()
 strokeCubic stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
@@ -275,14 +278,14 @@ strokeCubic stroker texture prefix =
 
             , [stroker 15 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
-                    [CubicBezierPrim cusp]]
+                    cusp]
 
             , [stroker 25 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
-                    [CubicBezierPrim loop]]
+                    loop]
             ]
 
-strokeCubicDashed :: DashStroker -> Texture PixelRGBA8 -> String
+strokeCubicDashed :: (forall g. DashStroker g) -> Texture PixelRGBA8 -> String
                   -> IO ()
 strokeCubicDashed stroker texture prefix =
     writePng (outFolder </> (prefix ++ "cubicStrokeDashed.png")) img
@@ -308,11 +311,11 @@ strokeCubicDashed stroker texture prefix =
 
             , [stroker dashPattern 15 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
-                    [CubicBezierPrim cusp]]
+                    cusp]
 
             , [stroker dashPattern 25 (JoinMiter 0)
                     (CapStraight 0, CapStraight 0)
-                    [CubicBezierPrim loop]]
+                    loop]
             ]
 
 textAlignStringTest :: String -> String -> String -> IO ()
@@ -342,7 +345,7 @@ textStrokeTest fontName filename txt = do
                     mapM_ (mapM_ (stroke 1 (JoinMiter 0) (CapRound, CapRound)
                             ) . _orderPrimitives) $ orders
 
-strokeTest :: Stroker -> Texture PixelRGBA8 -> String
+strokeTest :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
     writePng (outFolder </> (prefix ++ "stroke.png")) img
@@ -375,7 +378,6 @@ orientationAxisText =
         . renderDrawing 400 400 white
         . withTexture (uniformTexture blue)
         . fill . transform (applyTransformation trans)
-        . pathToPrimitives
         $ Path (V2 (-100) (-10)) True
               [ PathLineTo (V2 (-20) (-10))
               , PathLineTo (V2 0 5)
@@ -413,7 +415,7 @@ complexEvenOddTest size texture = mapM_ tester [(filling, ix)
         . fillWithMethod method
         . fmap (transform . applyTransformation $
                             rotateCenter (fromIntegral i / 6) (V2 (350) (350)))
-        $ concatMap pathToPrimitives command
+        $ command
 
 evenOddTest :: Texture PixelRGBA8 -> IO ()
 evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
@@ -429,10 +431,10 @@ evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
         . renderDrawing 300 300 white
         . withTexture texture
         . fillWithMethod FillEvenOdd
-        . fmap (transform . applyTransformation $
+        $ transform (applyTransformation $
                             translate (V2 (-80) (-40))
                             <> rotateCenter (fromIntegral i / 6) (V2 (250) (200)))
-        $ pathToPrimitives command
+          command
 
 crash :: Texture PixelRGBA8 -> IO ()
 crash texture = do
@@ -440,7 +442,7 @@ crash texture = do
         renderDrawing 600 600 background $
             withTexture texture $ fill geom
   where
-    geom = concat
+    geom =
         [line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
         ,line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
         ,line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
@@ -457,16 +459,16 @@ strokeCrash = do
      img = renderDrawing 600 600 white $
         withTexture (uniformTexture drawColor) $ do
            stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
-            [LinePrim (Line (V2 572.7273 572.7273) (V2 572.7273 27.272766))
-            ,LinePrim (Line (V2 572.7273 27.272728) (V2 27.272766 27.272728))
-            ,LinePrim (Line (V2 27.272728 27.272728) (V2 27.272728 572.72723))
-            ,LinePrim (Line (V2 27.272728 572.7273) (V2 572.72723 572.7273))
+            [Line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
+            ,Line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
+            ,Line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
+            ,Line (V2 27.272728 572.7273) (V2 572.72723 572.7273)
             ]
            stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
-            [LinePrim (Line (V2 481.81818 481.81818) (V2 118.18182 481.81818))
-            ,LinePrim (Line (V2 118.181816 481.81818) (V2 118.181816 118.18182))
-            ,LinePrim (Line (V2 118.181816 118.181816) (V2 481.81818 118.181816))
-            ,LinePrim (Line (V2 481.81818 118.181816) (V2 481.81818 481.81818))
+            [Line (V2 481.81818 481.81818) (V2 118.18182 481.81818)
+            ,Line (V2 118.181816 481.81818) (V2 118.181816 118.18182)
+            ,Line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
+            ,Line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
             ]
 
  writePng (outFolder </> "stroke_crash.png") img
@@ -478,11 +480,9 @@ dashTest = writePng (outFolder </> "dashed_wheel.png")
   where
     drawing =
         dashedStrokeWithOffset 0.0 [4.0,4.0] 10.0
-            (JoinMiter 0.0) (CapStraight 0.0,CapStraight 0.0) 
-            [CubicBezierPrim
+            (JoinMiter 0.0) (CapStraight 0.0,CapStraight 0.0) $
                 (CubicBezier (V2 525.0 275.0) (V2 525.0 136.92882)
                              (V2 413.0712 25.0) (V2 275.0 25.0))
-            ]
 
 weirdCircle :: IO ()
 weirdCircle = writePng (outFolder </> "bad_circle.png")
@@ -490,22 +490,14 @@ weirdCircle = writePng (outFolder </> "bad_circle.png")
             $ withTexture (uniformTexture black) drawing
   where
     drawing =
-        fill [CubicBezierPrim $ CubicBezier (V2 375.0 125.0)
-                                            (V2 375.0 55.96441)
-                                            (V2 319.03558 0.0)
-                                            (V2 250.0 0.0)
-             ,CubicBezierPrim $ CubicBezier (V2 250.0 (-1.4210855e-14))
-                                            (V2 180.96442 (-1.8438066e-14))
-                                            (V2 125.0 55.964405)
-                                            (V2 125.0 125.0)
-             ,CubicBezierPrim $ CubicBezier (V2 125.0 125.0)
-                                            (V2 125.0 194.03558)
-                                            (V2 180.9644 250.0)
-                                            (V2 250.0 250.0)
-             ,CubicBezierPrim $ CubicBezier (V2 250.0 250.0)
-                                            (V2 319.03558 250.0)
-                                            (V2 375.0 194.0356)
-                                            (V2 375.0 125.0)
+        fill [CubicBezier (V2 375.0 125.0) (V2 375.0 55.96441)
+                          (V2 319.03558 0.0) (V2 250.0 0.0)
+             ,CubicBezier (V2 250.0 (-1.4210855e-14)) (V2 180.96442 (-1.8438066e-14))
+                          (V2 125.0 55.964405) (V2 125.0 125.0)
+             ,CubicBezier (V2 125.0 125.0) (V2 125.0 194.03558)
+                          (V2 180.9644 250.0) (V2 250.0 250.0)
+             ,CubicBezier (V2 250.0 250.0) (V2 319.03558 250.0)
+                          (V2 375.0 194.0356) (V2 375.0 125.0)
              ]
 
 transparentGradient :: IO ()
@@ -548,7 +540,6 @@ strokeBad2 =
                                    ,CapRound) $
             BezierPrim <$>
                 [
-                {-
                  Bezier (V2 44.958496 23.413086) (V2 39.9292 23.413086) (V2 34.91211 23.413086)
                 ,Bezier (V2 34.91211 23.413086) (V2 34.91211 24.67041) (V2 35.290527 25.610352)
                 ,Bezier (V2 35.290527 25.610352) (V2 35.668945 26.538086) (V2 36.328125 27.13623)
@@ -559,24 +550,19 @@ strokeBad2 =
                 ,Bezier (V2 44.56787 26.660156) (V2 44.628906 26.660156) (V2 44.68994 26.660156)
                 ,Bezier (V2 44.68994 26.660156) (V2 44.68994 27.91748) (V2 44.68994 29.162598)
                 ,Bezier (V2 44.68994 29.162598) (V2 43.530273 29.650879) (V2 42.321777 29.980469)
-                 -}
-                {-
-                 Bezier (V2 42.321777 29.980469) (V2 41.11328 30.310059) (V2 39.782715 30.310059)
+                ,Bezier (V2 42.321777 29.980469) (V2 41.11328 30.310059) (V2 39.782715 30.310059)
                 ,Bezier (V2 39.782715 30.310059) (V2 36.38916 30.310059) (V2 34.484863 28.479004)
                 ,Bezier (V2 34.484863 28.479004) (V2 32.580566 26.635742) (V2 32.580566 23.254395)
                 ,Bezier (V2 32.580566 23.254395) (V2 32.580566 19.909668) (V2 34.399414 17.944336)
                 ,Bezier (V2 34.399414 17.944336) (V2 36.23047 15.979004) (V2 39.208984 15.979004)
                 ,Bezier (V2 39.208984 15.979004) (V2 41.967773 15.979004) (V2 43.45703 17.590332)
-                -}
                 -- Bezier (V2 43.45703 17.590332) (V2 44.958496 19.20166) (V2 44.958496 22.167969)
-                 Bezier (V2 44.958496 22.167969) (V2 44.958496 22.790527) (V2 44.958496 23.413086)
+                ,Bezier (V2 44.958496 22.167969) (V2 44.958496 22.790527) (V2 44.958496 23.413086)
                 ,Bezier (V2 42.72461 21.655273) (V2 42.712402 19.848633) (V2 41.809082 18.859863)
-                {-
-                 Bezier (V2 41.809082 18.859863) (V2 40.91797 17.871094) (V2 39.086914 17.871094)
+                ,Bezier (V2 41.809082 18.859863) (V2 40.91797 17.871094) (V2 39.086914 17.871094)
                 ,Bezier (V2 39.086914 17.871094) (V2 37.243652 17.871094) (V2 36.14502 18.95752)
                 ,Bezier (V2 36.14502 18.95752) (V2 35.058594 20.043945) (V2 34.91211 21.655273)
                 ,Bezier (V2 34.91211 21.655273) (V2 38.81836 21.655273) (V2 42.72461 21.655273)
-                -- -}
                 ]
 
 strokeBad :: IO ()
@@ -594,7 +580,6 @@ strokeBad =
             withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
                 stroke 2.0 (JoinMiter 1.0) (CapStraight 0.0
                                            ,CapStraight 0.0) $
-                    CubicBezierPrim <$>
                         [CubicBezier (V2 21.2 63.0)
                                      (V2 21.2 63.0)
                                      (V2 4.200001 55.8)
@@ -627,7 +612,7 @@ shouldBeTheSame = do
 
     img bez = renderDrawing 400 200 white $
       withTexture (uniformTexture drawColor) $
-        stroke 4 JoinRound (CapRound, CapRound) [CubicBezierPrim bez]
+        stroke 4 JoinRound (CapRound, CapRound) bez
 
 clipFail :: IO ()
 clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
@@ -636,7 +621,7 @@ clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
     img = renderDrawing 512 256 white .
             withTexture (uniformTexture red) $ fill geometry
 
-    geometry = transform trans $ CubicBezierPrim <$>
+    geometry = transform trans $
       [ CubicBezier (V2 104.707344 88.55418) (V2 153.00671 140.66666)
                     (V2 201.30609 192.77914) (V2 249.60547 244.89162)
       , CubicBezier (V2 249.60547 244.89162) (V2 349.59445 206.46687)

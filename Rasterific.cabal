@@ -69,7 +69,7 @@ library
 
   ghc-options: -O3 -Wall 
   -- -ddump-simpl -ddump-to-file -dsuppress-module-prefixes -dsuppress-uniques
-  ghc-prof-options: -Wall -prof -auto-all
+  ghc-prof-options: -Wall -prof
   default-language: Haskell2010
   build-depends: base        >= 4.6     && < 4.9
                , free        >= 4.7

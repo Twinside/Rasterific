@@ -81,7 +81,7 @@ fill = fillWithMethod FillWinding
 drawBoundingBox :: Geometry g => g -> Drawing PixelRGBA8 ()
 drawBoundingBox geom = do
   let prims = toPrimitives geom
-      PlaneBound mini maxi = foldMap planeBounds prims
+      PlaneBound mini maxi = planeBounds prims
       V2 width height = maxi ^-^ mini
   withTexture (uniformTexture red) $
       R.stroke 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) $

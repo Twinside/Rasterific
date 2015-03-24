@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 -- | This module implements drawing primitives to draw directly into
 -- the output texture, without generating an intermediate scene
 -- representation.
@@ -26,6 +27,10 @@ module Graphics.Rasterific.Immediate
     , fillOrder
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import qualified Data.Foldable( foldMap )
+#endif
+
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
 import Control.Monad.State( StateT, execStateT, get, lift )
@@ -45,6 +50,7 @@ import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Command
+import Graphics.Rasterific.PlaneBoundable
 
 -- | Monad used to describe the drawing context.
 type DrawContext m px =
@@ -62,6 +68,10 @@ data DrawOrder px = DrawOrder
       -- | Optional mask used for clipping.
     , _orderMask       :: !(Maybe (Texture (PixelBaseComponent px)))
     }
+
+instance PlaneBoundable (DrawOrder px) where
+    planeBounds =
+        foldMap (foldMap planeBounds) . _orderPrimitives
 
 -- | Transform back a low level drawing order to a more
 -- high level Drawing

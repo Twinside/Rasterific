@@ -1,10 +1,9 @@
 {-# LANGUAGE CPP #-}
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>) )
+import Control.Applicative( (<*>), (<$>) )
 #endif
 
-import Control.Applicative( (<$>) )
 
 import Control.Monad( forM_ )
 import Control.Monad.ST( runST )

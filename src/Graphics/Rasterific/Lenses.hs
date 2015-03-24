@@ -37,10 +37,9 @@ module Graphics.Rasterific.Lenses
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Traversable( traverse )
-import Control.Applicative( Applicative, (<*>), pure )
+import Control.Applicative( Applicative, (<*>), (<$>), pure )
 #endif
 
-import Control.Applicative( (<$>) )
 import Graphics.Rasterific.Types
 
 -- | Does it look familiar? yes it's the official

@@ -28,12 +28,9 @@ module Graphics.Rasterific.Operators
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative )
+import Control.Applicative( Applicative, (<$>) )
 #endif
-import Control.Applicative( liftA2
-                          , liftA3
-                          , (<$>)
-                          )
+import Control.Applicative( liftA2, liftA3 )
 
 import Graphics.Rasterific.Linear
              ( V2( .. )

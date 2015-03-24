@@ -16,11 +16,10 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( foldMap )
 import Data.Monoid( mempty )
-import Control.Applicative( Applicative, (<*>) )
+import Control.Applicative( Applicative, (<*>), (<$>) )
 #endif
 
 import Data.Monoid( (<>) )
-import Control.Applicative( (<$>) )
 
 import Control.Monad.Identity( Identity )
 import Control.Monad.State( StateT
@@ -104,8 +103,7 @@ drawOrdersOnPath drawer startOffset baseline path orders =
     runPathWalking path $ advanceBy startOffset >> go Nothing orders where
   go _ [] = return ()
   go prevX (img : rest) = do
-    let bounds =
-          foldMap (foldMap planeBounds) $ _orderPrimitives img
+    let bounds = planeBounds img
         width = boundWidth bounds
         cx = fromMaybe startX prevX
         V2 startX _ = boundLowerLeftCorner bounds

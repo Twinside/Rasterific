@@ -125,12 +125,12 @@ module Graphics.Rasterific
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<$>) )
 import Data.Monoid( Monoid( .. ) )
 #endif
 
 import Data.Monoid( (<>) )
 
-import Control.Applicative( (<$>) )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( fromF )
 import Control.Monad.ST( runST )

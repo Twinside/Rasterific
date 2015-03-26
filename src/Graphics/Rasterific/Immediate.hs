@@ -28,7 +28,7 @@ module Graphics.Rasterific.Immediate
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import qualified Data.Foldable( foldMap )
+import Data.Foldable( foldMap )
 #endif
 
 import qualified Data.Foldable as F
@@ -148,7 +148,7 @@ fillWithTexture fillMethod texture els = do
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
         !filler = primToPrim . transformTextureToFiller texture img
-        clipped = F.foldMap (clip mini maxi) els
+        clipped = foldMap (clip mini maxi) els
         spans = rasterize fillMethod clipped
     lift . mapExec filler $ filter (isCoverageDrawable img) spans
 
@@ -187,7 +187,7 @@ fillWithTextureAndMask fillMethod texture mask els = do
     img@(MutableImage width height _) <- get
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
-        spans = rasterize fillMethod $ F.foldMap (clip mini maxi) els
+        spans = rasterize fillMethod $ foldMap (clip mini maxi) els
         !shader = primToPrim
                 . transformTextureToFiller (modulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans

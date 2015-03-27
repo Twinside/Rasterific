@@ -101,6 +101,7 @@ module Graphics.Rasterific
     , polygon
     , drawImageAtSize
     , drawImage
+    , cacheDrawing
 
       -- ** Geometry Helpers
     , clip
@@ -375,6 +376,35 @@ renderDrawingAtDpi width height dpi background drawing =
     runST $ runDrawContext width height background
           $ mapM_ fillOrder
           $ drawOrdersOfDrawing width height dpi background drawing
+
+-- | This function perform an optimisation, it will render a drawing
+-- to an image interanlly and create a new order to render this image
+-- instead of the geometry, effectively cuting the geometry generation
+-- part.
+--
+-- It can save execution time when drawing complex elements multiple
+-- times.
+cacheDrawing
+    :: forall px . (RenderablePixel px)
+    => Int -- ^ Max rendering width
+    -> Int -- ^ Max rendering height
+    -> Dpi
+    -> Drawing px ()
+    -> Drawing px ()
+cacheDrawing maxWidth maxHeight dpi sub = drawImage resultImage 0 mini where
+  back = error ""
+  orders = drawOrdersOfDrawing maxWidth maxHeight dpi back sub
+  PlaneBound mini maxi = foldMap planeBounds orders
+  V2 width height = maxi ^-^ mini
+
+  shiftOrder order@DrawOrder { _orderPrimitives = prims } =
+      order { _orderPrimitives = fmap (transform (^-^ mini)) <$> prims }
+
+  resultImage =
+    runST $ runDrawContext (ceiling width) (ceiling height) back
+          $ mapM_ fillOrder
+          $ shiftOrder <$> orders
+
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing

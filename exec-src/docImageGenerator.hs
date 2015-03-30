@@ -103,25 +103,15 @@ moduleExample = do
 
   writePng (outFolder </> "module_example.png") img
 
-arialFont :: FilePath
-arialFont =
-#ifdef __WIN32__
-  "C:/Windows/Fonts/arial.ttf"
-#else
-  "/usr/share/fonts/truetype/msttcorefonts/arial.ttf"
-#endif
+sansSerifFont :: FilePath
+sansSerifFont = "test_fonts/DejaVuSans.ttf"
 
 monospaceFont :: FilePath
-monospaceFont =
-#ifdef __WIN32__
-  "C:/Windows/Fonts/consola.ttf"
-#else
-  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
-#endif
+monospaceFont =  "test_fonts/DejaVuSansMono.ttf"
 
 textOnPathExample :: IO ()
 textOnPathExample = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -137,7 +127,7 @@ textOnPathExample = do
 
 geometryOnPath :: IO ()
 geometryOnPath = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -156,7 +146,7 @@ geometryOnPath = do
 
 textExample :: IO ()
 textExample = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -167,7 +157,7 @@ textExample = do
 
 textMultipleExample :: IO ()
 textMultipleExample = do
-  eitherFont1 <- loadFontFile arialFont
+  eitherFont1 <- loadFontFile sansSerifFont
   eitherFont2 <- loadFontFile monospaceFont
   case (,) <$> eitherFont1 <*> eitherFont2 of
     Left err -> putStrLn err
@@ -187,7 +177,7 @@ textMultipleExample = do
 
 coordinateSystem :: IO ()
 coordinateSystem = do
-    fontErr <- loadFontFile arialFont
+    fontErr <- loadFontFile sansSerifFont
     case fontErr of
         Left err -> putStrLn err
         Right font -> 

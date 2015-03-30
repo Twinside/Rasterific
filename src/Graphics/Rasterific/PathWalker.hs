@@ -14,7 +14,6 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( foldMap )
 import Data.Monoid( mempty )
 import Control.Applicative( Applicative, (<*>), (<$>) )
 #endif

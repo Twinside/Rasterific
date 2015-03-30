@@ -42,11 +42,12 @@ before_install:
     fi
 
 install:
-  - $CABAL install --dependencies-only
+  - $CABAL install --dependencies-only --enable-tests
   - $CABAL configure $MODE
 
 script:
   - $CABAL build
+  - $CABAL test --show-details=always
   # Generate image for documentation
   - ./dist/build/doc_builder/doc_builder
   # tests that a source-distribution can be generated

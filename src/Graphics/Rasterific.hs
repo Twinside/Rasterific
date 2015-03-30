@@ -295,7 +295,7 @@ stroke width join caping prims =
 -- >
 -- > main :: IO ()
 -- > main = do
--- >   fontErr <- loadFontFile "C:/Windows/Fonts/arial.ttf"
+-- >   fontErr <- loadFontFile "test_fonts/DejaVuSans.ttf"
 -- >   case fontErr of
 -- >     Left err -> putStrLn err
 -- >     Right font ->

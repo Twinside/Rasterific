@@ -42,6 +42,12 @@ type DashStroker g = DashPattern -> Stroker g
 outFolder :: FilePath
 outFolder = "test_results"
 
+sansSerifFont :: FilePath
+sansSerifFont = "test_fonts/DejaVuSans.ttf"
+
+monospaceFont :: FilePath
+monospaceFont =  "test_fonts/DejaVuSansMono.ttf"
+
 logo :: Int -> Bool -> Vector -> [Bezier]
 logo size inv offset = bezierFromPath . way $ map (^+^ offset)
     [ (V2   0  is)
@@ -81,7 +87,7 @@ fill = fillWithMethod FillWinding
 drawBoundingBox :: Geometry g => g -> Drawing PixelRGBA8 ()
 drawBoundingBox geom = do
   let prims = toPrimitives geom
-      PlaneBound mini maxi = planeBounds prims
+      PlaneBound mini maxi = foldMap planeBounds prims
       V2 width height = maxi ^-^ mini
   withTexture (uniformTexture red) $
       R.stroke 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) $
@@ -321,7 +327,7 @@ strokeCubicDashed stroker texture prefix =
 textAlignStringTest :: String -> String -> String -> IO ()
 textAlignStringTest fontName filename txt = do
     putStrLn $ "Rendering " ++ fontName
-    fontErr <- loadFontFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    fontErr <- loadFontFile fontName
     case fontErr of
       Left err -> putStrLn err
       Right font ->
@@ -333,7 +339,7 @@ textAlignStringTest fontName filename txt = do
 textStrokeTest :: String -> String -> String -> IO ()
 textStrokeTest fontName filename txt = do
     putStrLn $ "Rendering " ++ fontName
-    fontErr <- loadFontFile $ "C:/Windows/Fonts/" ++ fontName ++ ".ttf"
+    fontErr <- loadFontFile fontName
     case fontErr of
       Left err -> putStrLn err
       Right font -> do
@@ -712,10 +718,10 @@ testSuite = do
   let testText =
         "Test of a text! It seems to be; à é è ç, working? () {} [] \" '"
 
-  textAlignStringTest "CONSOLA" "alignedConsola.png" testText
-  textAlignStringTest "arial" "alignedArial.png"
+  textAlignStringTest monospaceFont "alignedConsola.png" testText
+  textAlignStringTest sansSerifFont "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
-  textStrokeTest "verdana" "stroke_verdana.png" "e"
+  textStrokeTest sansSerifFont "stroke_verdana.png" "e"
   -- -}
 
 benchTest :: [String] -> IO ()

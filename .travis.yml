@@ -47,7 +47,8 @@ install:
 
 script:
   - $CABAL build
-
+  # Generate image for documentation
+  - ./dist/build/doc_builder/doc_builder
   # tests that a source-distribution can be generated
   - cabal sdist
 

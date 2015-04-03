@@ -41,17 +41,23 @@
 module Graphics.Rasterific
     (
       -- * Rasterization command
+      -- ** Filling
       fill
     , fillWithMethod
-    , withTexture
-    , withClipping
-    , withTransformation
-    , withPathOrientation
+      -- ** Stroking
     , stroke
     , dashedStroke
     , dashedStrokeWithOffset
+      -- ** Text rendering
     , printTextAt
     , printTextRanges
+      -- ** Texturing
+    , withTexture
+    , withClipping
+    , withGroupOpacity
+      -- ** Transformations
+    , withTransformation
+    , withPathOrientation
     , TextRange( .. )
     , PointSize( .. )
 
@@ -92,13 +98,18 @@ module Graphics.Rasterific
     , boundLowerLeftCorner
 
       -- * Helpers
+      -- ** line
     , line
+      -- ** Rectangle
     , rectangle
     , roundedRectangle
+      -- ** Circles
     , circle
     , ellipse
+      -- ** Polygons
     , polyline
     , polygon
+      -- ** Images
     , drawImageAtSize
     , drawImage
     , cacheDrawing
@@ -138,7 +149,10 @@ import Control.Monad.Free.Church( fromF )
 import Control.Monad.ST( runST )
 import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
-import Codec.Picture.Types( Image( .. ), Pixel( .. ) )
+import Codec.Picture.Types( Image( .. )
+                          , Pixel( .. )
+                          , unpackPixel
+                          , pixelMapXY )
 
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Rasterific.Compositor
@@ -184,6 +198,38 @@ import Graphics.Text.TrueType( Font
 withTexture :: Texture px -> Drawing px () -> Drawing px ()
 withTexture texture subActions =
     liftF $ SetTexture texture subActions ()
+
+-- | Will render the whole subaction with a given group opacity, after
+-- each element has been rendered. That means that completly opaque
+-- overlapping shapes will be rendered transparently, not one after
+-- another.
+--
+-- > withTexture (uniformTexture $ PixelRGBA8 0xFF 0x53 0x73 255) $
+-- >     stroke 3 JoinRound (CapRound, CapRound) $
+-- >         line (V2 0 100) (V2 200 100)
+-- >
+-- > withGroupOpacity 128 $ do
+-- >    withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 255) .
+-- >       fill $ circle (V2 70 100) 60
+-- >    withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 255) .
+-- >       fill $ circle (V2 120 100) 60
+--
+-- <<docimages/group_opacity.png>>
+--
+-- To be compared to the item opacity
+--
+-- > withTexture (uniformTexture $ PixelRGBA8 0xFF 0x53 0x73 255) $
+-- >     stroke 3 JoinRound (CapRound, CapRound) $
+-- >         line (V2 0 100) (V2 200 100)
+-- > withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 128) .
+-- >    fill $ circle (V2 70 100) 60
+-- > withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 128) .
+-- >    fill $ circle (V2 120 100) 60
+--
+-- <<docimages/item_opacity.png>>
+withGroupOpacity :: Pixel px => PixelBaseComponent px -> Drawing px ()-> Drawing px ()
+withGroupOpacity opa sub =
+    liftF $ WithGlobalOpacity opa sub ()
 
 -- | Draw all the sub drawing commands using a transformation.
 withTransformation :: Transformation -> Drawing px () -> Drawing px ()
@@ -378,6 +424,27 @@ renderDrawingAtDpi width height dpi background drawing =
           $ mapM_ fillOrder
           $ drawOrdersOfDrawing width height dpi background drawing
 
+emptyPx :: (RenderablePixel px) => px
+-- | Really need a "builder" function for pixel
+emptyPx = colorMap (const emptyValue) $ unpackPixel 0
+
+cacheOrders :: forall px. (RenderablePixel px)
+            => Maybe (Image px -> ImageTransformer px) -> [DrawOrder px] -> Drawing px ()
+cacheOrders imageFilter orders = case imageFilter of
+    Nothing -> drawImage resultImage 0 mini
+    Just f -> drawImage (pixelMapXY (f resultImage) resultImage) 0 mini
+  where
+   PlaneBound mini maxi = foldMap planeBounds orders
+   V2 width height = maxi ^-^ mini
+   
+   shiftOrder order@DrawOrder { _orderPrimitives = prims } =
+       order { _orderPrimitives = fmap (transform (^-^ mini)) <$> prims }
+   
+   resultImage =
+     runST $ runDrawContext (ceiling width) (ceiling height) emptyPx
+           $ mapM_ fillOrder
+           $ shiftOrder <$> orders
+
 -- | This function perform an optimisation, it will render a drawing
 -- to an image interanlly and create a new order to render this image
 -- instead of the geometry, effectively cuting the geometry generation
@@ -392,20 +459,8 @@ cacheDrawing
     -> Dpi
     -> Drawing px ()
     -> Drawing px ()
-cacheDrawing maxWidth maxHeight dpi sub = drawImage resultImage 0 mini where
-  back = error ""
-  orders = drawOrdersOfDrawing maxWidth maxHeight dpi back sub
-  PlaneBound mini maxi = foldMap planeBounds orders
-  V2 width height = maxi ^-^ mini
-
-  shiftOrder order@DrawOrder { _orderPrimitives = prims } =
-      order { _orderPrimitives = fmap (transform (^-^ mini)) <$> prims }
-
-  resultImage =
-    runST $ runDrawContext (ceiling width) (ceiling height) back
-          $ mapM_ fillOrder
-          $ shiftOrder <$> orders
-
+cacheDrawing maxWidth maxHeight dpi sub =
+  cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
@@ -441,6 +496,22 @@ drawOrdersOfDrawing width height dpi background drawing =
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
+    go ctxt (Free (WithGlobalOpacity opa sub next)) rest =
+        go ctxt (Free (WithImageEffect opacifier sub next)) rest
+      where 
+        -- Todo: a colorMapWithAlpha is really needed in JP API.
+        opacifier _ _ _ px = mixWithAlpha ignore alphaModulate px px
+        ignore _ _ a = a
+        alphaModulate _ v = opa `modulate` v
+
+    go ctxt (Free (WithImageEffect effect sub next)) rest =
+        go freeContext (fromF cached) after
+      where
+        cached = cacheOrders (Just effect) $ go ctxt (fromF sub) []
+        after = go ctxt next rest
+        freeContext = ctxt { currentClip = Nothing, currentTransformation = Nothing }
+
+
     go ctxt (Free (WithPathOrientation path base sub next)) rest = final where
       final = orders <> go ctxt next rest
       images = go ctxt (fromF sub) []

@@ -458,6 +458,25 @@ main = do
                     $ sampledImageTexture textureImage) $
             fill $ rectangle (V2 0 0) 200 200
 
+    produceDocImage (outFolder </> "group_opacity.png") $ do
+        withTexture accent2Texture $
+            stroke 3 JoinRound (CapRound, CapRound) $
+                line (V2 0 100) (V2 200 100)
+
+        withGroupOpacity 128 $ do
+           withTexture frontTexture . fill $ circle (V2 70 100) 60
+           withTexture accentTexture . fill $ circle (V2 120 100) 60
+
+    produceDocImage (outFolder </> "item_opacity.png") $ do
+        withTexture accent2Texture $
+            stroke 3 JoinRound (CapRound, CapRound) $
+                line (V2 0 100) (V2 200 100)
+
+        withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 128) .
+            fill $ circle (V2 70 100) 60
+        withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 128) .
+            fill $ circle (V2 120 100) 60
+
     textExample
     textMultipleExample 
     coordinateSystem

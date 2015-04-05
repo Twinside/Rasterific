@@ -435,10 +435,13 @@ cacheOrders imageFilter orders = case imageFilter of
     Just f -> drawImage (pixelMapXY (f resultImage) resultImage) 0 mini
   where
    PlaneBound mini maxi = foldMap planeBounds orders
-   V2 width height = maxi ^-^ mini
+   cornerUpperLeftInt = floor <$> mini :: V2 Int
+   cornerUpperLeft = fromIntegral <$> cornerUpperLeftInt
+
+   V2 width height = maxi ^-^ cornerUpperLeft ^+^ V2 1 1
    
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
-       order { _orderPrimitives = fmap (transform (^-^ mini)) <$> prims }
+       order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims }
    
    resultImage =
      runST $ runDrawContext (ceiling width) (ceiling height) emptyPx

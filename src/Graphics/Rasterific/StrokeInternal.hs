@@ -9,12 +9,11 @@ module Graphics.Rasterific.StrokeInternal
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure )
+import Control.Applicative( (<$>), pure )
 import Data.Monoid( mempty )
 import Data.Foldable( foldMap )
 #endif
 
-import Control.Applicative( (<$>) )
 import Data.Monoid( (<>) )
 
 import Graphics.Rasterific.Linear

@@ -16,7 +16,7 @@ import Data.Monoid( Monoid( .. ) )
 
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
-import Codec.Picture.Types( Pixel( .. ), Pixel8 )
+import Codec.Picture.Types( Image, Pixel( .. ), Pixel8 )
 
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Texture
@@ -45,6 +45,8 @@ data DrawCommand px next
     | TextFill Point [TextRange px] next
     | SetTexture (Texture px)
                  (Drawing px ()) next
+    | WithGlobalOpacity (PixelBaseComponent px) (Drawing px ()) next
+    | WithImageEffect (Image px -> ImageTransformer px) (Drawing px ()) next
     | WithCliping (forall innerPixel. Drawing innerPixel ())
                   (Drawing px ()) next
     | WithTransform Transformation (Drawing px ()) next
@@ -70,6 +72,10 @@ dumpDrawing = go . fromF where
 
         ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
+  go (Free (WithImageEffect _effect sub next)) =
+    "withImageEffect ({- fun -}) (" ++ go (fromF sub) ++ ") >>= " ++ go next
+  go (Free (WithGlobalOpacity opa sub next)) =
+    "withGlobalOpacity " ++ show opa ++ " (" ++ go (fromF sub) ++ ") >>= " ++ go next
   go (Free (WithPathOrientation path point drawing next)) =
     "withPathOrientation (" ++ show path ++ ") ("
                             ++ show point ++ ") ("
@@ -110,8 +116,12 @@ dumpDrawing = go . fromF where
 
 
 instance Functor (DrawCommand px) where
+    fmap f (WithImageEffect effect sub next) =
+        WithImageEffect effect sub $ f next
     fmap f (TextFill pos texts next) =
         TextFill pos texts $ f next
+    fmap f (WithGlobalOpacity opa sub next) =
+        WithGlobalOpacity opa sub $ f next
     fmap f (Fill method  prims next) = Fill method prims $ f next
     fmap f (SetTexture t sub next) = SetTexture t sub $ f next
     fmap f (WithCliping sub com next) =

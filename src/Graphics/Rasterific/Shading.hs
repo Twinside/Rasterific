@@ -7,6 +7,7 @@ module Graphics.Rasterific.Shading
     ( Texture( .. )
     , Gradient
     , ShaderFunction
+    , ImageTransformer
     , transformTextureToFiller
     , dumpTexture
     ) where
@@ -51,6 +52,8 @@ import Graphics.Rasterific.Compositor( Modulable( .. )
                                      , compositionAlpha )
 
 type ShaderFunction px = Float -> Float -> px
+
+type ImageTransformer px = Int -> Int -> px -> px
 
 -- | Reification of texture type
 data Texture px

@@ -19,12 +19,12 @@ module Graphics.Rasterific.CubicBezier
 import Prelude hiding( or )
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure )
+import Control.Applicative( (<$>), pure )
 import Data.Monoid( mempty )
 #endif
 
 import Data.Monoid( (<>) )
-import Control.Applicative( liftA2, (<$>))
+import Control.Applicative( liftA2 )
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)

@@ -41,6 +41,8 @@ type RenderablePixel px =
     ( ModulablePixel px
     , Pixel (PixelBaseComponent px)
     , PackeablePixel (PixelBaseComponent px)
+    , Num (PackedRepresentation px)
+    , Num (PackedRepresentation (PixelBaseComponent px))
     , Storable (PackedRepresentation (PixelBaseComponent px))
     , PixelBaseComponent (PixelBaseComponent px)
             ~ (PixelBaseComponent px)

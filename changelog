@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5.2 April 2015
+ * Enhancement: Added a withGroupOpacity to render elements with
+   a global opacity.
+
 v0.5.1 March 2015
  * Enhancement: Generalizing geometry description, with automatic
    conversion, reducing the need of type constructor from Primitive,

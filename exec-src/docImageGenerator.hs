@@ -1,10 +1,9 @@
 {-# LANGUAGE CPP #-}
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>) )
+import Control.Applicative( (<*>), (<$>) )
 #endif
 
-import Control.Applicative( (<$>) )
 
 import Control.Monad( forM_ )
 import Control.Monad.ST( runST )
@@ -104,25 +103,15 @@ moduleExample = do
 
   writePng (outFolder </> "module_example.png") img
 
-arialFont :: FilePath
-arialFont =
-#ifdef __WIN32__
-  "C:/Windows/Fonts/arial.ttf"
-#else
-  "/usr/share/fonts/truetype/msttcorefonts/arial.ttf"
-#endif
+sansSerifFont :: FilePath
+sansSerifFont = "test_fonts/DejaVuSans.ttf"
 
 monospaceFont :: FilePath
-monospaceFont =
-#ifdef __WIN32__
-  "C:/Windows/Fonts/consola.ttf"
-#else
-  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
-#endif
+monospaceFont =  "test_fonts/DejaVuSansMono.ttf"
 
 textOnPathExample :: IO ()
 textOnPathExample = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -138,7 +127,7 @@ textOnPathExample = do
 
 geometryOnPath :: IO ()
 geometryOnPath = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -157,7 +146,7 @@ geometryOnPath = do
 
 textExample :: IO ()
 textExample = do
-  fontErr <- loadFontFile arialFont
+  fontErr <- loadFontFile sansSerifFont
   case fontErr of
     Left err -> putStrLn err
     Right font ->
@@ -168,7 +157,7 @@ textExample = do
 
 textMultipleExample :: IO ()
 textMultipleExample = do
-  eitherFont1 <- loadFontFile arialFont
+  eitherFont1 <- loadFontFile sansSerifFont
   eitherFont2 <- loadFontFile monospaceFont
   case (,) <$> eitherFont1 <*> eitherFont2 of
     Left err -> putStrLn err
@@ -188,7 +177,7 @@ textMultipleExample = do
 
 coordinateSystem :: IO ()
 coordinateSystem = do
-    fontErr <- loadFontFile arialFont
+    fontErr <- loadFontFile sansSerifFont
     case fontErr of
         Left err -> putStrLn err
         Right font -> 
@@ -468,6 +457,25 @@ main = do
                                       scale 0.5 0.25)
                     $ sampledImageTexture textureImage) $
             fill $ rectangle (V2 0 0) 200 200
+
+    produceDocImage (outFolder </> "group_opacity.png") $ do
+        withTexture accent2Texture $
+            stroke 3 JoinRound (CapRound, CapRound) $
+                line (V2 0 100) (V2 200 100)
+
+        withGroupOpacity 128 $ do
+           withTexture frontTexture . fill $ circle (V2 70 100) 60
+           withTexture accentTexture . fill $ circle (V2 120 100) 60
+
+    produceDocImage (outFolder </> "item_opacity.png") $ do
+        withTexture accent2Texture $
+            stroke 3 JoinRound (CapRound, CapRound) $
+                line (V2 0 100) (V2 200 100)
+
+        withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 128) .
+            fill $ circle (V2 70 100) 60
+        withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 128) .
+            fill $ circle (V2 120 100) 60
 
     textExample
     textMultipleExample 

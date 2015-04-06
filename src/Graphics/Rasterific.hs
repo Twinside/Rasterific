@@ -431,8 +431,8 @@ emptyPx = colorMap (const emptyValue) $ unpackPixel 0
 cacheOrders :: forall px. (RenderablePixel px)
             => Maybe (Image px -> ImageTransformer px) -> [DrawOrder px] -> Drawing px ()
 cacheOrders imageFilter orders = case imageFilter of
-    Nothing -> drawImage resultImage 0 mini
-    Just f -> drawImage (pixelMapXY (f resultImage) resultImage) 0 mini
+    Nothing -> drawImage resultImage 0 cornerUpperLeft
+    Just f -> drawImage (pixelMapXY (f resultImage) resultImage) 0 cornerUpperLeft
   where
    PlaneBound mini maxi = foldMap planeBounds orders
    cornerUpperLeftInt = floor <$> mini :: V2 Int
@@ -441,12 +441,14 @@ cacheOrders imageFilter orders = case imageFilter of
    V2 width height = maxi ^-^ cornerUpperLeft ^+^ V2 1 1
    
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
-       order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims }
+       order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims 
+             , _orderTexture =
+                 transformTexture (translate cornerUpperLeft) $ _orderTexture order
+             }
    
    resultImage =
      runST $ runDrawContext (ceiling width) (ceiling height) emptyPx
-           $ mapM_ fillOrder
-           $ shiftOrder <$> orders
+           $ mapM_ (fillOrder . shiftOrder) orders
 
 -- | This function perform an optimisation, it will render a drawing
 -- to an image interanlly and create a new order to render this image
@@ -740,7 +742,7 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
     | otherwise = do
         withTransformation (translate p <> scale scaleX scaleY) $
             withTexture (sampledImageTexture img) $ fill rect
-        stroke borderSize (JoinMiter 0)
+        stroke (borderSize / 2) (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'
         where
           p = ip ^-^ V2 0.5 0.5

@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5.2.1 April 2015
+ * Fixed: non-composability of cached elements
+ * Fixed: Border size when drawing images was twice too large.
+
 v0.5.2 April 2015
  * Enhancement: Added a withGroupOpacity to render elements with
    a global opacity.

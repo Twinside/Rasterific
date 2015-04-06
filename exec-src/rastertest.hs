@@ -4,13 +4,13 @@
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( foldMap )
+import Control.Applicative( (<$>) )
 #endif
 
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
 import Data.Monoid( (<>) )
-import Control.Applicative( (<$>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
                                   , dashedStroke
@@ -635,6 +635,14 @@ clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
       , CubicBezier (V2 549.57245 129.6174)  (V2 401.28406 115.92966)
                     (V2 252.99573 102.24192) (V2 104.707344 88.55418)
       ]
+
+doubleCache :: IO ()
+doubleCache = writePng (outFolder </> "double_opa.png") img where
+  img = renderDrawing 200 200 white $
+      withTexture (uniformTexture red) $
+          withGroupOpacity 128 $
+              withGroupOpacity 128 $
+                  fill $ circle (V2 100 100) 70
   
 testSuite :: IO ()
 testSuite = do
@@ -657,6 +665,7 @@ testSuite = do
             triColor (V2 200 200) 70 (V2 150 170)
 
   createDirectoryIfMissing True outFolder
+  doubleCache
   clipFail
   pledgeTest
   strokeBad 

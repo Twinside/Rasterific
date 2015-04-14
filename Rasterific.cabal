@@ -56,6 +56,7 @@ library
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command
+               , Graphics.Rasterific.MicroPdf
                , Graphics.Rasterific.CubicBezier
                , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators
@@ -80,6 +81,8 @@ library
                , dlist       >= 0.6
                , primitive   >= 0.5
                , vector-algorithms >= 0.3
+               , bytestring
+               , containers
 
   if !flag(embed_linear)
       build-depends: linear >= 1.3

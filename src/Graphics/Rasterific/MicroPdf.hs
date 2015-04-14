@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Graphics.Rasterific.MicroPdf where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -10,8 +11,16 @@ import Control.Applicative( pure )
 
 import Control.Monad.State( State )
 import Data.Monoid( (<>) )
+import qualified Data.Foldable as F
 import qualified Data.Map as M
+import Data.ByteString.Builder( byteString
+                              , intDec
+                              , floatDec
+                              {-, charUtf8-}
+                              , toLazyByteString
+                              , Builder )
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as LB
 import Codec.Picture( PixelRGBA8( PixelRGBA8 ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
@@ -23,58 +32,94 @@ type PdfCommand = B.ByteString
 type PdfPage = B.ByteString
 type Outlines = B.ByteString
 type PdfId = Int
+type PdfContent = B.ByteString
 
-type PdfObject = PdfObject
+class ToPdf a where
+  toPdf :: a -> Builder
+
+instance ToPdf B.ByteString where
+  toPdf = byteString
+
+data PdfObject = PdfObject
   { _pdfId       :: !PdfId
   , _pdfRevision :: !PdfId
-  , _pdfAnnot    :: !M.Map B.ByteString PdfCommand
+  , _pdfAnnot    :: !(M.Map B.ByteString B.ByteString)
   , _pdfStream   :: !B.ByteString
   }
 
-glength :: Foldable f => f a -> Int
-glength = F.foldr (+ 1) 0
+buildToStrict :: Builder -> B.ByteString
+buildToStrict = LB.toStrict . toLazyByteString
 
-outlinesObject :: PdfId -> f Outlines -> PdfObject
+instance ToPdf (M.Map B.ByteString B.ByteString) where
+  toPdf dic = tp "<< " <> foldMap dicToPdf (M.assocs dic) <> tp ">>\n"
+    where
+      tp = toPdf :: B.ByteString -> Builder
+      dicToPdf (k, el) =
+        tp "/" <> toPdf k <> tp " " <> toPdf el <> tp "\n"
+
+instance ToPdf PdfObject where
+  toPdf obj = intDec (_pdfId obj)
+           <> tp " "
+           <> intDec (_pdfRevision obj)
+           <> tp " obj\n"
+           <> toPdf dic
+           <> tp "stream\n"
+           <> toPdf (_pdfStream obj)
+           <> tp "\nendstream\n"
+    where
+      tp = toPdf :: B.ByteString -> Builder
+      bSize = buildToStrict . intDec . B.length $ _pdfStream obj
+      dic = M.insert "Length" bSize $ _pdfAnnot obj
+
+glength :: Foldable f => f a -> Int
+glength = F.foldr (const (+ 1)) 0
+
+outlinesObject :: Foldable f => PdfId -> f Outlines -> PdfObject
 outlinesObject pid outlines = PdfObject
   { _pdfId       = pid
   , _pdfRevision = 0
   , _pdfAnnot    = M.fromList
         [ ("Types", "/Outlines")
-        , ("Count", B.pack . printf "%d" $ glength outlines)
+        , ("Count", buildToStrict . intDec $ glength outlines)
         ]
   , _pdfStream   = mempty
   }
 
-pagesObject :: PdfId -> f PdfPage -> PdfObject
+pagesObject :: Foldable f => PdfId -> f PdfPage -> PdfObject
 pagesObject pid outlines = PdfObject
   { _pdfId       = pid
   , _pdfRevision = 0
   , _pdfAnnot    = M.fromList
         [ ("Types", "/Pages")
-        , ("Kids", "[ " <> foldMap (<> " ") <> "]")
-        , ("Count", B.pack . printf "%d" $ glength outlines)
+        , ("Kids", buildToStrict $ tp "[ " <> foldMap kidsToBuild outlines <> tp "]")
+        , ("Count", buildToStrict . intDec $ glength outlines)
         ]
   , _pdfStream   = mempty
   }
+  where
+    tp = toPdf :: B.ByteString -> Builder
+    kidsToBuild k = toPdf k <> tp " "
 
 {-pageObject :: PdfId -}
 
-pointToPdf :: Point -> PdfCommand
-pointToPdf (V2 x y) =
-  B.pack (printf "%4g" x) <> " " <> B.pack (printf "%4g" y)
+instance ToPdf Point where
+  toPdf (V2 x y) = floatDec x <> tp " " <> floatDec y
+    where tp = toPdf :: B.ByteString -> Builder
 
-primToPdf :: Primitive -> PdfCommand
-primToPdf p = case p of
-  LinePrim (Line _p0 p1) -> pp p1 <> " l"
-  BezierPrim (Bezier _p0 p1 p2) ->
-    pp p1 <> " " <> pp p1 <> " " <> pp p2 <> " c"
-  CubicBezierPrim (CubicBezier _p0 p1 p2 p3) ->
-    pp p1 <> " " <> pp p2 <> " " <> pp p3 <> " c"
-  where
-    pp = pointToPdf
+instance ToPdf Primitive where
+  toPdf p = case p of
+    LinePrim (Line _p0 p1) -> tp p1 <> " l"
+    BezierPrim (Bezier _p0 p1 p2) ->
+      tp p1 <> " " <> tp p1 <> " " <> tp p2 <> " c"
+    CubicBezierPrim (CubicBezier _p0 p1 p2 p3) ->
+      tp p1 <> " " <> tp p2 <> " " <> tp p3 <> " c"
+    where
+      tp = toPdf
 
-firstPointToPdf :: Primitive -> PdfCommand
-firstPointToPdf = pointToPdf . firstPointOf
+instance Foldable f => ToPdf (f Primitive) where
+  toPdf ps = case F.toList ps of
+    [] -> mempty
+    p:_ -> toPdf (firstPointOf p) <> foldMap toPdf ps
 
 colorToPdf :: PixelRGBA8 -> PdfCommand
 colorToPdf (PixelRGBA8 r g b _a) =
@@ -82,9 +127,6 @@ colorToPdf (PixelRGBA8 r g b _a) =
   where
     toNum c = 
       B.pack . printf "%g" $ (fromIntegral c / 255 :: Float)
-
-primsToPdf :: Foldable t => t Primitive -> PdfCommand
-primsToPdf = foldMap primToPdf
 
 textureToPdf :: Texture PixelRGBA8 -> State PdfObject (Either String PdfCommand)
 textureToPdf tex = case tex of

@@ -106,6 +106,7 @@ Executable doc_builder
                  , filepath
                  , vector
                  , FontyFruity
+                 , bytestring
 
 Test-Suite test
     type: exitcode-stdio-1.0

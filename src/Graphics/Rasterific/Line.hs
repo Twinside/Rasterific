@@ -10,6 +10,7 @@ module Graphics.Rasterific.Line
     , flattenLine
     , lineLength
     , offsetLine
+    , isLinePoint
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -38,6 +39,9 @@ lineFromPath :: [Point] -> [Line]
 lineFromPath [] = []
 lineFromPath lst@(_:rest) =
     uncurry Line <$> zip lst rest
+
+isLinePoint :: Line -> Bool
+isLinePoint (Line a b) = not $ a `isDistingableFrom` b
 
 lineLength :: Line -> Float
 lineLength (Line a b) = norm (b ^-^ a)

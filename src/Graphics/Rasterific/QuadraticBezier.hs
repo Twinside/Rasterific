@@ -15,6 +15,7 @@ module Graphics.Rasterific.QuadraticBezier
     , flattenBezier
     , bezierBreakAt
     , bezierLengthApproximation
+    , isBezierPoint
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -45,6 +46,11 @@ import Graphics.Rasterific.Types
 bezierFromPath :: [Point] -> [Bezier]
 bezierFromPath (a:b:rest@(c:_)) = Bezier a b c : bezierFromPath rest
 bezierFromPath _ = []
+
+isBezierPoint :: Bezier -> Bool
+isBezierPoint (Bezier a b c) =
+  not $ a `isDistingableFrom` b || 
+        b `isDistingableFrom` c
 
 -- | Only work if the quadratic bezier curve
 -- is nearly flat

@@ -2,6 +2,7 @@
 
 v0.6 2015
  * Adding: repeating background pattern texture.
+ * Added: PDF output
 
 v0.5.2.1 April 2015
  * Fixed: non-composability of cached elements

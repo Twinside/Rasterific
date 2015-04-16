@@ -6,7 +6,7 @@ module Graphics.Rasterific.MicroPdf( drawOrdersToPdf ) where
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable, foldMap )
 import Data.Monoid( mempty )
-import Control.Applicative( pure )
+import Control.Applicative( (<$>), pure )
 #endif
 
 import Control.Monad.State( State, runState )

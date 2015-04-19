@@ -6,6 +6,7 @@ module Graphics.Rasterific.StrokeInternal
     , dashedStrokize
     , splitPrimitiveUntil
     , approximatePathLength
+    , isPrimitivePoint
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -44,6 +45,12 @@ firstPointAndNormal :: Primitive -> (Point, Vector)
 firstPointAndNormal (LinePrim (Line a b)) = (a, a `normal` b)
 firstPointAndNormal (BezierPrim (Bezier a b _)) = (a, a `normal` b)
 firstPointAndNormal (CubicBezierPrim (CubicBezier a b _ _)) = (a, a `normal` b)
+
+isPrimitivePoint :: Primitive -> Bool
+isPrimitivePoint p = case p of
+  LinePrim l -> isLinePoint l
+  BezierPrim b -> isBezierPoint b
+  CubicBezierPrim c -> isCubicBezierPoint c
 
 reversePrimitive :: Primitive -> Primitive
 reversePrimitive (LinePrim (Line a b)) = LinePrim (Line b a)

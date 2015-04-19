@@ -9,7 +9,7 @@ import Data.Monoid( mempty )
 import Control.Applicative( (<$>), pure )
 #endif
 
-import Control.Monad.State( State, get, put, runState )
+import Control.Monad.State( State, get, put, runState, modify )
 import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
 import Data.ByteString.Builder( byteString
@@ -25,8 +25,6 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Shading
 import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
 import Text.Printf
@@ -49,25 +47,42 @@ type PdfEnv = State PdfContext
 
 data PdfContext = PdfContext
     { _pdfFreeIndex        :: !Int
+    , _pdfPatternIndex     :: !Int
     , _generatedPdfObjects :: ![PdfObject]
+    , _patternAssoc        :: ![(B.ByteString, B.ByteString)]
     }
+
+generatePattern :: PdfEnv Builder
+generatePattern = do
+  ctxt <- get
+  let idx = _pdfPatternIndex ctxt
+  put $ ctxt { _pdfPatternIndex = idx + 1 }
+  return $ tp "Sh" <> intDec idx
+
+namePatternObject :: PdfId -> PdfEnv (Builder, (B.ByteString, B.ByteString))
+namePatternObject pid = do
+  patId <- generatePattern 
+  let patAssoc = (buildToStrict patId, refOf pid)
+  modify $ \ctxt -> ctxt { _patternAssoc = patAssoc : _patternAssoc ctxt }
+  return ("/" <> patId, patAssoc)
 
 generateObject :: (PdfId -> PdfObject) -> PdfEnv PdfId
 generateObject f = do
   ctxt <- get
   let idx = _pdfFreeIndex ctxt
-  put $ PdfContext
+  put $ ctxt
     { _pdfFreeIndex = idx + 1
     , _generatedPdfObjects = f idx : _generatedPdfObjects ctxt
     }
   return idx
 
 emptyContext :: PdfId -> PdfContext
-emptyContext idx =
-  PdfContext
-    { _pdfFreeIndex = idx
-    , _generatedPdfObjects = []
-    }
+emptyContext idx = PdfContext
+  { _pdfFreeIndex = idx
+  , _pdfPatternIndex = 1
+  , _generatedPdfObjects = []
+  , _patternAssoc = []
+  }
 
 
 --------------------------------------------------
@@ -82,8 +97,9 @@ instance ToPdf B.ByteString where
 
 instance ToPdf [(B.ByteString, B.ByteString)] where
   toPdf [] = mempty
-  toPdf dic = tp "<< " <> foldMap dicToPdf dic <> tp ">>\n"
+  toPdf dic = tp "<< " <> foldMap dicToPdf dic <> tp ">> "
     where
+      dicToPdf (_, el) | B.null el = mempty
       dicToPdf (k, el) =
         tp "/" <> toPdf k <> tp " " <> toPdf el <> tp "\n"
 
@@ -92,7 +108,7 @@ instance ToPdf PdfObject where
            <> tp " "
            <> intDec (_pdfRevision obj)
            <> tp " obj\n"
-           <> toPdf dic
+           <> toPdf dic <> tp "\n"
            <> stream
            <> tp "endobj\n"
     where
@@ -104,7 +120,6 @@ instance ToPdf PdfObject where
         | otherwise = _pdfAnnot obj <> [("Length", bSize)]
 
       stream
-        | hasntStream && null dic = tp "[/PDF]\n"
         | hasntStream = mempty
         | otherwise = tp "stream\n"
                    <> toPdf (_pdfStream obj)
@@ -143,16 +158,16 @@ glength :: Foldable f => f a -> Int
 glength = F.foldr (const (+ 1)) 0
 
 pdfSignature :: B.ByteString
-pdfSignature = "%PDF-1.4\n"
+pdfSignature = "%PDF-1.4\n%\xBF\xF7\xA2\xFE\n"
 
 refOf :: PdfId -> B.ByteString
 refOf i = buildToStrict $ intDec i <> " 0 R"
 
 arrayOf :: Builder -> Builder
-arrayOf a = tp "[" <> a <> tp "]"
+arrayOf a = tp "[ " <> a <> tp " ]"
 
 arrayOfB :: B.ByteString -> B.ByteString
-arrayOfB a = "[" <> a <> "]"
+arrayOfB a = "[ " <> a <> " ]"
 
 dicObj :: [(B.ByteString, B.ByteString)] -> PdfId -> PdfObject
 dicObj annots pid = PdfObject
@@ -192,18 +207,26 @@ pageObject width height parentId contentId resourceId = dicObj
   , ("Parent", refOf parentId)
   , ("MediaBox", buildToStrict box)
   , ("Contents", refOf contentId)
-  , ("Resources", buildToStrict $ tp "<< /ProcSet " <> toPdf (refOf resourceId) <> tp " >>")
+  , ("Resources", refOf resourceId)
   ]
   where
     box = tp "[0 0 " <> intDec width <> tp " " <> intDec height <> tp "]"
 
+gradientPatternObject :: PdfId -> PdfId -> PdfObject
+gradientPatternObject gradientId = dicObj
+  [ ("Type", "/Pattern")
+  , ("PatternType", "2")
+  , ("Matrix", "[ 1 0 0 1 0 0 ]")
+  , ("Shading", refOf gradientId)
+  ]
+
 linearGradientObject :: Line -> PdfId -> PdfId -> PdfObject
 linearGradientObject (Line p1 p2) funId = dicObj
-  [ ("ShadingType", "3")
-  , ("ColorSpace", "DeviceRGB")
+  [ ("ShadingType", "2")
+  , ("ColorSpace", "/DeviceRGB")
   , ("Coords", buildToStrict coords)
   , ("Function", refOf funId)
-  , ("Extend", "[true, true]")
+  , ("Extend", "[ true true ]")
   ]
   where
     coords = arrayOf $ toPdf p1 <> tp " " <> toPdf p2
@@ -216,14 +239,17 @@ contentObject content pid = PdfObject
   , _pdfStream   = content
   }
 
+vswap :: Int -> Point -> Point
+vswap height (V2 x y) = V2 x (fromIntegral height - y)
+
 pathToPdf :: Int -> [Primitive] -> Builder
 pathToPdf height ps = case ps of
     [] -> mempty
+    [_] -> mempty
     p:_ ->
-      toPdf (vswap $ firstPointOf p) <> tp " m\n" <> foldMap (toPdf . verticalSwap) ps <> "\n"
+      toPdf (vswap height $ firstPointOf p) <> tp " m\n" <> foldMap (toPdf . verticalSwap) ps <> "\n"
   where
-    vswap (V2 x y) = V2 x (fromIntegral height - y)
-    verticalSwap = transform vswap
+    verticalSwap = transform (vswap height)
 
 colorToPdf :: PixelRGBA8 -> PdfCommand
 colorToPdf (PixelRGBA8 r g b _a) =
@@ -235,25 +261,31 @@ colorToPdf (PixelRGBA8 r g b _a) =
 colorInterpolationFunction :: PixelRGBA8 -> PixelRGBA8 -> PdfId -> PdfObject
 colorInterpolationFunction c0 c1 = dicObj
   [ ("FunctionType", "2")
-  , ("Domain", "[0, 1]")
+  , ("Domain", "[ 0 1 ]")
   , ("C0", arrayOfB $ colorToPdf c0)
   , ("C1", arrayOfB $ colorToPdf c1)
   , ("N", "1")
   ]
 
+resourceObject :: [(B.ByteString, B.ByteString)] -> PdfId -> PdfObject
+resourceObject patterns = dicObj
+  [ ("Pattern", buildToStrict $ toPdf patterns)
+  , ("ProcSet", buildToStrict . arrayOf $ tp "/PDF /Text")
+  ]
+
 stitchingFunction :: [PdfId] -> [(Float, Float)] -> PdfId -> PdfObject
 stitchingFunction interpolations bounds = dicObj
   [ ("FunctionType", "3")
-  , ("Domain", "[0, 1]")
+  , ("Domain", "[ 0 1 ]")
   , ("Functions", buildToStrict interpIds)
   , ("Bounds", buildToStrict boundsId)
-  , ("Encode", buildToStrict . F.fold $ map (const $ tp "0 1") interpolations)
+  , ("Encode", buildToStrict . arrayOf . F.fold $ map (const $ tp "0 1 ") interpolations)
   ]
   where
     interpIds =
-       tp "[" <> foldMap (\i -> intDec i <> tp " ") interpolations <> tp "]"
-    boundEncode (b1, b2) = floatDec b1 <> tp " "<> floatDec b2 <> tp " "
-    boundsId = tp "[" <> foldMap boundEncode bounds <> tp "]"
+       tp "[ " <> foldMap (\i -> toPdf (refOf i) <> tp " ") interpolations <> tp "]"
+    boundEncode (_, b2) = floatDec b2
+    boundsId = tp "[ " <> foldMap boundEncode (init bounds) <> tp "]"
 
 gradientToPdf :: Gradient PixelRGBA8 -> PdfEnv PdfId
 gradientToPdf [] = return 0
@@ -265,31 +297,36 @@ gradientToPdf lst@(_:rest) = do
   let bounds = zip (map fst lst) (map fst rest)
   generateObject (stitchingFunction interpolations bounds)
 
-textureToPdf :: Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
-textureToPdf tex = case tex of
-  RawTexture img -> textureToPdf (SampledTexture img)
-  SolidTexture px ->
-    -- at this point we(re only doing "fill" operations.
-    pure . pure $ colorToPdf px <> " rg\n"
-  LinearGradientTexture grad line -> do
-    shaderId <- gradientToPdf grad
-    gradId <- generateObject (linearGradientObject line shaderId)
-    "/Pattern cs scn"
-    return $ Left "Unsupported linear gradient in PDF output."
-  RadialGradientTexture _grad _center _radius ->
-    return $ Left "Unsupported radial gradient in PDF output."
-  RadialGradientWithFocusTexture _grad _center _rad _focus ->
-    return $ Left "Unsupported radial gradient with focus in PDF output."
-  WithSampler _ tx -> textureToPdf tx
-  WithTextureTransform _trans tx -> textureToPdf tx
-  SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
-  ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
-  ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
+textureToPdf :: Int -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
+textureToPdf height = go where
+  go tex= case tex of
+    RawTexture img -> go (SampledTexture img)
+    SolidTexture px ->
+      -- at this point we(re only doing "fill" operations.
+      pure . pure $ colorToPdf px <> " rg\n"
+    LinearGradientTexture grad line -> do
+      let shapedLine = transform (vswap height) line
+      shaderId <- gradientToPdf grad
+      gradId <- generateObject (linearGradientObject shapedLine shaderId)
+      patternId <- generateObject (gradientPatternObject gradId)
+      (patternName, _patAssoc) <- namePatternObject patternId
+      return . Right . buildToStrict $
+          tp "/Pattern cs\n" <> patternName <> tp " scn\n"
+    
+    RadialGradientTexture grad center radius ->
+       go $ RadialGradientWithFocusTexture grad center radius center
+    RadialGradientWithFocusTexture _grad _center _rad _focus ->
+      return $ Left "Unsupported radial gradient with focus in PDF output."
+    WithSampler _ tx -> go tx
+    WithTextureTransform _trans tx -> go tx
+    SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
+    ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
+    ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
 
 resplit :: [Primitive] -> [[Primitive]]
 resplit = uncurry (:) . go where
   go [] = ([], [])
-  go (x:xs@(y:_)) | firstPointOf y `isDistingableFrom` lastPointOf x =
+  go (x:xs@(y:_)) | lastPointOf x `isDistingableFrom` firstPointOf y =
       ([x], after:rest) where (after, rest) = go xs
   go (x:xs) = (x:curr, rest) where (curr, rest) = go xs
 
@@ -298,21 +335,11 @@ fillCommandOfOrder = go . _orderFillMethod where
   go FillWinding = tp "f\n"
   go FillEvenOdd = tp "f*\n"
 
-
-isPrimitivePoint :: Primitive -> Bool
-isPrimitivePoint p = case p of
-  LinePrim l -> isLinePoint l
-  BezierPrim b -> isBezierPoint b
-  CubicBezierPrim c -> isCubicBezierPoint c
-
-removeDegeneratePrimitive :: [Primitive] -> [Primitive]
-removeDegeneratePrimitive = filter (not . isPrimitivePoint)
-
 orderToPdf :: Int -> DrawOrder PixelRGBA8 -> PdfEnv Builder
 orderToPdf height order = do
-  etx <- textureToPdf $ _orderTexture order
+  etx <- textureToPdf height $ _orderTexture order
   let processPath =
-        foldMap (pathToPdf height) . resplit . removeDegeneratePrimitive
+        foldMap (pathToPdf height) . resplit -- . removeDegeneratePrimitive
       geometryCode =
         foldMap processPath $ _orderPrimitives order
   case etx of
@@ -322,8 +349,8 @@ orderToPdf height order = do
 buildXRefTable :: [Int] -> Builder
 buildXRefTable lst = tp "xref\n0 " <> intDec (glength lst) <> tp "\n"
                    <> foldMap build lst where
-  build 0 = "0000000000 65535 f\n"
-  build ix = toPdf . B.pack $ printf "%010d 00000 n\n" ix
+  build 0 = "0000000000 65535 f \n"
+  build ix = toPdf . B.pack $ printf "%010d 00000 n \n" ix
 
 buildTrailer :: Foldable f => f a -> PdfId -> Builder
 buildTrailer objs startId =
@@ -350,7 +377,7 @@ drawOrdersToPdf width height orders = toLazyByteString $
     , pagesObject    [pageId] pagesId
     , pageObject     width height pagesId contentId endObjId pageId
     , contentObject  (buildToStrict content) contentId
-    , contentObject  mempty endObjId
+    , resourceObject (_patternAssoc endContext) endObjId
     ]
     <> reverse (_generatedPdfObjects endContext)
 

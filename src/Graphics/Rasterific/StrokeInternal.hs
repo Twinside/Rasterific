@@ -132,7 +132,7 @@ miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
   | uDotW > l / max 1 l && uDotW > 0.01 =
-      pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
+      pure (a `lineFromTo` m) <> pure (m `lineFromTo` c)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
   where --      X m
@@ -179,10 +179,10 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
         (firstPoint, _) = firstPointAndNormal firstShape
 
         go prev []
-           | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
+           | firstPoint `isNearby` lastPoint prev = offseter prev <> joiner prev firstShape
            | otherwise = offseter prev <> cap offset caping prev
         go prev (x:xs) =
-             joiner prev x <> offseter prev <> go x xs
+             offseter prev <> joiner prev x <> go x xs
 
 approximateLength :: Primitive -> Float
 approximateLength (LinePrim l) = lineLength l

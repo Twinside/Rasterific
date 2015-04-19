@@ -231,6 +231,18 @@ linearGradientObject (Line p1 p2) funId = dicObj
   where
     coords = arrayOf $ toPdf p1 <> tp " " <> toPdf p2
 
+radialGradientObject :: Point -> Point -> Float -> PdfId -> PdfId -> PdfObject
+radialGradientObject center focus radius funId = dicObj
+  [ ("ShadingType", "3")
+  , ("ColorSpace", "/DeviceRGB")
+  , ("Coords", buildToStrict coords)
+  , ("Function", refOf funId)
+  , ("Extend", "[ true true ]")
+  ]
+  where
+    coords = arrayOf $ toPdf center <> tp " " <> floatDec radius
+                    <> " " <> toPdf focus <> tp " 0"
+
 contentObject :: B.ByteString -> PdfId -> PdfObject
 contentObject content pid = PdfObject
   { _pdfId       = pid
@@ -315,8 +327,15 @@ textureToPdf height = go where
     
     RadialGradientTexture grad center radius ->
        go $ RadialGradientWithFocusTexture grad center radius center
-    RadialGradientWithFocusTexture _grad _center _rad _focus ->
-      return $ Left "Unsupported radial gradient with focus in PDF output."
+    RadialGradientWithFocusTexture grad center rad focus -> do
+      let cs = vswap height center
+          fs = vswap height focus
+      shaderId <- gradientToPdf $ reverse grad
+      gradId <- generateObject (radialGradientObject cs fs rad shaderId)
+      patternId <- generateObject (gradientPatternObject gradId)
+      (patternName, _patAssoc) <- namePatternObject patternId
+      return . Right . buildToStrict $
+          tp "/Pattern cs\n" <> patternName <> tp " scn\n"
     WithSampler _ tx -> go tx
     WithTextureTransform _trans tx -> go tx
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."

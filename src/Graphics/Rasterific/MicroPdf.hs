@@ -27,6 +27,7 @@ import Graphics.Rasterific.Shading
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
+import Graphics.Rasterific.PlaneBoundable
 import Text.Printf
 
 
@@ -299,6 +300,17 @@ stitchingFunction interpolations bounds = dicObj
     boundEncode (_, b2) = floatDec b2
     boundsId = tp "[ " <> foldMap boundEncode (init bounds) <> tp "]"
 
+{-
+repeatingFunction :: PdfId -> PdfObject
+repeatingFunction begin end = dicObj
+  [ ("FunctionType", "3")
+  , ("Domain", buildToStrict . arrayOf $ floatDec begin <> tp " " <> floatDec end)
+  , ("Functions", buildToStrict interpIds)
+  , ("Bounds", buildToStrict boundsId)
+  , ("Encode", buildToStrict . arrayOf . F.fold $ map (const $ tp "0 1 ") interpolations)
+  ]
+-}
+
 gradientToPdf :: Gradient PixelRGBA8 -> PdfEnv PdfId
 gradientToPdf [] = return 0
 gradientToPdf [(_, a), (_, b)] = generateObject (colorInterpolationFunction a b)
@@ -309,35 +321,35 @@ gradientToPdf lst@(_:rest) = do
   let bounds = zip (map fst lst) (map fst rest)
   generateObject (stitchingFunction interpolations bounds)
 
-textureToPdf :: Int -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
-textureToPdf height = go where
-  go tex= case tex of
-    RawTexture img -> go (SampledTexture img)
-    SolidTexture px ->
-      -- at this point we(re only doing "fill" operations.
-      pure . pure $ colorToPdf px <> " rg\n"
+gradientObjectGenerator :: PlaneBound -> SamplerRepeat -> Gradient PixelRGBA8
+                        -> (PdfId -> PdfId -> PdfObject)
+                        -> PdfEnv (Either String PdfCommand)
+gradientObjectGenerator _pBounds _sampler grad gen = do
+  shaderId <- gradientToPdf grad
+  gradId <- generateObject (gen shaderId)
+  patternId <- generateObject (gradientPatternObject gradId)
+  (patternName, _patAssoc) <- namePatternObject patternId
+  return . Right . buildToStrict $
+      tp "/Pattern cs\n" <> patternName <> tp " scn\n"
+
+textureToPdf :: PlaneBound -> Int -> Texture PixelRGBA8
+             -> PdfEnv (Either String PdfCommand)
+textureToPdf pBounds height = go SamplerPad where
+  go sampler tex = case tex of
+    RawTexture img -> go sampler (SampledTexture img)
+    WithSampler newSampler tx -> go newSampler tx
+    SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
     LinearGradientTexture grad line -> do
       let shapedLine = transform (vswap height) line
-      shaderId <- gradientToPdf grad
-      gradId <- generateObject (linearGradientObject shapedLine shaderId)
-      patternId <- generateObject (gradientPatternObject gradId)
-      (patternName, _patAssoc) <- namePatternObject patternId
-      return . Right . buildToStrict $
-          tp "/Pattern cs\n" <> patternName <> tp " scn\n"
-    
+      gradientObjectGenerator pBounds sampler grad (linearGradientObject shapedLine)
     RadialGradientTexture grad center radius ->
-       go $ RadialGradientWithFocusTexture grad center radius center
+       go sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
       let cs = vswap height center
           fs = vswap height focus
-      shaderId <- gradientToPdf $ reverse grad
-      gradId <- generateObject (radialGradientObject cs fs rad shaderId)
-      patternId <- generateObject (gradientPatternObject gradId)
-      (patternName, _patAssoc) <- namePatternObject patternId
-      return . Right . buildToStrict $
-          tp "/Pattern cs\n" <> patternName <> tp " scn\n"
-    WithSampler _ tx -> go tx
-    WithTextureTransform _trans tx -> go tx
+      gradientObjectGenerator pBounds sampler grad (radialGradientObject cs fs rad)
+    WithTextureTransform _trans tx -> go sampler tx
+
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
@@ -356,7 +368,8 @@ fillCommandOfOrder = go . _orderFillMethod where
 
 orderToPdf :: Int -> DrawOrder PixelRGBA8 -> PdfEnv Builder
 orderToPdf height order = do
-  etx <- textureToPdf height $ _orderTexture order
+  let orderBounds = foldMap (foldMap planeBounds) $ _orderPrimitives order
+  etx <- textureToPdf orderBounds height $ _orderTexture order
   let processPath =
         foldMap (pathToPdf height) . resplit -- . removeDegeneratePrimitive
       geometryCode =

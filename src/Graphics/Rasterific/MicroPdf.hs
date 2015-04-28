@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 import Codec.Picture( PixelRGBA8( PixelRGBA8 ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Shading
+import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
@@ -353,6 +353,7 @@ textureToPdf pBounds height = go SamplerPad where
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
+    PatternTexture _w _h _px _draw _img -> return $ Left "Unsupported pattern in PDF output."
 
 resplit :: [Primitive] -> [[Primitive]]
 resplit = uncurry (:) . go where

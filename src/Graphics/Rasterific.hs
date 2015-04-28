@@ -161,8 +161,7 @@ import qualified Data.ByteString.Lazy as LB
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
-import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Shading
+{-import Graphics.Rasterific.Texture-}
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.QuadraticBezier
@@ -456,7 +455,7 @@ cacheOrders imageFilter orders = case imageFilter of
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
        order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims 
              , _orderTexture =
-                 transformTexture (translate cornerUpperLeft) $ _orderTexture order
+                 WithTextureTransform (translate cornerUpperLeft) $ _orderTexture order
              }
    
    resultImage =
@@ -498,10 +497,10 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     clipRender =
       renderDrawing width height clipBackground
-            . withTexture (uniformTexture clipForeground)
+            . withTexture (SolidTexture clipForeground)
 
     textureOf ctxt@RenderContext { currentTransformation = Just (_, t) } =
-        transformTexture t $ currentTexture ctxt
+        WithTextureTransform t $ currentTexture ctxt
     textureOf ctxt = currentTexture ctxt
 
     geometryOf RenderContext { currentTransformation = Just (trans, _) } =
@@ -509,7 +508,7 @@ drawOrdersOfDrawing width height dpi background drawing =
     geometryOf _ = id
 
     stupidDefaultTexture =
-        uniformTexture $ colorMap (const clipBackground) background
+        SolidTexture $ colorMap (const clipBackground) background
 
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
@@ -610,7 +609,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
         subModuler Nothing = modulationTexture
         subModuler (Just v) =
-            modulateTexture v modulationTexture
+            ModulateTexture v modulationTexture
 
 -- | With stroke geometry with a given stroke width, using
 -- a dash pattern.
@@ -751,10 +750,10 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
             reqWidth reqHeight
     | borderSize <= 0 =
         withTransformation (translate p <> scale scaleX scaleY) .
-            withTexture (sampledImageTexture img) $ fill rect
+            withTexture (SampledTexture img) $ fill rect
     | otherwise = do
         withTransformation (translate p <> scale scaleX scaleY) $
-            withTexture (sampledImageTexture img) $ fill rect
+            withTexture (SampledTexture img) $ fill rect
         stroke (borderSize / 2) (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'
         where

@@ -46,7 +46,6 @@ import qualified Data.Vector.Storable.Mutable as M
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Rasterize
-import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Shading
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Command
@@ -189,6 +188,6 @@ fillWithTextureAndMask fillMethod texture mask els = do
         !maxi = V2 (fromIntegral width) (fromIntegral height)
         spans = rasterize fillMethod $ foldMap (clip mini maxi) els
         !shader = primToPrim
-                . transformTextureToFiller (modulateTexture texture mask) img
+                . transformTextureToFiller (ModulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 

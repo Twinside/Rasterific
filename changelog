@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.6 2015
+ * Adding: repeating background pattern texture.
+
 v0.5.2.1 April 2015
  * Fixed: non-composability of cached elements
  * Fixed: Border size when drawing images was twice too large.

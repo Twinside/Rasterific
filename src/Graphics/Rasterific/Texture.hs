@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Module describing the various filling method of the
 -- geometric primitives.
 --
@@ -15,6 +16,7 @@ module Graphics.Rasterific.Texture
     , radialGradientTexture
     , radialGradientWithFocusTexture
     , sampledImageTexture
+    , patternTexture
 
       -- * Texture manipulation
     , modulateTexture
@@ -22,11 +24,10 @@ module Graphics.Rasterific.Texture
     ) where
 
 
-import Codec.Picture.Types( Pixel( .. )
-                          , Image( .. )
-                          )
-import Graphics.Rasterific.Types( Point, SamplerRepeat( .. ), Line( .. ) )
-import Graphics.Rasterific.Shading
+import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
+import Graphics.Text.TrueType( Dpi )
+import Graphics.Rasterific
+import Graphics.Rasterific.Command
 import Graphics.Rasterific.Transformations
 
 -- | Set the repeat pattern of the texture (if any).
@@ -144,4 +145,28 @@ modulateTexture :: (Pixel px)
                 -> Texture (PixelBaseComponent px)  -- ^ A greyscale modulation texture.
                 -> Texture px                       -- ^ The resulting texture.
 modulateTexture = ModulateTexture
+
+
+-- | Use a drawing as a repeating background pattern.
+--
+-- > let pattern =
+-- >       patternTexture 40 40 96 (PixelRGBA8 0xFF 0x53 0x73 255) .
+-- >         withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 255) $
+-- >           fill $ circle (V2 20 20) 13
+-- > in
+-- > withTexture pattern $
+-- >   fill $ roundedRectangle (V2 20 20) 160 160 20 20
+--
+-- <<docimages/pattern_texture.png>>
+--
+patternTexture :: RenderablePixel px
+               => Int           -- ^ Width
+               -> Int           -- ^ Height
+               -> Dpi           -- ^ Dpi if text is present in pattern
+               -> px            -- ^ Pattern background color
+               -> Drawing px () -- ^ Drawing defining the pattern
+               -> Texture px
+patternTexture w h dpi back drawing =
+    PatternTexture w h back drawing $
+        renderDrawingAtDpi w h dpi back drawing
 

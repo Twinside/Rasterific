@@ -44,10 +44,15 @@ logo size inv offset =
 backgroundColor :: PixelRGBA8
 backgroundColor = PixelRGBA8 255 255 255 255
 
+frontColor, accentColor, accent2Color :: PixelRGBA8
+frontColor = PixelRGBA8 0 0x86 0xc1 255
+accentColor = PixelRGBA8 0xff 0xf4 0xc1 255
+accent2Color = PixelRGBA8 0xFF 0x53 0x73 255
+
 frontTexture, accentTexture, accent2Texture :: Texture PixelRGBA8
-frontTexture = uniformTexture $ PixelRGBA8 0 0x86 0xc1 255
-accentTexture = uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 255
-accent2Texture = uniformTexture $ PixelRGBA8 0xFF 0x53 0x73 255
+frontTexture = uniformTexture frontColor
+accentTexture = uniformTexture accentColor
+accent2Texture = uniformTexture accent2Color
 
 produceDocImage :: FilePath -> Drawing PixelRGBA8 () -> IO ()
 produceDocImage filename drawing = do
@@ -474,6 +479,15 @@ main = do
         withGroupOpacity 128 $ do
            withTexture frontTexture . fill $ circle (V2 70 100) 60
            withTexture accentTexture . fill $ circle (V2 120 100) 60
+
+    produceDocImage (outFolder </> "pattern_texture.png") $
+        let pattern =
+              patternTexture 40 40 96 accent2Color .
+                withTexture frontTexture $
+                  fill $ circle (V2 20 20) 13
+        in
+        withTexture pattern $
+          fill $ roundedRectangle (V2 20 20) 160 160 20 20
 
     produceDocImage (outFolder </> "item_opacity.png") $ do
         withTexture accent2Texture $

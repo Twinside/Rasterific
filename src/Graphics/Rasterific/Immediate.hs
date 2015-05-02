@@ -25,6 +25,9 @@ module Graphics.Rasterific.Immediate
     , fillWithTextureAndMask
     , fillWithTexture
     , fillOrder
+
+    , textToDrawOrders
+    , transformOrder
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -32,6 +35,7 @@ import Control.Applicative( (<$>) )
 import Data.Foldable( foldMap )
 #endif
 
+import Data.Maybe( fromMaybe )
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
 import Control.Monad.State( StateT, execStateT, get, lift )
@@ -48,9 +52,13 @@ import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Shading
+import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.PlaneBoundable
+
+import qualified Data.Vector.Unboxed as VU
+import Graphics.Text.TrueType( Dpi, getStringCurveAtPoint )
 
 -- | Monad used to describe the drawing context.
 type DrawContext m px =
@@ -70,8 +78,15 @@ data DrawOrder px = DrawOrder
     }
 
 instance PlaneBoundable (DrawOrder px) where
-    planeBounds =
-        foldMap (foldMap planeBounds) . _orderPrimitives
+  planeBounds =
+    foldMap (foldMap planeBounds) . _orderPrimitives
+
+transformOrder :: (Point -> Point) -> DrawOrder px -> DrawOrder px
+transformOrder f order =
+  order { _orderPrimitives = transform f $ _orderPrimitives order }
+
+instance Transformable (DrawOrder px) where
+  transform = transformOrder
 
 -- | Transform back a low level drawing order to a more
 -- high level Drawing
@@ -191,4 +206,31 @@ fillWithTextureAndMask fillMethod texture mask els = do
         !shader = primToPrim
                 . transformTextureToFiller (ModulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans
+
+-- | Helper function transforming text range to draw order.
+textToDrawOrders :: Dpi             -- ^ Current output device resolution
+                 -> Texture px      -- ^ Texture to use if no texture is defined in the range
+                 -> Point           -- ^ Baseline position
+                 -> [TextRange px]  -- ^ Text description.
+                 -> [DrawOrder px]
+textToDrawOrders dpi defaultTexture (V2 x y) descriptions = 
+    toOrder <$> zip floatCurves linearDescriptions where
+
+  toOrder (curve, d) = DrawOrder 
+    { _orderPrimitives = [beziersOfChar curve]
+    , _orderFillMethod = FillWinding
+    , _orderMask = Nothing
+    , _orderTexture = fromMaybe defaultTexture $ _textTexture d
+    }
+
+  floatCurves =
+    getStringCurveAtPoint dpi (x, y)
+      [(_textFont d, _textSize d, _text d) | d <- descriptions]
+
+  linearDescriptions =
+    concat [map (const d) $ _text d | d <- descriptions]
+
+  beziersOfChar curves = concat
+    [fmap BezierPrim . bezierFromPath . fmap (uncurry V2) $ VU.toList c | c <- curves]
+
 

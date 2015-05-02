@@ -54,10 +54,24 @@ accentTexture = uniformTexture accentColor
 accent2Texture = uniformTexture accent2Color
 
 produceDocImage :: FilePath -> Drawing PixelRGBA8 () -> IO ()
-produceDocImage filename drawing = writePng filename img
+produceDocImage filename drawing = do
+    writePng filename img
+    writePdf $ filename <> ".draw.pdf"
+    writeOrderPdf $ filename <> ".order.pdf"
   where
     img = renderDrawing 200 200 backgroundColor
         $ withTexture frontTexture drawing
+
+    writeOrderPdf fname =
+      LB.writeFile fname .
+        renderOrdersToPdf 200 200 $
+          drawOrdersOfDrawing 200 200 92 (PixelRGBA8 0 0 0 0) $
+            withTexture frontTexture drawing
+
+    writePdf fname =
+      LB.writeFile fname .
+        renderDrawingAtDpiToPDF 200 200 92 $
+            withTexture frontTexture drawing
 
 capTester :: (FilePath, Cap) -> IO ()
 capTester (filename, cap) =
@@ -320,6 +334,8 @@ main = do
             [line (V2 0 yf) (V2 200 (yf + 10)) 
                            | y <- [5 :: Int, 17 .. 200]
                            , let yf = fromIntegral y ]
+
+    {-produceDocImage (outFolder </> "clip_compose.png") $-}
 
     produceDocImage (outFolder </> "stroke_line.png") $
       stroke 17 JoinRound (CapRound, CapRound) $

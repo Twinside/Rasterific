@@ -66,6 +66,8 @@ module Graphics.Rasterific
     , RenderablePixel
     , renderDrawing
     , renderDrawingAtDpi
+    , renderDrawingAtDpiToPDF
+    , renderOrdersToPdf 
     , pathToPrimitives
 
       -- * Rasterization types
@@ -155,6 +157,7 @@ import Codec.Picture.Types( Image( .. )
                           , pixelMapXY )
 
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.ByteString.Lazy as LB
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
@@ -174,7 +177,7 @@ import Graphics.Rasterific.Command
 import Graphics.Text.TrueType( Font
                              , Dpi
                              , PointSize( .. )
-                             , getStringCurveAtPoint )
+                             )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -407,6 +410,17 @@ renderDrawing
     -> Image px
 renderDrawing width height = renderDrawingAtDpi width height 96
 
+renderDrawingAtDpiToPDF
+    :: Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> Drawing PixelRGBA8 () -- ^ Rendering action
+    -> LB.ByteString
+renderDrawingAtDpiToPDF width height dpi =
+  renderDrawingToPdf renderer width height dpi
+    where
+      renderer = drawOrdersOfDrawing width height dpi (PixelRGBA8 0 0 0 0)
+
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
 -- in other colorspace will probably produce weird results.
@@ -490,9 +504,14 @@ drawOrdersOfDrawing width height dpi background drawing =
         WithTextureTransform t $ currentTexture ctxt
     textureOf ctxt = currentTexture ctxt
 
+    geometryOf :: Transformable a => RenderContext px -> a -> a
     geometryOf RenderContext { currentTransformation = Just (trans, _) } =
         transform (applyTransformation trans)
     geometryOf _ = id
+
+    geometryOfO RenderContext { currentTransformation = Just (trans, _) } =
+        transformOrder (applyTransformation trans)
+    geometryOfO _ = id
 
     stupidDefaultTexture =
         SolidTexture $ colorMap (const clipBackground) background
@@ -520,11 +539,9 @@ drawOrdersOfDrawing width height dpi background drawing =
       final = orders <> go ctxt next rest
       images = go ctxt (fromF sub) []
 
-      drawer trans _ order = modify $ \lst -> finalOrder : lst
-        where
-          toFinalPos = transform $ applyTransformation trans
-          finalOrder =
-            order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
+      drawer trans _ order =
+        modify (transformOrder (applyTransformation trans) order :)
+
       orders = reverse $ execState (drawOrdersOnPath drawer 0 base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
@@ -561,29 +578,9 @@ drawOrdersOfDrawing width height dpi background drawing =
         recurse sub =
             go ctxt (liftF $ Fill FillWinding sub ())
 
-    go ctxt (Free (TextFill (V2 x y) descriptions next)) rest =
-        go ctxt (sequence_ drawCalls) $ go ctxt next rest
-      where
-        floatCurves =
-          getStringCurveAtPoint dpi (x, y)
-            [(_textFont d, _textSize d, _text d) | d <- descriptions]
-
-        linearDescriptions =
-            concat [map (const d) $ _text d | d <- descriptions]
-
-        drawCalls =
-            [texturize d $ beziersOfChar curve
-                | (curve, d) <- zip floatCurves linearDescriptions]
-
-        texturize descr sub = case _textTexture descr of
-            Nothing -> fromF sub
-            Just t -> liftF $ SetTexture t sub ()
-
-        beziersOfChar curves = liftF $ Fill FillWinding bezierCurves ()
-          where
-            bezierCurves = concat
-              [map BezierPrim . bezierFromPath . map (uncurry V2)
-                              $ VU.toList c | c <- curves]
+    go ctxt (Free (TextFill p descriptions next)) rest = calls <> go ctxt next rest where
+      calls =
+        geometryOfO ctxt <$> textToDrawOrders dpi (currentTexture ctxt) p descriptions
 
     go ctxt (Free (WithCliping clipPath path next)) rest =
         go (ctxt { currentClip = newModuler }) (fromF path) $

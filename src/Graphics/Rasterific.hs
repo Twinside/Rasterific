@@ -66,7 +66,6 @@ module Graphics.Rasterific
     , RenderablePixel
     , renderDrawing
     , renderDrawingAtDpi
-    , renderDrawingAtDpiToPDF
     , pathToPrimitives
 
       -- * Rasterization types
@@ -152,12 +151,10 @@ import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
-                          , PixelRGBA8( PixelRGBA8 )
                           , unpackPixel
                           , pixelMapXY )
 
 import qualified Data.Vector.Unboxed as VU
-import qualified Data.ByteString.Lazy as LB
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Rasterize
@@ -172,7 +169,6 @@ import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
-import Graphics.Rasterific.MicroPdf
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font
@@ -410,15 +406,6 @@ renderDrawing
     -> Drawing px () -- ^ Rendering action
     -> Image px
 renderDrawing width height = renderDrawingAtDpi width height 96
-
-renderDrawingAtDpiToPDF
-    :: Int -- ^ Rendering width
-    -> Int -- ^ Rendering height
-    -> Dpi -- ^ Current DPI used for text rendering.
-    -> Drawing PixelRGBA8 () -- ^ Rendering action
-    -> LB.ByteString
-renderDrawingAtDpiToPDF width height dpi =
-  drawOrdersToPdf width height .  drawOrdersOfDrawing width height dpi (PixelRGBA8 0 0 0 0)
 
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types

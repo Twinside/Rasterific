@@ -56,7 +56,6 @@ library
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command
-               , Graphics.Rasterific.MicroPdf
                , Graphics.Rasterific.CubicBezier
                , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators

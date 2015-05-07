@@ -8,7 +8,6 @@ import Control.Applicative( (<*>), (<$>) )
 import Control.Monad( forM_ )
 import Control.Monad.ST( runST )
 import Data.Monoid( (<>) )
-import qualified Data.ByteString.Lazy as LB
 import Codec.Picture
 import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )
@@ -55,17 +54,10 @@ accentTexture = uniformTexture accentColor
 accent2Texture = uniformTexture accent2Color
 
 produceDocImage :: FilePath -> Drawing PixelRGBA8 () -> IO ()
-produceDocImage filename drawing = do
-    writePng filename img
-    writePdf $ filename <> ".pdf"
+produceDocImage filename drawing = writePng filename img
   where
     img = renderDrawing 200 200 backgroundColor
         $ withTexture frontTexture drawing
-
-    writePdf fname =
-      LB.writeFile fname .
-        renderDrawingAtDpiToPDF 200 200 92 $
-            withTexture frontTexture drawing
 
 capTester :: (FilePath, Cap) -> IO ()
 capTester (filename, cap) =

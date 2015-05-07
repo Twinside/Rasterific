@@ -18,6 +18,7 @@ import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
+import qualified Data.ByteString.Lazy as LB
 
 import Graphics.Rasterific.Linear( (^+^) )
 
@@ -53,25 +54,29 @@ frontTexture = uniformTexture frontColor
 accentTexture = uniformTexture accentColor
 accent2Texture = uniformTexture accent2Color
 
-produceDocImage :: FilePath -> Drawing PixelRGBA8 () -> IO ()
-produceDocImage filename drawing = do
+produceDocImageAtSize :: Int -> Int -> FilePath -> Drawing PixelRGBA8 () -> IO ()
+produceDocImageAtSize width height filename drawing = do
+    putStrLn $ "Producing " <> filename
     writePng filename img
     writePdf $ filename <> ".draw.pdf"
     writeOrderPdf $ filename <> ".order.pdf"
   where
-    img = renderDrawing 200 200 backgroundColor
+    img = renderDrawing width height backgroundColor
         $ withTexture frontTexture drawing
 
     writeOrderPdf fname =
       LB.writeFile fname .
-        renderOrdersToPdf 200 200 $
-          drawOrdersOfDrawing 200 200 92 (PixelRGBA8 0 0 0 0) $
+        renderOrdersAtDpiToPdf width height 92 $
+          drawOrdersOfDrawing width height 92 (PixelRGBA8 0 0 0 0) $
             withTexture frontTexture drawing
 
     writePdf fname =
       LB.writeFile fname .
-        renderDrawingAtDpiToPDF 200 200 92 $
+        renderDrawingAtDpiToPDF width height 92 $
             withTexture frontTexture drawing
+
+produceDocImage :: FilePath -> Drawing PixelRGBA8 () -> IO ()
+produceDocImage = produceDocImageAtSize 200 200
 
 capTester :: (FilePath, Cap) -> IO ()
 capTester (filename, cap) =
@@ -109,10 +114,9 @@ outFolder = "docimages"
 
 moduleExample :: IO ()
 moduleExample = do
-  let white = PixelRGBA8 255 255 255 255
-      drawColor = PixelRGBA8 0 0x86 0xc1 255
+  let drawColor = PixelRGBA8 0 0x86 0xc1 255
       recColor = PixelRGBA8 0xFF 0x53 0x73 255
-      img = renderDrawing 400 200 white $
+      img =
          withTexture (uniformTexture drawColor) $ do
             fill $ circle (V2 0 0) 30
             stroke 4 JoinRound (CapRound, CapRound) $
@@ -120,7 +124,7 @@ moduleExample = do
             withTexture (uniformTexture recColor) .
                 fill $ rectangle (V2 100 100) 200 100
 
-  writePng (outFolder </> "module_example.png") img
+  produceDocImageAtSize 400 200 (outFolder </> "module_example.png") img
 
 sansSerifFont :: FilePath
 sansSerifFont = "test_fonts/DejaVuSans.ttf"
@@ -169,10 +173,9 @@ textExample = do
   case fontErr of
     Left err -> putStrLn err
     Right font ->
-      writePng (outFolder </> "text_example.png") .
-          renderDrawing 300 70 (PixelRGBA8 255 255 255 255)
-              . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
-                      printTextAt font (PointSize 12) (V2 20 40) "A simple text test!"
+      produceDocImageAtSize 300 70 (outFolder </> "text_example.png")
+          . withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+                  printTextAt font (PointSize 12) (V2 20 40) "A simple text test!"
 
 textMultipleExample :: IO ()
 textMultipleExample = do
@@ -181,18 +184,15 @@ textMultipleExample = do
   case (,) <$> eitherFont1 <*> eitherFont2 of
     Left err -> putStrLn err
     Right (font1, font2) ->
-      writePng (outFolder </> "text_complex_example.png") .
-          renderDrawing 300 70 (PixelRGBA8 255 255 255 255) $
-              let blackTexture =
-                    Just . uniformTexture $ PixelRGBA8 0 0 0 255
-                  redTexture =
-                    Just . uniformTexture $ PixelRGBA8 255 0 0 255
-              in
-              printTextRanges (V2 20 40)
-                [ TextRange font1 (PointSize 12) "A complex " blackTexture
-                , TextRange font2 (PointSize 8) "text test" redTexture]
-                    
-                    
+      produceDocImageAtSize 300 70 (outFolder </> "text_complex_example.png") $
+          let blackTexture =
+                Just . uniformTexture $ PixelRGBA8 0 0 0 255
+              redTexture =
+                Just . uniformTexture $ PixelRGBA8 255 0 0 255
+          in
+          printTextRanges (V2 20 40)
+            [ TextRange font1 (PointSize 12) "A complex " blackTexture
+            , TextRange font2 (PointSize 8) "text test" redTexture]
 
 coordinateSystem :: IO ()
 coordinateSystem = do
@@ -200,11 +200,8 @@ coordinateSystem = do
     case fontErr of
         Left err -> putStrLn err
         Right font -> 
-            writePng (outFolder </> "coordinate.png") 
-                . renderDrawing 200 200 white
-                $ create font
+            produceDocImage (outFolder </> "coordinate.png") $ create font
   where
-    white = PixelRGBA8 255 255 255 255
     black = PixelRGBA8   0   0   0 255
     stroker = stroke 4 JoinRound (CapStraight 0, CapStraight 0)
     create font = withTexture (uniformTexture black) $ do
@@ -266,7 +263,7 @@ main :: IO ()
 main = do
     let addFolder (p, v) = (outFolder </> p, v)
     createDirectoryIfMissing True outFolder
-    moduleExample 
+    moduleExample
     mapM_ (capTester . addFolder)
         [ ("cap_straight.png", CapStraight 0)
         , ("cap_straight_1.png", CapStraight 1)
@@ -508,7 +505,7 @@ main = do
             fill $ circle (V2 120 100) 60
 
     textExample
-    textMultipleExample 
+    textMultipleExample
     coordinateSystem
     textOnPathExample
     geometryOnPath

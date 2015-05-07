@@ -13,13 +13,15 @@ import Control.Applicative( (<$>), pure )
 
 import Control.Monad.Free( liftF, Free( .. ) )
 import Control.Monad.Free.Church( fromF )
-import Control.Monad.State( State, get, put, runState, modify, execState )
+import Control.Monad.State( StateT, get, put, runStateT, modify, execState )
+import Control.Monad.Reader( Reader, local, asks, runReader )
 
+import Numeric( showFFloat )
 import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
 import Data.ByteString.Builder( byteString
                               , intDec
-                              , floatDec
+                              {-, floatDec-}
                               {-, charUtf8-}
                               , toLazyByteString
                               , Builder )
@@ -35,8 +37,10 @@ import Graphics.Rasterific.Operators
 import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PathWalker
+import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Text.TrueType( Dpi )
 import Text.Printf
+{-import Debug.Trace-}
 
 
 type PdfCommand = B.ByteString
@@ -49,28 +53,57 @@ data PdfObject = PdfObject
   , _pdfStream   :: !B.ByteString
   }
 
+data PdfConfiguration = PdfConfiguration
+  { _pdfConfDpi     :: !Dpi
+  , _pdfWidth       :: !Int
+  , _pdfHeight      :: !Int
+  , _pdfConfToOrder :: Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8]
+  }
+
 --------------------------------------------------
 ----       Monadic generation types
 --------------------------------------------------
-type PdfEnv = State PdfContext
+type PdfEnv = StateT PdfContext (Reader PdfConfiguration)
+
+runPdfEnv :: PdfConfiguration -> PdfId -> PdfEnv a -> (a, PdfContext)
+runPdfEnv conf firstFreeId producer =
+  runReader (runStateT producer $ emptyContext firstFreeId) conf 
 
 data PdfContext = PdfContext
-    { _pdfFreeIndex        :: !Int
-    , _pdfPatternIndex     :: !Int
-    , _generatedPdfObjects :: ![PdfObject]
-    , _patternAssoc        :: ![(B.ByteString, B.ByteString)]
-    }
+  { _pdfFreeIndex        :: !Int
+  , _pdfPatternIndex     :: !Int
+  , _generatedPdfObjects :: ![PdfObject]
+  , _patternAssoc        :: ![(B.ByteString, B.ByteString)]
+  }
 
-generatePattern :: PdfEnv Builder
-generatePattern = do
+withLocalSubcontext :: PdfEnv a -> PdfEnv (a, PdfId)
+withLocalSubcontext sub = do
+  ctxt <- get
+  let oldAssocs = _patternAssoc ctxt
+  put ctxt { _patternAssoc = [] }
+  result <- sub
+  ctxt' <- get
+  put $ ctxt { _patternAssoc = oldAssocs }
+  resource <- generateObject (resourceObject (_patternAssoc ctxt'))
+  return (result, resource)
+
+shadingName :: PdfEnv Builder
+shadingName = do
   ctxt <- get
   let idx = _pdfPatternIndex ctxt
   put $ ctxt { _pdfPatternIndex = idx + 1 }
   return $ tp "Sh" <> intDec idx
 
-namePatternObject :: PdfId -> PdfEnv (Builder, (B.ByteString, B.ByteString))
-namePatternObject pid = do
-  patId <- generatePattern 
+patternName :: PdfEnv Builder
+patternName = do
+  ctxt <- get
+  let idx = _pdfPatternIndex ctxt
+  put $ ctxt { _pdfPatternIndex = idx + 1 }
+  return $ tp "P" <> intDec idx
+
+namePatternObject :: PdfEnv Builder -> PdfId -> PdfEnv (Builder, (B.ByteString, B.ByteString))
+namePatternObject namer pid = do
+  patId <- namer
   let patAssoc = (buildToStrict patId, refOf pid)
   modify $ \ctxt -> ctxt { _patternAssoc = patAssoc : _patternAssoc ctxt }
   return ("/" <> patId, patAssoc)
@@ -100,6 +133,9 @@ emptyContext idx = PdfContext
 class ToPdf a where
   toPdf :: a -> Builder
 
+instance ToPdf Float where
+  toPdf v = toPdf . B.pack $ showFFloat (Just 4) v ""
+
 instance ToPdf B.ByteString where
   toPdf = byteString
 
@@ -107,7 +143,7 @@ instance ToPdf Transformation where
   toPdf (Transformation a c e b d f) =
      foldMap t [a, b, c, d, e, f] <> tp " cm\n"
     where
-      t v = floatDec v <> tp " "
+      t v = toPdf v <> tp " "
 
 instance ToPdf [(B.ByteString, B.ByteString)] where
   toPdf [] = mempty
@@ -140,7 +176,7 @@ instance ToPdf PdfObject where
                    <> tp "\nendstream\n"
 
 instance ToPdf Point where
-  toPdf (V2 x y) = floatDec x <> tp " " <> floatDec y
+  toPdf (V2 x y) = toPdf x <> tp " " <> toPdf y
 
 instance ToPdf Bezier where
   toPdf = toPdf . cubicFromQuadraticBezier 
@@ -181,7 +217,7 @@ arrayOfB :: B.ByteString -> B.ByteString
 arrayOfB a = "[ " <> a <> " ]"
 
 localGraphicState :: Builder -> Builder
-localGraphicState sub = tp "q " <> sub <> tp "Q "
+localGraphicState sub = tp "q\n" <> sub <> tp "Q\n"
 
 dicObj :: [(B.ByteString, B.ByteString)] -> PdfId -> PdfObject
 dicObj annots pid = PdfObject
@@ -254,7 +290,7 @@ radialGradientObject center focus radius funId = dicObj
   , ("Extend", "[ true true ]")
   ]
   where
-    coords = arrayOf $ toPdf center <> tp " " <> floatDec radius
+    coords = arrayOf $ toPdf center <> tp " " <> toPdf radius
                     <> " " <> toPdf focus <> tp " 0"
 
 contentObject :: B.ByteString -> PdfId -> PdfObject
@@ -304,19 +340,36 @@ stitchingFunction interpolations bounds = dicObj
   where
     interpIds =
        tp "[ " <> foldMap (\i -> toPdf (refOf i) <> tp " ") interpolations <> tp "]"
-    boundEncode (_, b2) = floatDec b2
+    boundEncode (_, b2) = toPdf b2
     boundsId = tp "[ " <> foldMap boundEncode (init bounds) <> tp "]"
 
 {-
 repeatingFunction :: PdfId -> PdfObject
 repeatingFunction begin end = dicObj
   [ ("FunctionType", "3")
-  , ("Domain", buildToStrict . arrayOf $ floatDec begin <> tp " " <> floatDec end)
+  , ("Domain", buildToStrict . arrayOf $ toPdf begin <> tp " " <> toPdf end)
   , ("Functions", buildToStrict interpIds)
   , ("Bounds", buildToStrict boundsId)
   , ("Encode", buildToStrict . arrayOf . F.fold $ map (const $ tp "0 1 ") interpolations)
   ]
 -}
+
+tillingPattern :: Int -> Int -> Builder -> PdfId -> PdfId -> PdfObject
+tillingPattern w h content res pid = PdfObject 
+  { _pdfId       = pid
+  , _pdfRevision = 0
+  , _pdfStream   = buildToStrict content
+  , _pdfAnnot    =
+      [ ("Type", "/Pattern")
+      , ("PatternType", "1")
+      , ("PaintType", "1")
+      , ("TilingType", "1")
+      , ("BBox", buildToStrict $ "[0 0 " <> intDec w <> tp " " <> intDec h <> "]")
+      , ("XStep", buildToStrict $ intDec w)
+      , ("YStep", buildToStrict $ intDec h)
+      , ("Resources", refOf res)
+      ]
+  }
 
 gradientToPdf :: Gradient PixelRGBA8 -> PdfEnv PdfId
 gradientToPdf [] = return 0
@@ -335,14 +388,13 @@ gradientObjectGenerator _pBounds _sampler grad gen = do
   shaderId <- gradientToPdf grad
   gradId <- generateObject (gen shaderId)
   patternId <- generateObject (gradientPatternObject gradId)
-  (patternName, _patAssoc) <- namePatternObject patternId
+  (pat, _patAssoc) <- namePatternObject shadingName patternId
   return . Right . buildToStrict $
-      tp "/Pattern cs\n" <> patternName <> tp " scn\n"
+      tp "/Pattern cs\n" <> pat <> tp " scn\n"
 
-textureToPdf :: Int -> PlaneBound -> Texture PixelRGBA8
-             -> PdfEnv (Either String PdfCommand)
-textureToPdf height pBounds = go SamplerPad where
-  vs (V2 x y) = V2 x (fromIntegral height - y)
+textureToPdf :: PlaneBound -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
+textureToPdf pBounds = go SamplerPad where
+  vs h (V2 x y) = V2 x (fromIntegral h - y)
 
   go sampler tex = case tex of
     RawTexture img -> go sampler (SampledTexture img)
@@ -350,13 +402,15 @@ textureToPdf height pBounds = go SamplerPad where
     SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
                                   <> colorToPdf px <> " RG\n"
     LinearGradientTexture grad line -> do
-      let sampledLine = transform vs line
+      height <- asks _pdfHeight
+      let sampledLine = transform (vs height) line
       gradientObjectGenerator pBounds sampler grad (linearGradientObject sampledLine)
     RadialGradientTexture grad center radius ->
        go sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
-      let cs = vs center
-          fs = vs focus
+      height <- asks _pdfHeight
+      let cs = vs height center
+          fs = vs height focus
           invGrad = reverse [(1 - o, c) | (o, c) <- grad]
       gradientObjectGenerator pBounds sampler invGrad (radialGradientObject cs fs rad)
     WithTextureTransform _trans tx -> go sampler tx
@@ -364,7 +418,19 @@ textureToPdf height pBounds = go SamplerPad where
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
-    PatternTexture _w _h _px _draw _img -> return $ Left "Unsupported pattern in PDF output."
+    PatternTexture w h px draw _img -> do
+      let withPatternSize conf = conf { _pdfWidth = w, _pdfHeight = h }
+          baseTexture = SolidTexture px
+          backRect = rectangle (V2 0 0) (fromIntegral w) (fromIntegral h)
+          backDraw =
+            liftF $ SetTexture baseTexture
+               (liftF $ Fill FillWinding backRect ()) ()
+      (content, resId) <-
+          local withPatternSize . withLocalSubcontext $ pdfProducer baseTexture (backDraw >> draw)
+      tillingId <- generateObject $ tillingPattern w h content resId
+      (pat, _patAssoc) <- namePatternObject patternName tillingId
+      return . Right . buildToStrict $
+            tp "/Pattern cs\n" <> pat <> tp " scn\n"
 
 resplit :: [Primitive] -> [[Primitive]]
 resplit = uncurry (:) . go where
@@ -393,12 +459,12 @@ lineJoinOf :: Join -> Builder
 lineJoinOf j = case j of
   JoinRound -> tp "1 j "
   JoinMiter 0 -> tp "2 j "
-  JoinMiter n -> floatDec n <> tp " M 0 j "
+  JoinMiter n -> toPdf n <> tp " M 0 j "
 
-orderToPdf :: Int -> DrawOrder PixelRGBA8 -> PdfEnv Builder
-orderToPdf height order = do
+orderToPdf :: DrawOrder PixelRGBA8 -> PdfEnv Builder
+orderToPdf order = do
   let orderBounds = foldMap (foldMap planeBounds) $ _orderPrimitives order
-  etx <- textureToPdf height orderBounds $ _orderTexture order
+  etx <- textureToPdf orderBounds $ _orderTexture order
   let processPath = foldMap pathToPdf . resplit -- . removeDegeneratePrimitive
       geometryCode =
         foldMap processPath $ _orderPrimitives order
@@ -421,25 +487,24 @@ buildTrailer objs startId = tp "trailer\n" <> toPdf
 toPdfSpace :: Float -> Transformation
 toPdfSpace h = translate (V2 0 h) <> scale 1 (-1)
 
-pdfFromProducer :: Int -> Int -> PdfEnv Builder -> LB.ByteString
-pdfFromProducer width height producer = toLazyByteString $
+pdfFromProducer :: PdfConfiguration -> PdfEnv Builder -> LB.ByteString
+pdfFromProducer conf producer = toLazyByteString $
   foldMap byteString objs
     <> xref
     <> buildTrailer objects catalogId
     <> xrefPosition 
     <> tp "%%EOF"
   where
+  height = _pdfHeight conf
   (catalogId : outlineId : pagesId : pageId : contentId : endObjId : firstFreeId :  _) = [1..]
-  startContext = emptyContext firstFreeId
-  (content, endContext) = runState producer startContext
-
+  (content, endContext) = runPdfEnv conf firstFreeId producer
   initialTransform = toPdf . toPdfSpace $ fromIntegral height
 
   objects =
     [ catalogObject  pagesId outlineId catalogId 
     , outlinesObject [] outlineId
     , pagesObject    [pageId] pagesId
-    , pageObject     width height pagesId contentId endObjId pageId
+    , pageObject     (_pdfWidth conf) height pagesId contentId endObjId pageId
     , contentObject  (buildToStrict $ initialTransform <> content) contentId
     , resourceObject (_patternAssoc endContext) endObjId
     ]
@@ -453,16 +518,23 @@ pdfFromProducer width height producer = toLazyByteString $
 
   xref = buildXRefTable indexes
 
-
 renderDrawingToPdf :: (Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8])
                    -> Int -> Int -> Dpi -> Drawing PixelRGBA8 ()
                    -> LB.ByteString
-renderDrawingToPdf toOrders width height dpi rootDrawing =
-    pdfFromProducer width height pdfProducer where
+renderDrawingToPdf toOrders width height dpi =
+    pdfFromProducer conf . pdfProducer baseTexture
+  where
+    baseTexture = SolidTexture $ PixelRGBA8 0 0 0 0
+    conf = PdfConfiguration
+        { _pdfConfDpi     = dpi
+        , _pdfWidth       = width
+        , _pdfHeight      = height
+        , _pdfConfToOrder = toOrders
+        }
 
-  baseTexture = SolidTexture $ PixelRGBA8 0 0 0 0
-  pdfProducer =
-    goNext False fillCommandOf baseTexture $ fromF rootDrawing
+pdfProducer :: Texture PixelRGBA8 -> Drawing PixelRGBA8 () -> PdfEnv Builder
+pdfProducer baseTexture =
+    goNext False fillCommandOf baseTexture . fromF where
 
   goNext forceInverse filler prevTexture f = case f of
     Free c -> go forceInverse filler prevTexture c
@@ -476,21 +548,21 @@ renderDrawingToPdf toOrders width height dpi rootDrawing =
             <> after
      Stroke w j (c, _) prims next -> do
        after <- recurse next
-       pure $ floatDec w <> tp " w "
+       pure $ toPdf w <> tp " w "
             <> lineJoinOf j
             <> lineCapOf  c <> "\n"
             <> foldMap pathToPdf (resplit prims)
             <> tp "S\n"
             <> after
      
-     DashedStroke w pat o j (c, _) prims next -> do
-       sub <-  go forceInverse filler prevTexture (Stroke w j (c, c) prims next)
+     DashedStroke o pat w j (c, _) prims next -> do
+       sub <- go forceInverse filler prevTexture (Stroke w j (c, c) prims next)
        pure $ arrayOf (foldMap coords pat) 
-           <> floatDec o <> tp " d "
+           <> toPdf o <> tp " d "
            <> sub
            <> "[] 0 d "
        where
-         coords co = floatDec co <> tp " "
+         coords co = toPdf co <> tp " "
      
      -- Opacity is ignored for now
      WithGlobalOpacity _opacity sub next ->
@@ -510,7 +582,7 @@ renderDrawingToPdf toOrders width height dpi rootDrawing =
         pure $ localGraphicState (toPdf trans <> inner) <> after
 
      SetTexture tx sub next -> do
-        tex <- textureToPdf height mempty tx
+        tex <- textureToPdf mempty tx
         inner <- goNext forceInverse filler tx $ fromF sub
         after <- recurse next
         pure $ case tex of
@@ -527,12 +599,14 @@ renderDrawingToPdf toOrders width height dpi rootDrawing =
             <> after
 
      TextFill p ranges next -> do
+        dpi <- asks _pdfConfDpi
         after <- recurse next
         let orders = textToDrawOrders dpi prevTexture p ranges
-        textPrint <- mapM (orderToPdf height) orders
+        textPrint <- mapM orderToPdf orders
         pure $ F.fold textPrint <> after
 
      WithPathOrientation path base subDrawings next -> do
+       toOrders <- asks _pdfConfToOrder
        let orders :: [DrawOrder PixelRGBA8]
            orders = toOrders . liftF $ SetTexture prevTexture subDrawings ()
 
@@ -549,9 +623,17 @@ renderDrawingToPdf toOrders width height dpi rootDrawing =
     where
       recurse = goNext forceInverse filler prevTexture
 
-renderOrdersToPdf :: Int -> Int -> [DrawOrder PixelRGBA8] -> LB.ByteString
-renderOrdersToPdf width height orders =
-  pdfFromProducer width height $ F.fold <$> mapM (orderToPdf height) orders
+renderOrdersToPdf :: (Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8])
+                  -> Int -> Int -> Dpi -> [DrawOrder PixelRGBA8] -> LB.ByteString
+renderOrdersToPdf toOrders width height dpi orders =
+  pdfFromProducer conf $ F.fold <$> mapM orderToPdf orders
+  where
+    conf = PdfConfiguration
+      { _pdfConfDpi     = dpi
+      , _pdfWidth       = width
+      , _pdfHeight      = height
+      , _pdfConfToOrder = toOrders
+      }
 
 prepareObjects :: [PdfObject] -> [(Int, B.ByteString)]
 prepareObjects = scanl go (0, pdfSignature) where

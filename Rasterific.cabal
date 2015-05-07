@@ -61,8 +61,10 @@ library
                , Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize
                , Graphics.Rasterific.StrokeInternal
+               , Graphics.Rasterific.ComplexPrimitive
                , Graphics.Rasterific.Types
                , Graphics.Rasterific.Compositor
+               , Graphics.Rasterific.MicroPdf
                , Graphics.Rasterific.Shading
                , Graphics.Rasterific.PlaneBoundable
                , Graphics.Rasterific.QuadraticFormula

@@ -28,6 +28,7 @@ module Graphics.Rasterific.Immediate
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<$>) )
 import Data.Foldable( foldMap )
 #endif
 

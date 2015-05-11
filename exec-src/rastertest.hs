@@ -478,6 +478,37 @@ weirdCircle =
                           (V2 375.0 194.0356) (V2 375.0 125.0)
              ]
 
+compositionClip :: IO ()
+compositionClip =
+  produceImageAtSize 500 500 "composition_clip.png" $ do
+    withClipping clipPath $
+      withTexture (uniformTexture blue) $
+        fill $ rectangle (V2 0 0) 500 500
+  where
+    clipPath  =
+      withClipping (R.fill $ rectangle (V2 0 200) 500 100) .
+        R.fill $ ellipse (V2 250 250) 180 170
+
+compositionTransparentGradient :: IO ()
+compositionTransparentGradient =
+  produceImageAtSize 600 200 "composition_gradient.png" $ do
+    baseDrawing
+    withTransformation (translate (V2 200 0)) baseDrawing
+    withTransformation (translate (V2 400 0) <> scale 0.5 0.5) baseDrawing
+    withTransformation (translate (V2 440 100) <> rotate 0.4 <> scale 0.3 0.5) baseDrawing
+
+  where
+    baseDrawing = 
+      withTexture texture . fill $ circle (V2 100 100) 100
+
+    texture =
+      withSampler SamplerPad $
+        linearGradientTexture gradDef (V2 40 40) (V2 130 130)
+
+    gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+              ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+              ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
+
 transparentGradient :: IO ()
 transparentGradient =
   produceImageAtSize 400 200 "transparent_gradient.png" $
@@ -647,6 +678,8 @@ testSuite = do
   logoTest biGradient "gradient_"
   crash uniform
   transparentGradient 
+  compositionTransparentGradient 
+  compositionClip 
   gradientRadial "white_opaque" white
   gradientRadial "black_opaque" black
   gradientRadial "white_transparent" (PixelRGBA8 255 255 255 0)

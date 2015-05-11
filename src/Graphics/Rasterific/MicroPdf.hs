@@ -33,7 +33,6 @@ import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
-import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.ComplexPrimitive
@@ -169,9 +168,17 @@ instance ToPdf Float where
 instance ToPdf B.ByteString where
   toPdf = byteString
 
+newtype Matrix = Matrix Transformation
+
 instance ToPdf Transformation where
   toPdf (Transformation a c e b d f) =
      foldMap t [a, b, c, d, e, f] <> tp " cm\n"
+    where
+      t v = toPdf v <> tp " "
+
+instance ToPdf Matrix where
+  toPdf (Matrix (Transformation a c e b d f)) =
+     arrayOf $ foldMap t [a, b, c, d, e, f]
     where
       t v = toPdf v <> tp " "
 
@@ -292,13 +299,15 @@ pageObject width height parentId contentId resourceId = dicObj
   where
     box = tp "[0 0 " <> intDec width <> tp " " <> intDec height <> tp "]"
 
-gradientPatternObject :: PdfId -> PdfId -> PdfObject
-gradientPatternObject gradientId = dicObj
+gradientPatternObject :: Transformation -> PdfId -> PdfId -> PdfObject
+gradientPatternObject trans gradientId = dicObj
   [ ("Type", "/Pattern")
   , ("PatternType", "2")
-  , ("Matrix", "[ 1 0 0 1 0 0 ]")
+  , ("Matrix", it)
   , ("Shading", refOf gradientId)
   ]
+  where
+    it = buildToStrict . toPdf $ Matrix trans
 
 linearGradientObject :: Line -> Float -> Float -> PdfId -> PdfId -> PdfObject
 linearGradientObject (Line p1 p2) beg end funId = dicObj
@@ -423,57 +432,55 @@ repeatFunction sampler beg end fun = case sampler of
   SamplerRepeat -> generateObject $ repeatingFunction False beg end fun
   SamplerReflect -> generateObject $ repeatingFunction True beg end fun
 
-gradientObjectGenerator :: Float -> Float -> SamplerRepeat -> Gradient PixelRGBA8
+gradientObjectGenerator :: Transformation
+                        -> Float -> Float -> SamplerRepeat -> Gradient PixelRGBA8
                         -> (PdfId -> PdfId -> PdfObject)
                         -> PdfEnv (Either String PdfCommand)
-gradientObjectGenerator beg end sampler grad generator = do
+gradientObjectGenerator trans beg end sampler grad generator = do
   shaderId <- gradientToPdf grad
   stitched <- repeatFunction sampler beg end shaderId
   gradId <- generateObject (generator stitched)
-  patternId <- generateObject (gradientPatternObject gradId)
+  patternId <- generateObject (gradientPatternObject trans gradId)
   (pat, _patAssoc) <- namePatternObject shadingName patternId
   return . Right . buildToStrict $
       tp "/Pattern cs\n" <> pat <> tp " scn\n" <>
       tp "/Pattern CS\n" <> pat <> tp " SCN\n"
 
-createLinearGradient :: SamplerRepeat -> Gradient PixelRGBA8 -> Line
+createLinearGradient :: Transformation -> SamplerRepeat -> Gradient PixelRGBA8 -> Line
                      -> PdfEnv (Either String PdfCommand)
-createLinearGradient sampler grad line = do
+createLinearGradient trans sampler grad line = do
     width <- asks _pdfWidth
     height <- asks _pdfHeight
     let (beg, end) = sampledDomainOf $ domainOfLinearGradient (V2 0 0)
                           (V2 (fromIntegral width) (fromIntegral height))
                           line
-        sampledLine = extendLine beg end $ transform (vs height) line
+        sampledLine = extendLine beg end line
  
-    gradientObjectGenerator beg end sampler grad $ linearGradientObject sampledLine beg end
+    gradientObjectGenerator trans beg end sampler grad $ linearGradientObject sampledLine beg end
   where
-    vs h (V2 x y) = V2 x (fromIntegral h - y)
     sampledDomainOf (beg, end) = case sampler of
       SamplerPad -> (0, 1)
       SamplerRepeat -> (beg, end)
       SamplerReflect -> (beg, end)
 
-textureToPdf :: PlaneBound -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
-textureToPdf _pBounds = go SamplerPad where
-  vs h (V2 x y) = V2 x (fromIntegral h - y)
-
-  go sampler tex = case tex of
-    RawTexture img -> go sampler (SampledTexture img)
-    WithSampler newSampler tx -> go newSampler tx
+textureToPdf :: Transformation -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
+textureToPdf rootTrans = go rootTrans SamplerPad where
+  go currTrans sampler tex = case tex of
+    RawTexture img -> go currTrans sampler (SampledTexture img)
+    WithSampler newSampler tx -> go currTrans newSampler tx
     SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
                                   <> colorToPdf px <> " RG\n"
-    LinearGradientTexture grad line -> createLinearGradient sampler grad line
+    LinearGradientTexture grad line -> createLinearGradient currTrans sampler grad line
     RadialGradientTexture grad center radius ->
-       go sampler $ RadialGradientWithFocusTexture grad center radius center
+       go currTrans sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
-      height <- asks _pdfHeight
-      let cs = vs height center
-          fs = vs height focus
-          invGrad = reverse [(1 - o, c) | (o, c) <- grad]
-      gradientObjectGenerator 0 0 sampler invGrad (radialGradientObject cs fs rad)
-    WithTextureTransform _trans tx -> go sampler tx
-
+      let invGrad = reverse [(1 - o, c) | (o, c) <- grad]
+      gradientObjectGenerator currTrans 0 0 sampler invGrad (radialGradientObject center focus rad)
+    WithTextureTransform trans tx ->
+        go tt sampler tx
+      where tt = case inverseTransformation trans of
+              Nothing -> currTrans
+              Just v -> currTrans <> v
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
@@ -520,10 +527,9 @@ lineJoinOf j = case j of
   JoinMiter 0 -> tp "2 j "
   JoinMiter n -> toPdf n <> tp " M 0 j "
 
-orderToPdf :: DrawOrder PixelRGBA8 -> PdfEnv Builder
-orderToPdf order = do
-  let orderBounds = foldMap (foldMap planeBounds) $ _orderPrimitives order
-  etx <- textureToPdf orderBounds $ _orderTexture order
+orderToPdf :: Transformation -> DrawOrder PixelRGBA8 -> PdfEnv Builder
+orderToPdf trans order = do
+  etx <- textureToPdf trans $ _orderTexture order
   let processPath = foldMap pathToPdf . resplit -- . removeDegeneratePrimitive
       geometryCode =
         foldMap processPath $ _orderPrimitives order
@@ -592,14 +598,15 @@ renderDrawingToPdf toOrders width height dpi =
         }
 
 pdfProducer :: Texture PixelRGBA8 -> Drawing PixelRGBA8 () -> PdfEnv Builder
-pdfProducer baseTexture =
-    goNext False fillCommandOf baseTexture . fromF where
+pdfProducer baseTexture draw = do
+  initTrans <- asks (toPdfSpace . fromIntegral . _pdfHeight)
+  goNext False initTrans fillCommandOf baseTexture $ fromF draw where
 
-  goNext forceInverse filler prevTexture f = case f of
-    Free c -> go forceInverse filler prevTexture c
+  goNext forceInverse activeTrans filler prevTexture f = case f of
+    Free c -> go forceInverse activeTrans filler prevTexture c
     Pure () -> pure mempty
 
-  go forceInverse filler prevTexture com = case com of
+  go forceInverse activeTrans filler prevTexture com = case com of
      Fill method prims next -> do
        after <- recurse next
        pure $ foldMap pathToPdf (resplit prims)
@@ -615,7 +622,7 @@ pdfProducer baseTexture =
             <> after
      
      DashedStroke o pat w j (c, _) prims next -> do
-       sub <- go forceInverse filler prevTexture (Stroke w j (c, c) prims next)
+       sub <- go forceInverse activeTrans filler prevTexture $ Stroke w j (c, c) prims next
        pure $ arrayOf (foldMap coords pat) 
            <> toPdf o <> tp " d "
            <> sub
@@ -631,18 +638,20 @@ pdfProducer baseTexture =
 
      WithTransform trans sub next | forceInverse -> do
         after <- recurse next
-        inner <- recurse $ fromF sub
+        let subTrans = (activeTrans <> trans)
+        inner <- goNext forceInverse subTrans filler prevTexture $ fromF sub
         let inv = foldMap toPdf $ inverseTransformation trans
         pure $ toPdf trans <> inner <> inv <> after
 
      WithTransform trans sub next -> do
         after <- recurse next
-        inner <- recurse $ fromF sub
+        let subTrans = activeTrans <> trans
+        inner <- goNext forceInverse subTrans filler prevTexture $ fromF sub
         pure $ localGraphicState (toPdf trans <> inner) <> after
 
      SetTexture tx sub next -> do
-        tex <- textureToPdf mempty tx
-        inner <- goNext forceInverse filler tx $ fromF sub
+        tex <- textureToPdf activeTrans tx
+        inner <- goNext forceInverse activeTrans filler tx $ fromF sub
         after <- recurse next
         pure $ case tex of
            Left _ -> inner <> after
@@ -654,7 +663,7 @@ pdfProducer baseTexture =
         let draw8 = clipping :: Drawing PixelRGBA8 ()
             localClip | forceInverse = id
                       | otherwise = localGraphicState
-        clipPath <- goNext True clipCommandOf prevTexture (fromF draw8)
+        clipPath <- goNext True activeTrans clipCommandOf prevTexture (fromF draw8)
         drawing <- recurse (fromF sub)
         pure $ localClip (clipPath <> tp "\n" <> drawing)
             <> after
@@ -663,7 +672,7 @@ pdfProducer baseTexture =
         dpi <- asks _pdfConfDpi
         after <- recurse next
         let orders = textToDrawOrders dpi prevTexture p ranges
-        textPrint <- mapM orderToPdf orders
+        textPrint <- mapM (orderToPdf activeTrans) orders
         pure $ F.fold textPrint <> after
 
      WithPathOrientation path base subDrawings next -> do
@@ -682,13 +691,14 @@ pdfProducer baseTexture =
        pure $ this <> after
 
     where
-      recurse = goNext forceInverse filler prevTexture
+      recurse = goNext forceInverse activeTrans filler prevTexture
 
 renderOrdersToPdf :: (Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8])
                   -> Int -> Int -> Dpi -> [DrawOrder PixelRGBA8] -> LB.ByteString
 renderOrdersToPdf toOrders width height dpi orders =
-  pdfFromProducer conf $ F.fold <$> mapM orderToPdf orders
+  pdfFromProducer conf $ F.fold <$> mapM (orderToPdf rootTrans) orders
   where
+    rootTrans = toPdfSpace $ fromIntegral height
     conf = PdfConfiguration
       { _pdfConfDpi     = dpi
       , _pdfWidth       = width

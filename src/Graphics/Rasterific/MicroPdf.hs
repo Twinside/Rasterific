@@ -433,8 +433,8 @@ gradientObjectGenerator beg end sampler grad generator = do
   patternId <- generateObject (gradientPatternObject gradId)
   (pat, _patAssoc) <- namePatternObject shadingName patternId
   return . Right . buildToStrict $
-      tp "/Pattern cs\n" <> pat <> tp " scn\n"
-
+      tp "/Pattern cs\n" <> pat <> tp " scn\n" <>
+      tp "/Pattern CS\n" <> pat <> tp " SCN\n"
 
 createLinearGradient :: SamplerRepeat -> Gradient PixelRGBA8 -> Line
                      -> PdfEnv (Either String PdfCommand)

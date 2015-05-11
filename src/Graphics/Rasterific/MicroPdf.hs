@@ -652,9 +652,11 @@ pdfProducer baseTexture =
      WithCliping clipping sub next -> do
         after <- recurse next
         let draw8 = clipping :: Drawing PixelRGBA8 ()
+            localClip | forceInverse = id
+                      | otherwise = localGraphicState
         clipPath <- goNext True clipCommandOf prevTexture (fromF draw8)
         drawing <- recurse (fromF sub)
-        pure $ localGraphicState (clipPath <> tp "\n" <> drawing)
+        pure $ localClip (clipPath <> tp "\n" <> drawing)
             <> after
 
      TextFill p ranges next -> do

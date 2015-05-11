@@ -11,6 +11,7 @@ module Graphics.Rasterific.Line
     , lineLength
     , offsetLine
     , isLinePoint
+    , extendLine
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -164,4 +165,15 @@ decomposeLine (Line (V2 aRx aRy) (V2 bRx bRy)) = go aRx aRy bRx bRy where
           | otherwise = aby
          where !mini = fromIntegral (floor aby :: Int)
                !maxi = fromIntegral (ceiling aby :: Int)
+
+-- | Extend a line by two coefficient, giving a line that's a
+-- linear extension of the original line.
+--
+-- law: extendLine 0 1 = id
+extendLine :: Float  -- ^ Begin extension coefficient
+           -> Float  -- ^ End extension coefficient
+           -> Line   -- ^ Line to transform
+           -> Line
+extendLine beg end (Line p1 p2) =
+    Line (lerp beg p1 p2) (lerp end p1 p2)
 

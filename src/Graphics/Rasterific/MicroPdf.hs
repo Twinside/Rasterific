@@ -21,8 +21,6 @@ import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
 import Data.ByteString.Builder( byteString
                               , intDec
-                              {-, floatDec-}
-                              {-, charUtf8-}
                               , toLazyByteString
                               , Builder )
 import qualified Data.ByteString.Char8 as B
@@ -32,6 +30,7 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.PlaneBoundable
@@ -59,6 +58,37 @@ data PdfConfiguration = PdfConfiguration
   , _pdfHeight      :: !Int
   , _pdfConfToOrder :: Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8]
   }
+
+domainOfLinearGradient :: Point -> Point -> Line -> (Float, Float)
+domainOfLinearGradient mini maxi (Line p1 p2) =
+    (t0 + xxAdd + yxAdd, t0 + xyAdd + yyAdd)
+  where
+    {-
+     * Linear gradients are othrogonal to the line passing through
+     * their extremes. Because of convexity, the parameter range can
+     * be computed as the convex hull (one the real line) of the
+     * parameter values of the 4 corners of the box.
+     *
+     * The parameter value t for a point (x,y) can be computed as:
+     *
+     *   t = (p2 - p1) . (x,y) / |p2 - p1|^2
+     *
+     * t0  is the t value for the top left corner
+     * tdx is the difference between left and right corners
+     * tdy is the difference between top and bottom corners
+     -}
+    delta = p2 ^-^ p1
+    invSquareNorm = 1 / quadrance delta
+
+    normDelta = delta ^* invSquareNorm
+
+    t0 = (mini ^-^ p1) `dot` normDelta
+    V2 tdx tdy = (maxi ^-^ mini) * normDelta
+
+    (xxAdd, xyAdd) | tdx < 0 = (tdx, 0)
+                   | otherwise = (0, tdx)
+    (yxAdd, yyAdd) | tdy < 0 = (tdy, 0)
+                   | otherwise = (0, tdy)
 
 --------------------------------------------------
 ----       Monadic generation types
@@ -270,12 +300,13 @@ gradientPatternObject gradientId = dicObj
   , ("Shading", refOf gradientId)
   ]
 
-linearGradientObject :: Line -> PdfId -> PdfId -> PdfObject
-linearGradientObject (Line p1 p2) funId = dicObj
+linearGradientObject :: Line -> Float -> Float -> PdfId -> PdfId -> PdfObject
+linearGradientObject (Line p1 p2) beg end funId = dicObj
   [ ("ShadingType", "2")
   , ("ColorSpace", "/DeviceRGB")
   , ("Coords", buildToStrict coords)
   , ("Function", refOf funId)
+  , ("Domain", buildToStrict . arrayOf $ toPdf beg <> tp " " <> toPdf end)
   , ("Extend", "[ true true ]")
   ]
   where
@@ -339,20 +370,26 @@ stitchingFunction interpolations bounds = dicObj
   ]
   where
     interpIds =
-       tp "[ " <> foldMap (\i -> toPdf (refOf i) <> tp " ") interpolations <> tp "]"
-    boundEncode (_, b2) = toPdf b2
-    boundsId = tp "[ " <> foldMap boundEncode (init bounds) <> tp "]"
+       arrayOf $ foldMap (\i -> toPdf (refOf i) <> tp " ") interpolations
+    boundsId = arrayOf . foldMap (toPdf . snd) $ init bounds
 
-{-
-repeatingFunction :: PdfId -> PdfObject
-repeatingFunction begin end = dicObj
+repeatingFunction :: Bool -> Float -> Float -> PdfId -> PdfId -> PdfObject
+repeatingFunction reflect begin end fun = dicObj
   [ ("FunctionType", "3")
-  , ("Domain", buildToStrict . arrayOf $ toPdf begin <> tp " " <> toPdf end)
+  , ("Domain", buildToStrict . arrayOf $ intDec ibegin <> tp " " <> intDec iend)
   , ("Functions", buildToStrict interpIds)
-  , ("Bounds", buildToStrict boundsId)
-  , ("Encode", buildToStrict . arrayOf . F.fold $ map (const $ tp "0 1 ") interpolations)
+  , ("Bounds", buildToStrict $ arrayOf boundsIds)
+  , ("Encode", buildToStrict . arrayOf $ foldMap encoding [ibegin .. iend - 1])
   ]
--}
+  where
+    ibegin = floor begin
+    iend = ceiling end
+    interpIds =
+       arrayOf $ foldMap (\_ -> toPdf (refOf fun) <> tp " ") [ibegin .. iend - 1]
+    boundsIds =
+       foldMap ((<> tp " ") . intDec) [ibegin + 1 .. iend - 1]
+    encoding i | i `mod` 2 /= 0 && reflect = tp "1 0 "
+               | otherwise = tp "0 1 "
 
 tillingPattern :: Int -> Int -> Builder -> PdfId -> PdfId -> PdfObject
 tillingPattern w h content res pid = PdfObject 
@@ -381,19 +418,45 @@ gradientToPdf lst@(_:rest) = do
   let bounds = zip (map fst lst) (map fst rest)
   generateObject (stitchingFunction interpolations bounds)
 
-gradientObjectGenerator :: PlaneBound -> SamplerRepeat -> Gradient PixelRGBA8
+repeatFunction :: SamplerRepeat -> Float -> Float -> PdfId -> PdfEnv PdfId
+repeatFunction sampler beg end fun = case sampler of
+  SamplerPad -> pure fun
+  SamplerRepeat -> generateObject $ repeatingFunction False beg end fun
+  SamplerReflect -> generateObject $ repeatingFunction True beg end fun
+
+gradientObjectGenerator :: Float -> Float -> SamplerRepeat -> Gradient PixelRGBA8
                         -> (PdfId -> PdfId -> PdfObject)
                         -> PdfEnv (Either String PdfCommand)
-gradientObjectGenerator _pBounds _sampler grad gen = do
+gradientObjectGenerator beg end sampler grad generator = do
   shaderId <- gradientToPdf grad
-  gradId <- generateObject (gen shaderId)
+  stitched <- repeatFunction sampler beg end shaderId
+  gradId <- generateObject (generator stitched)
   patternId <- generateObject (gradientPatternObject gradId)
   (pat, _patAssoc) <- namePatternObject shadingName patternId
   return . Right . buildToStrict $
       tp "/Pattern cs\n" <> pat <> tp " scn\n"
 
+
+createLinearGradient :: SamplerRepeat -> Gradient PixelRGBA8 -> Line
+                     -> PdfEnv (Either String PdfCommand)
+createLinearGradient sampler grad line = do
+    width <- asks _pdfWidth
+    height <- asks _pdfHeight
+    let (beg, end) = sampledDomainOf $ domainOfLinearGradient (V2 0 0)
+                          (V2 (fromIntegral width) (fromIntegral height))
+                          line
+        sampledLine = extendLine beg end $ transform (vs height) line
+ 
+    gradientObjectGenerator beg end sampler grad $ linearGradientObject sampledLine beg end
+  where
+    vs h (V2 x y) = V2 x (fromIntegral h - y)
+    sampledDomainOf (beg, end) = case sampler of
+      SamplerPad -> (0, 1)
+      SamplerRepeat -> (beg, end)
+      SamplerReflect -> (beg, end)
+
 textureToPdf :: PlaneBound -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
-textureToPdf pBounds = go SamplerPad where
+textureToPdf _pBounds = go SamplerPad where
   vs h (V2 x y) = V2 x (fromIntegral h - y)
 
   go sampler tex = case tex of
@@ -401,10 +464,7 @@ textureToPdf pBounds = go SamplerPad where
     WithSampler newSampler tx -> go newSampler tx
     SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
                                   <> colorToPdf px <> " RG\n"
-    LinearGradientTexture grad line -> do
-      height <- asks _pdfHeight
-      let sampledLine = transform (vs height) line
-      gradientObjectGenerator pBounds sampler grad (linearGradientObject sampledLine)
+    LinearGradientTexture grad line -> createLinearGradient sampler grad line
     RadialGradientTexture grad center radius ->
        go sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
@@ -412,7 +472,7 @@ textureToPdf pBounds = go SamplerPad where
       let cs = vs height center
           fs = vs height focus
           invGrad = reverse [(1 - o, c) | (o, c) <- grad]
-      gradientObjectGenerator pBounds sampler invGrad (radialGradientObject cs fs rad)
+      gradientObjectGenerator 0 0 sampler invGrad (radialGradientObject cs fs rad)
     WithTextureTransform _trans tx -> go sampler tx
 
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."

@@ -131,5 +131,6 @@ Test-Suite test
                  , deepseq
                  , criterion >= 1.0
                  , statistics
+                 , bytestring
                  --, groom
 

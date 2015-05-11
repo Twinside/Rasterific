@@ -339,11 +339,10 @@ pathToPdf ps = case ps of
       toPdf (firstPointOf p) <> tp " m\n" <> foldMap toPdf ps <> "\n"
 
 colorToPdf :: PixelRGBA8 -> PdfCommand
-colorToPdf (PixelRGBA8 r g b _a) =
-    toNum r <> " " <> toNum g <> " " <> toNum b
+colorToPdf (PixelRGBA8 r g b _a) = buildToStrict $
+    toNum r <> tp " " <> toNum g <> tp " " <> toNum b
   where
-    toNum c = 
-      B.pack . printf "%g" $ (fromIntegral c / 255 :: Float)
+    toNum c = toPdf (fromIntegral c / 255 :: Float)
 
 colorInterpolationFunction :: PixelRGBA8 -> PixelRGBA8 -> PdfId -> PdfObject
 colorInterpolationFunction c0 c1 = dicObj

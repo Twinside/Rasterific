@@ -530,7 +530,6 @@ gradientRadial name _back =
     gradDef = 
       [(0  , PixelRGBA8 255 165 0 102)
       ,(0.5, PixelRGBA8 255 165 0 102)
-      ,(0.5, PixelRGBA8 255 165 0 102)
       ,(0.525, PixelRGBA8 255 165 0 255)
       ,(0.675, PixelRGBA8 128 128 128 64)
       ,(0.75, PixelRGBA8 0 128 128 255)

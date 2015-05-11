@@ -379,7 +379,7 @@ stitchingFunction interpolations bounds = dicObj
   where
     interpIds =
        arrayOf $ foldMap (\i -> toPdf (refOf i) <> tp " ") interpolations
-    boundsId = arrayOf . foldMap (toPdf . snd) $ init bounds
+    boundsId = arrayOf . foldMap ((<> " ") . toPdf . snd) $ init bounds
 
 repeatingFunction :: Bool -> Float -> Float -> PdfId -> PdfId -> PdfObject
 repeatingFunction reflect begin end fun = dicObj
@@ -429,6 +429,7 @@ gradientToPdf lst@(_:rest) = do
 repeatFunction :: SamplerRepeat -> Float -> Float -> PdfId -> PdfEnv PdfId
 repeatFunction sampler beg end fun = case sampler of
   SamplerPad -> pure fun
+  _ | abs (ceiling end - floor beg) <= (1 :: Int) -> pure fun
   SamplerRepeat -> generateObject $ repeatingFunction False beg end fun
   SamplerReflect -> generateObject $ repeatingFunction True beg end fun
 
@@ -475,7 +476,7 @@ textureToPdf rootTrans = go rootTrans SamplerPad where
        go currTrans sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
       let invGrad = reverse [(1 - o, c) | (o, c) <- grad]
-      gradientObjectGenerator currTrans 0 0 sampler invGrad (radialGradientObject center focus rad)
+      gradientObjectGenerator currTrans 0 1 sampler invGrad (radialGradientObject center focus rad)
     WithTextureTransform trans tx ->
         go tt sampler tx
       where tt = case inverseTransformation trans of
@@ -505,6 +506,12 @@ resplit = uncurry (:) . go where
       ([x], after:rest) where (after, rest) = go xs
   go (x:xs) = (x:curr, rest) where (curr, rest) = go xs
 
+reClose :: [Primitive] -> Builder
+reClose [] = mempty
+reClose lst@(x:_)
+  | lastPointOf (last lst) `isDistingableFrom` firstPointOf x = mempty
+  | otherwise = tp " h\n"
+
 fillCommandOf :: FillMethod -> Builder
 fillCommandOf m = tp $ case m of
   FillWinding -> "f\n"
@@ -524,7 +531,7 @@ lineCapOf c = tp $ case c of
 lineJoinOf :: Join -> Builder
 lineJoinOf j = case j of
   JoinRound -> tp "1 j "
-  JoinMiter 0 -> tp "2 j "
+  JoinMiter 0 -> tp "8 M 0 j "
   JoinMiter n -> toPdf n <> tp " M 0 j "
 
 orderToPdf :: Transformation -> DrawOrder PixelRGBA8 -> PdfEnv Builder
@@ -614,10 +621,11 @@ pdfProducer baseTexture draw = do
             <> after
      Stroke w j (c, _) prims next -> do
        after <- recurse next
+       let output p = pathToPdf p <> reClose p
        pure $ toPdf w <> tp " w "
             <> lineJoinOf j
             <> lineCapOf  c <> "\n"
-            <> foldMap pathToPdf (resplit prims)
+            <> foldMap output (resplit prims)
             <> tp "S\n"
             <> after
      

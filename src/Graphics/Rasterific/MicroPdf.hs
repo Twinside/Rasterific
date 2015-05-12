@@ -658,11 +658,13 @@ pdfProducer baseTexture draw = do
             <> after
      
      DashedStroke o pat w j (c, _) prims next -> do
-       sub <- go forceInverse activeTrans filler prevTexture $ Stroke w j (c, c) prims next
+       sub <- go forceInverse activeTrans filler prevTexture $ Stroke w j (c, c) prims (Pure ())
+       after <- recurse next
        pure $ arrayOf (foldMap coords pat) 
            <> toPdf o <> tp " d "
            <> sub
            <> "[] 0 d "
+           <> after
        where
          coords co = toPdf co <> tp " "
      

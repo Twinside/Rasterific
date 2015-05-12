@@ -58,8 +58,14 @@ data PdfConfiguration = PdfConfiguration
   , _pdfConfToOrder :: Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8]
   }
 
-domainOfLinearGradient :: Point -> Point -> Line -> (Float, Float)
-domainOfLinearGradient mini maxi (Line p1 p2) =
+domainOfCircle :: Point -> Float -> (Point, Point) -> Domain
+domainOfCircle center radius (mini, maxi) = (0, max d1 d2 / radius)
+  where
+   d1 = distance maxi center
+   d2 = distance mini center
+
+domainOfLinearGradient :: Line -> (Point, Point) -> (Float, Float)
+domainOfLinearGradient (Line p1 p2) (mini, maxi) =
     (t0 + xxAdd + yxAdd, t0 + xyAdd + yyAdd)
   where
     {-
@@ -309,8 +315,8 @@ gradientPatternObject trans gradientId = dicObj
   where
     it = buildToStrict . toPdf $ Matrix trans
 
-linearGradientObject :: Line -> Float -> Float -> PdfId -> PdfId -> PdfObject
-linearGradientObject (Line p1 p2) beg end funId = dicObj
+linearGradientObject :: Line -> Domain -> PdfId -> PdfId -> PdfObject
+linearGradientObject (Line p1 p2) (beg, end) funId = dicObj
   [ ("ShadingType", "2")
   , ("ColorSpace", "/DeviceRGB")
   , ("Coords", buildToStrict coords)
@@ -321,12 +327,14 @@ linearGradientObject (Line p1 p2) beg end funId = dicObj
   where
     coords = arrayOf $ toPdf p1 <> tp " " <> toPdf p2
 
-radialGradientObject :: Point -> Point -> Float -> PdfId -> PdfId -> PdfObject
-radialGradientObject center focus radius funId = dicObj
+radialGradientObject :: (Float, Float) -> Point -> Point -> Float -> PdfId
+                     -> PdfId -> PdfObject
+radialGradientObject (beg, end) center focus radius funId = dicObj
   [ ("ShadingType", "3")
   , ("ColorSpace", "/DeviceRGB")
   , ("Coords", buildToStrict coords)
   , ("Function", refOf funId)
+  , ("Domain", buildToStrict . arrayOf $ toPdf beg <> tp " " <> toPdf end)
   , ("Extend", "[ true true ]")
   ]
   where
@@ -433,11 +441,13 @@ repeatFunction sampler beg end fun = case sampler of
   SamplerRepeat -> generateObject $ repeatingFunction False beg end fun
   SamplerReflect -> generateObject $ repeatingFunction True beg end fun
 
+type Domain = (Float, Float)
+
 gradientObjectGenerator :: Transformation
-                        -> Float -> Float -> SamplerRepeat -> Gradient PixelRGBA8
+                        -> Domain -> SamplerRepeat -> Gradient PixelRGBA8
                         -> (PdfId -> PdfId -> PdfObject)
                         -> PdfEnv (Either String PdfCommand)
-gradientObjectGenerator trans beg end sampler grad generator = do
+gradientObjectGenerator trans (beg, end) sampler grad generator = do
   shaderId <- gradientToPdf grad
   stitched <- repeatFunction sampler beg end shaderId
   gradId <- generateObject (generator stitched)
@@ -447,26 +457,47 @@ gradientObjectGenerator trans beg end sampler grad generator = do
       tp "/Pattern cs\n" <> pat <> tp " scn\n" <>
       tp "/Pattern CS\n" <> pat <> tp " SCN\n"
 
+sampledDomainOf :: SamplerRepeat -> Domain -> Domain 
+sampledDomainOf _ (beg, end) | abs (beg - end) <= 1 = (0, 1)
+sampledDomainOf sampler (beg, end) = case sampler of
+  SamplerPad -> (0, 1)
+  SamplerRepeat -> (beg, end)
+  SamplerReflect -> (beg, end)
+
+currentViewBox :: Transformation -> PdfEnv (Point, Point)
+currentViewBox trans = do
+  width <- asks $ fromIntegral . _pdfWidth
+  height <- asks $ fromIntegral . _pdfHeight
+  let pMin = V2 0 0
+      pMax = V2 width height
+      fitBounds t = (applyTransformation t pMin, applyTransformation t pMax)
+  pure . maybe (pMin, pMax) fitBounds $ inverseTransformation trans
+
 createLinearGradient :: Transformation -> SamplerRepeat -> Gradient PixelRGBA8 -> Line
                      -> PdfEnv (Either String PdfCommand)
 createLinearGradient trans sampler grad line = do
-    width <- asks _pdfWidth
-    height <- asks _pdfHeight
-    let (beg, end) = sampledDomainOf $ domainOfLinearGradient (V2 0 0)
-                          (V2 (fromIntegral width) (fromIntegral height))
-                          line
-        sampledLine = extendLine beg end line
- 
-    gradientObjectGenerator trans beg end sampler grad $ linearGradientObject sampledLine beg end
-  where
-    sampledDomainOf (beg, end) = case sampler of
-      SamplerPad -> (0, 1)
-      SamplerRepeat -> (beg, end)
-      SamplerReflect -> (beg, end)
+  baseDomain <- domainOfLinearGradient line <$> currentViewBox trans
+  let dom@(beg, end) = sampledDomainOf sampler baseDomain
+      sampledLine = extendLine beg end line
+  gradientObjectGenerator trans dom sampler grad $
+      linearGradientObject sampledLine dom
+
+createRadialGradient :: Transformation -> SamplerRepeat -> Gradient PixelRGBA8
+                     -> Point -> Point -> Float
+                     -> PdfEnv (Either String PdfCommand)
+createRadialGradient trans sampler grad center focus radius = do
+    baseDomain <- domainOfCircle center radius <$> currentViewBox trans
+    let dom@(beg, end) = sampledDomainOf sampler baseDomain
+        radius' = radius * max (abs beg) (abs end)
+    gradientObjectGenerator trans dom sampler grad $
+        radialGradientObject dom center focus radius'
 
 textureToPdf :: Transformation -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
 textureToPdf rootTrans = go rootTrans SamplerPad where
   go currTrans sampler tex = case tex of
+    SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
+    ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
+    ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx
     SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
@@ -476,15 +507,12 @@ textureToPdf rootTrans = go rootTrans SamplerPad where
        go currTrans sampler $ RadialGradientWithFocusTexture grad center radius center
     RadialGradientWithFocusTexture grad center rad focus -> do
       let invGrad = reverse [(1 - o, c) | (o, c) <- grad]
-      gradientObjectGenerator currTrans 0 1 sampler invGrad (radialGradientObject center focus rad)
+      createRadialGradient currTrans sampler invGrad center focus rad
     WithTextureTransform trans tx ->
         go tt sampler tx
       where tt = case inverseTransformation trans of
               Nothing -> currTrans
               Just v -> currTrans <> v
-    SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
-    ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
-    ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
     PatternTexture w h px draw _img -> do
       let withPatternSize conf = conf { _pdfWidth = w, _pdfHeight = h }
           baseTexture = SolidTexture px

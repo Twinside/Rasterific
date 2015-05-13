@@ -153,7 +153,7 @@ import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
-                          , PixelRGBA8( PixelRGBA8 )
+                          , PixelRGBA8
                           , unpackPixel
                           , pixelMapXY )
 
@@ -421,7 +421,8 @@ renderOrdersAtDpiToPdf
 renderOrdersAtDpiToPdf w h dpi =
   renderOrdersToPdf renderer w h dpi
     where
-      renderer = drawOrdersOfDrawing w h dpi (PixelRGBA8 0 0 0 0)
+      renderer :: forall px . RenderablePixel px => Drawing px () -> [DrawOrder px]
+      renderer = drawOrdersOfDrawing w h dpi emptyPx
 
 renderDrawingAtDpiToPDF
     :: Int -- ^ Rendering width
@@ -432,7 +433,8 @@ renderDrawingAtDpiToPDF
 renderDrawingAtDpiToPDF w h dpi =
   renderDrawingToPdf renderer w h dpi
     where
-      renderer = drawOrdersOfDrawing w h dpi (PixelRGBA8 0 0 0 0)
+      renderer :: forall px . RenderablePixel px => Drawing px () -> [DrawOrder px]
+      renderer = drawOrdersOfDrawing w h dpi emptyPx
 
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types

@@ -1,14 +1,18 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Graphics.Rasterific.MicroPdf( renderDrawingToPdf
                                    , renderOrdersToPdf ) where
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable, foldMap, fold )
 import Data.Monoid( mempty )
-import Control.Applicative( (<$>), pure )
+import Control.Applicative( (<$>), (<*>), pure )
 #endif
 
 import Control.Monad.Free( liftF, Free( .. ) )
@@ -25,9 +29,10 @@ import Data.ByteString.Builder( byteString
                               , Builder )
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as LB
-import Codec.Picture( PixelRGBA8( PixelRGBA8 ) )
+import Codec.Picture( PixelRGBA8( PixelRGBA8 ), Pixel8 )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
+import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Line
@@ -40,6 +45,13 @@ import Graphics.Text.TrueType( Dpi )
 import Text.Printf
 {-import Debug.Trace-}
 
+#if !MIN_VERSION_base(4,8,0)
+glength :: Foldable f => f a -> Int
+glength = F.foldl' (\acc _ -> acc + 1) 0
+#else
+glength :: Foldable f => f a -> Int
+glength = F.length
+#endif
 
 type PdfCommand = B.ByteString
 type PdfId = Int
@@ -51,11 +63,22 @@ data PdfObject = PdfObject
   , _pdfStream   :: !B.ByteString
   }
 
+instance Eq PdfObject where
+  obj1 == obj2 =
+    (_pdfAnnot obj1, _pdfStream obj1) == (_pdfAnnot obj2, _pdfStream obj2)
+
+instance Ord PdfObject where
+  compare obj1 obj2 =
+    compare (_pdfAnnot obj1, _pdfStream obj1) (_pdfAnnot obj2, _pdfStream obj2)
+
+type InnerRenderer =
+    forall px . PdfColorable px => Drawing px () -> [DrawOrder px]
+
 data PdfConfiguration = PdfConfiguration
   { _pdfConfDpi     :: !Dpi
   , _pdfWidth       :: !Int
   , _pdfHeight      :: !Int
-  , _pdfConfToOrder :: Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8]
+  , _pdfConfToOrder :: InnerRenderer
   }
 
 domainOfCircle :: Point -> Float -> (Point, Point) -> Domain
@@ -256,9 +279,6 @@ refOf i = buildToStrict $ intDec i <> " 0 R"
 arrayOf :: Builder -> Builder
 arrayOf a = tp "[ " <> a <> tp " ]"
 
-arrayOfB :: B.ByteString -> B.ByteString
-arrayOfB a = "[ " <> a <> " ]"
-
 localGraphicState :: Builder -> Builder
 localGraphicState sub = tp "q\n" <> sub <> tp "Q\n"
 
@@ -276,14 +296,14 @@ dicObj annots pid = PdfObject
 outlinesObject :: Foldable f => f PdfCommand -> PdfId -> PdfObject
 outlinesObject outlines = dicObj
   [ ("Type", "/Outlines")
-  , ("Count", buildToStrict . intDec $ F.length outlines)
+  , ("Count", buildToStrict . intDec $ glength outlines)
   ]
 
 pagesObject :: Foldable f => f PdfId -> PdfId -> PdfObject
 pagesObject pages = dicObj
   [ ("Type", "/Pages")
   , ("Kids", buildToStrict . arrayOf $ foldMap (toPdf . refOf) pages)
-  , ("Count", buildToStrict . intDec $ F.length pages)
+  , ("Count", buildToStrict . intDec $ glength pages)
   ]
 
 
@@ -315,27 +335,27 @@ gradientPatternObject trans gradientId = dicObj
   where
     it = buildToStrict . toPdf $ Matrix trans
 
-linearGradientObject :: Line -> Domain -> PdfId -> PdfId -> PdfObject
-linearGradientObject (Line p1 p2) (beg, end) funId = dicObj
+linearGradientObject :: B.ByteString -> Line -> Domain -> PdfId -> PdfId -> PdfObject
+linearGradientObject colorSpace (Line p1 p2) (beg, end) funId = dicObj
   [ ("ShadingType", "2")
-  , ("ColorSpace", "/DeviceRGB")
+  , ("ColorSpace", colorSpace)
   , ("Coords", buildToStrict coords)
   , ("Function", refOf funId)
   , ("Domain", buildToStrict . arrayOf $ toPdf beg <> tp " " <> toPdf end)
-  , ("Extend", "[ true true ]")
+  , ("Extend", "[true true]")
   ]
   where
     coords = arrayOf $ toPdf p1 <> tp " " <> toPdf p2
 
-radialGradientObject :: (Float, Float) -> Point -> Point -> Float -> PdfId
+radialGradientObject :: B.ByteString -> Domain -> Point -> Point -> Float -> PdfId
                      -> PdfId -> PdfObject
-radialGradientObject (beg, end) center focus radius funId = dicObj
+radialGradientObject colorSpace (beg, end) center focus radius funId = dicObj
   [ ("ShadingType", "3")
-  , ("ColorSpace", "/DeviceRGB")
+  , ("ColorSpace", colorSpace)
   , ("Coords", buildToStrict coords)
   , ("Function", refOf funId)
   , ("Domain", buildToStrict . arrayOf $ toPdf beg <> tp " " <> toPdf end)
-  , ("Extend", "[ true true ]")
+  , ("Extend", "[true true]")
   ]
   where
     coords = arrayOf $ toPdf center <> tp " " <> toPdf radius
@@ -355,18 +375,26 @@ pathToPdf ps = case ps of
     p:_ ->
       toPdf (firstPointOf p) <> tp " m\n" <> foldMap toPdf ps <> "\n"
 
-colorToPdf :: PixelRGBA8 -> PdfCommand
-colorToPdf (PixelRGBA8 r g b _a) = buildToStrict $
-    toNum r <> tp " " <> toNum g <> tp " " <> toNum b
-  where
-    toNum c = toPdf (fromIntegral c / 255 :: Float)
+class RenderablePixel px => PdfColorable px where
+  pdfColorSpace :: px -> B.ByteString
+  colorToPdf :: px -> Builder
 
-colorInterpolationFunction :: PixelRGBA8 -> PixelRGBA8 -> PdfId -> PdfObject
+instance PdfColorable Pixel8 where
+  pdfColorSpace _ = "/DeviceGrey"
+  colorToPdf c = toPdf (fromIntegral c / 255 :: Float)
+
+instance PdfColorable PixelRGBA8 where
+  pdfColorSpace _ = "/DeviceRGB"
+  colorToPdf (PixelRGBA8 r g b _a) = 
+     colorToPdf r <> tp " " <> colorToPdf g <> tp " " <> colorToPdf b
+
+
+colorInterpolationFunction :: PdfColorable px => px -> px -> PdfId -> PdfObject
 colorInterpolationFunction c0 c1 = dicObj
   [ ("FunctionType", "2")
   , ("Domain", "[ 0 1 ]")
-  , ("C0", arrayOfB $ colorToPdf c0)
-  , ("C1", arrayOfB $ colorToPdf c1)
+  , ("C0", buildToStrict . arrayOf $ colorToPdf c0)
+  , ("C1", buildToStrict . arrayOf $ colorToPdf c1)
   , ("N", "1")
   ]
 
@@ -424,7 +452,7 @@ tillingPattern w h content res pid = PdfObject
       ]
   }
 
-gradientToPdf :: Gradient PixelRGBA8 -> PdfEnv PdfId
+gradientToPdf :: PdfColorable px => Gradient px -> PdfEnv PdfId
 gradientToPdf [] = return 0
 gradientToPdf [(_, a), (_, b)] = generateObject (colorInterpolationFunction a b)
 gradientToPdf lst@(_:rest) = do
@@ -443,8 +471,9 @@ repeatFunction sampler beg end fun = case sampler of
 
 type Domain = (Float, Float)
 
-gradientObjectGenerator :: Transformation
-                        -> Domain -> SamplerRepeat -> Gradient PixelRGBA8
+gradientObjectGenerator :: PdfColorable px
+                        => Transformation
+                        -> Domain -> SamplerRepeat -> Gradient px
                         -> (PdfId -> PdfId -> PdfObject)
                         -> PdfEnv (Either String PdfCommand)
 gradientObjectGenerator trans (beg, end) sampler grad generator = do
@@ -473,26 +502,31 @@ currentViewBox trans = do
       fitBounds t = (applyTransformation t pMin, applyTransformation t pMax)
   pure . maybe (pMin, pMax) fitBounds $ inverseTransformation trans
 
-createLinearGradient :: Transformation -> SamplerRepeat -> Gradient PixelRGBA8 -> Line
+createLinearGradient :: forall px. PdfColorable px
+                     => Transformation -> SamplerRepeat -> Gradient px -> Line
                      -> PdfEnv (Either String PdfCommand)
 createLinearGradient trans sampler grad line = do
   baseDomain <- domainOfLinearGradient line <$> currentViewBox trans
   let dom@(beg, end) = sampledDomainOf sampler baseDomain
       sampledLine = extendLine beg end line
+      colorSpace = pdfColorSpace (undefined :: px)
   gradientObjectGenerator trans dom sampler grad $
-      linearGradientObject sampledLine dom
+      linearGradientObject colorSpace sampledLine dom
 
-createRadialGradient :: Transformation -> SamplerRepeat -> Gradient PixelRGBA8
+createRadialGradient :: forall px. PdfColorable px
+                     => Transformation -> SamplerRepeat -> Gradient px
                      -> Point -> Point -> Float
                      -> PdfEnv (Either String PdfCommand)
 createRadialGradient trans sampler grad center focus radius = do
     baseDomain <- domainOfCircle center radius <$> currentViewBox trans
     let dom@(beg, end) = sampledDomainOf sampler baseDomain
         radius' = radius * max (abs beg) (abs end)
+        colorSpace = pdfColorSpace (undefined :: px)
     gradientObjectGenerator trans dom sampler grad $
-        radialGradientObject dom center focus radius'
+        radialGradientObject colorSpace dom center focus radius'
 
-textureToPdf :: Transformation -> Texture PixelRGBA8 -> PdfEnv (Either String PdfCommand)
+textureToPdf :: PdfColorable px
+             => Transformation -> Texture px -> PdfEnv (Either String PdfCommand)
 textureToPdf rootTrans = go rootTrans SamplerPad where
   go currTrans sampler tex = case tex of
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
@@ -500,8 +534,8 @@ textureToPdf rootTrans = go rootTrans SamplerPad where
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx
-    SolidTexture px -> pure . pure $ colorToPdf px <> " rg\n"
-                                  <> colorToPdf px <> " RG\n"
+    SolidTexture px -> pure . pure . buildToStrict $ co <> tp " rg\n" <> co <> tp " RG\n"
+        where co = colorToPdf px
     LinearGradientTexture grad line -> createLinearGradient currTrans sampler grad line
     RadialGradientTexture grad center radius ->
        go currTrans sampler $ RadialGradientWithFocusTexture grad center radius center
@@ -562,7 +596,7 @@ lineJoinOf j = case j of
   JoinMiter 0 -> tp "8 M 0 j "
   JoinMiter n -> toPdf n <> tp " M 0 j "
 
-orderToPdf :: Transformation -> DrawOrder PixelRGBA8 -> PdfEnv Builder
+orderToPdf :: PdfColorable px => Transformation -> DrawOrder px -> PdfEnv Builder
 orderToPdf trans order = do
   etx <- textureToPdf trans $ _orderTexture order
   let processPath = foldMap pathToPdf . resplit -- . removeDegeneratePrimitive
@@ -573,14 +607,14 @@ orderToPdf trans order = do
     Right tx -> pure $ toPdf tx <> geometryCode <> fillCommandOf (_orderFillMethod order)
 
 buildXRefTable :: [Int] -> Builder
-buildXRefTable lst = tp "xref\n0 " <> intDec (F.length lst) <> tp "\n"
+buildXRefTable lst = tp "xref\n0 " <> intDec (glength lst) <> tp "\n"
                    <> foldMap build lst where
   build 0 = "0000000000 65535 f \n"
   build ix = toPdf . B.pack $ printf "%010d 00000 n \n" ix
 
 buildTrailer :: Foldable f => f a -> PdfId -> Builder
 buildTrailer objs startId = tp "trailer\n" <> toPdf
-  [("Size" :: B.ByteString, buildToStrict . intDec $ F.length objs + 1)
+  [("Size" :: B.ByteString, buildToStrict . intDec $ glength objs + 1)
   ,("Root", refOf startId)
   ]
 
@@ -618,7 +652,7 @@ pdfFromProducer conf producer = toLazyByteString $
 
   xref = buildXRefTable indexes
 
-renderDrawingToPdf :: (Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8])
+renderDrawingToPdf :: (forall px . PdfColorable px => Drawing px () -> [DrawOrder px])
                    -> Int -> Int -> Dpi -> Drawing PixelRGBA8 ()
                    -> LB.ByteString
 renderDrawingToPdf toOrders width height dpi =
@@ -632,15 +666,23 @@ renderDrawingToPdf toOrders width height dpi =
         , _pdfConfToOrder = toOrders
         }
 
-pdfProducer :: Texture PixelRGBA8 -> Drawing PixelRGBA8 () -> PdfEnv Builder
+pdfProducer :: forall pixel . PdfColorable pixel
+            => Texture pixel -> Drawing pixel () -> PdfEnv Builder
 pdfProducer baseTexture draw = do
   initTrans <- asks (toPdfSpace . fromIntegral . _pdfHeight)
   goNext False initTrans fillCommandOf baseTexture $ fromF draw where
 
+  goNext :: forall px. PdfColorable px
+         => Bool -> Transformation -> (FillMethod -> Builder) -> Texture px
+         -> Free (DrawCommand px) ()
+         -> PdfEnv Builder
   goNext forceInverse activeTrans filler prevTexture f = case f of
     Free c -> go forceInverse activeTrans filler prevTexture c
     Pure () -> pure mempty
 
+  go :: forall px. PdfColorable px
+     => Bool -> Transformation -> (FillMethod -> Builder) -> Texture px
+     -> DrawCommand px (Free (DrawCommand px) ()) -> PdfEnv Builder
   go forceInverse activeTrans filler prevTexture com = case com of
      Fill method prims next -> do
        after <- recurse next
@@ -698,10 +740,10 @@ pdfProducer baseTexture draw = do
 
      WithCliping clipping sub next -> do
         after <- recurse next
-        let draw8 = clipping :: Drawing PixelRGBA8 ()
+        let draw8 = clipping :: Drawing px ()
             localClip | forceInverse = id
                       | otherwise = localGraphicState
-        clipPath <- goNext True activeTrans clipCommandOf prevTexture (fromF draw8)
+        clipPath <- goNext True activeTrans clipCommandOf prevTexture $ fromF draw8
         drawing <- recurse (fromF sub)
         pure $ localClip (clipPath <> tp "\n" <> drawing)
             <> after
@@ -715,13 +757,13 @@ pdfProducer baseTexture draw = do
 
      WithPathOrientation path base subDrawings next -> do
        toOrders <- asks _pdfConfToOrder
-       let orders :: [DrawOrder PixelRGBA8]
+       let orders :: [DrawOrder px]
            orders = toOrders . liftF $ SetTexture prevTexture subDrawings ()
 
            drawer trans _ order =
              modify (liftF (WithTransform trans (orderToDrawing order) ()) :)
 
-           placedDrawings :: [Drawing PixelRGBA8 ()]
+           placedDrawings :: [Drawing px ()]
            placedDrawings =
              reverse $ execState (drawOrdersOnPath drawer 0 base path orders) []
        after <- recurse next
@@ -731,8 +773,8 @@ pdfProducer baseTexture draw = do
     where
       recurse = goNext forceInverse activeTrans filler prevTexture
 
-renderOrdersToPdf :: (Drawing PixelRGBA8 () -> [DrawOrder PixelRGBA8])
-                  -> Int -> Int -> Dpi -> [DrawOrder PixelRGBA8] -> LB.ByteString
+renderOrdersToPdf :: InnerRenderer -> Int -> Int -> Dpi -> [DrawOrder PixelRGBA8]
+                  -> LB.ByteString
 renderOrdersToPdf toOrders width height dpi orders =
   pdfFromProducer conf $ F.fold <$> mapM (orderToPdf rootTrans) orders
   where

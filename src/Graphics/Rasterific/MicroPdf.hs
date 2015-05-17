@@ -225,6 +225,11 @@ nameObject prefix lens info = do
 nameStateObject :: PdfId -> PdfEnv Builder
 nameStateObject = nameObject "gs" pdfGraphicStates . refOf
 
+nameOpacityObject :: Float -> PdfEnv Builder
+nameOpacityObject opa = nameObject "gs" pdfGraphicStates opac where
+  opb = toPdf opa
+  opac = buildToStrict $ "<< /ca " <> opb <> "/CA " <> opb <> ">> "
+
 nameXObject :: PdfId -> PdfEnv Builder
 nameXObject = nameObject "x" pdfXObjects . refOf
 
@@ -503,7 +508,7 @@ resourceObject :: Resources -> Resources -> Resources -> Resources
                -> PdfId -> PdfObject
 resourceObject shadings extStates patterns xobjects= dicObj $
   ("ProcSet", buildToStrict . arrayOf $ tp "/PDF /Text") :
-       genExt "ExtGState" extStates
+       genExt "ExtGState" (("ao", "<< /SMask /None /ca 1 /CA 1 >>") : extStates)
     <> genExt "Pattern" patterns
     <> genExt "Shading" shadings
     <> genExt "XObject" xobjects
@@ -621,6 +626,7 @@ createGradientFunction trans (beg, end) sampler grad generator = do
 type PdfBaseColorable px =
   ( PdfColorable px
   , PdfColorable (PixelBaseComponent px)
+  , Integral (PixelBaseComponent px)
   , PixelBaseComponent (PixelBaseComponent px) ~ (PixelBaseComponent px))
 
 fullPageFill :: PdfEnv Builder
@@ -711,7 +717,7 @@ gradientObjectGenerator inner rootTrans dom sampler rootGrad generator
       maskId <- generateObject $ maskObject formId
       maskGraphicStateId <- generateObject $ maskState maskId
       stateName <- nameStateObject maskGraphicStateId
-      pure . pure $ tp "q" <> stateName <> tp " gs\n" <> xObjName <> tp " Do Q\n"
+      pure . pure . localGraphicState $ stateName <> tp " gs\n" <> xObjName <> tp " Do\n"
 
 sampledDomainOf :: SamplerRepeat -> Domain -> Domain 
 sampledDomainOf _ (beg, end) | abs (beg - end) <= 1 = (0, 1)
@@ -750,7 +756,7 @@ createRadialGradient inner trans sampler grad center focus radius = do
     gradientObjectGenerator inner trans dom sampler grad $
         radialGradientObject dom center focus radius'
 
-textureToPdf :: PdfBaseColorable px
+textureToPdf :: forall px. PdfBaseColorable px
              => Transformation -> Builder -> Texture px
              -> PdfEnv (Either String Builder)
 textureToPdf rootTrans inner = go rootTrans SamplerPad where
@@ -760,7 +766,15 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx
-    SolidTexture px -> pure . pure $ co <> tp " rg\n" <> co <> tp " RG\n" <> inner
+    SolidTexture px | isPixelTransparent px -> do
+      let fv = fullValue :: PixelBaseComponent px
+          opa = fromIntegral (pixelOpacity px) / fromIntegral fv
+      localState <- nameOpacityObject opa
+      pure . pure . localGraphicState $
+          localState <> " gs\n" <> co <> " rg\n" <> co <> " RG\n" <> inner
+        where co = colorToPdf px
+    SolidTexture px ->
+      pure . pure $ "/ao gs " <> co <> " rg\n" <> co <> " RG\n" <> inner
         where co = colorToPdf px
     LinearGradientTexture grad line -> createLinearGradient inner currTrans sampler grad line
     RadialGradientTexture grad center radius ->

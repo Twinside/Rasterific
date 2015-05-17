@@ -491,10 +491,14 @@ compositionClip =
 
 compositionTransparentGradient :: IO ()
 compositionTransparentGradient =
-  produceImageAtSize 600 400 "composition_gradient.png" $ do
-    row (texture gradDef)
+  produceImageAtSize 600 800 "composition_gradient.png" $ do
+    row $ texture SamplerPad gradDef
     withTransformation (translate $ V2 0 200) $
-        row $ texture opaqueGrad
+        row $ texture SamplerPad opaqueGrad
+    withTransformation (translate $ V2 0 400) $
+        strokeRow $ texture SamplerRepeat opaqueGrad
+    withTransformation (translate $ V2 0 600) $
+        strokeRow $ texture SamplerReflect gradDef
 
   where
     row tx = do
@@ -503,11 +507,20 @@ compositionTransparentGradient =
       withTransformation (translate (V2 400 0) <> scale 0.5 0.5) $ baseDrawing tx
       withTransformation (translate (V2 440 100) <> rotate 0.4 <> scale 0.3 0.5) $ baseDrawing tx
 
+    strokeElem tx =
+      withTransformation (scale (1 / 2.5) (1/ 2.5)) $
+        withTexture tx $
+          stroke 40 JoinRound (CapRound, CapRound) . bezierFromPath $
+            [ V2 30 30, V2 150 200, V2 450 450, V2 450 90, V2 30  450 ]
+
+    strokeRow tx =
+      strokeElem tx
+
     baseDrawing tx = 
       withTexture tx . fill $ circle (V2 100 100) 100
 
-    texture grad =
-      withSampler SamplerPad $
+    texture samp grad =
+      withSampler samp $
         linearGradientTexture grad (V2 40 40) (V2 130 130)
 
     opaqueGrad = [(0, PixelRGBA8 0 0x86 0xc1 255)

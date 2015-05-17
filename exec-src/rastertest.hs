@@ -491,19 +491,28 @@ compositionClip =
 
 compositionTransparentGradient :: IO ()
 compositionTransparentGradient =
-  produceImageAtSize 600 200 "composition_gradient.png" $ do
-    baseDrawing
-    withTransformation (translate (V2 200 0)) baseDrawing
-    withTransformation (translate (V2 400 0) <> scale 0.5 0.5) baseDrawing
-    withTransformation (translate (V2 440 100) <> rotate 0.4 <> scale 0.3 0.5) baseDrawing
+  produceImageAtSize 600 400 "composition_gradient.png" $ do
+    row (texture gradDef)
+    withTransformation (translate $ V2 0 200) $
+        row $ texture opaqueGrad
 
   where
-    baseDrawing = 
-      withTexture texture . fill $ circle (V2 100 100) 100
+    row tx = do
+      baseDrawing tx
+      withTransformation (translate (V2 200 0)) $ baseDrawing tx
+      withTransformation (translate (V2 400 0) <> scale 0.5 0.5) $ baseDrawing tx
+      withTransformation (translate (V2 440 100) <> rotate 0.4 <> scale 0.3 0.5) $ baseDrawing tx
 
-    texture =
+    baseDrawing tx = 
+      withTexture tx . fill $ circle (V2 100 100) 100
+
+    texture grad =
       withSampler SamplerPad $
-        linearGradientTexture gradDef (V2 40 40) (V2 130 130)
+        linearGradientTexture grad (V2 40 40) (V2 130 130)
+
+    opaqueGrad = [(0, PixelRGBA8 0 0x86 0xc1 255)
+                 ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+                 ,(1, PixelRGBA8 0xFF 0x53 0x73 255)]
 
     gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
               ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
@@ -727,7 +736,6 @@ testSuite = do
   textAlignStringTest sansSerifFont "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
-  -- -}
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

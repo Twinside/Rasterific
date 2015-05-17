@@ -65,6 +65,7 @@ library
                , Graphics.Rasterific.Types
                , Graphics.Rasterific.Compositor
                , Graphics.Rasterific.MicroPdf
+               , Graphics.Rasterific.MiniLens
                , Graphics.Rasterific.Shading
                , Graphics.Rasterific.PlaneBoundable
                , Graphics.Rasterific.QuadraticFormula

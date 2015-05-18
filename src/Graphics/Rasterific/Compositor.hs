@@ -11,6 +11,7 @@ module Graphics.Rasterific.Compositor
     , RenderablePixel
     , compositionDestination
     , compositionAlpha
+    , emptyPx
     ) where
 
 import Foreign.Storable( Storable )
@@ -150,4 +151,8 @@ compositionAlpha c ic
                     `modiv` alphaOut
         in
         mixWithAlpha colorComposer (\_ _ -> alphaOut) bottom top
+
+emptyPx :: (RenderablePixel px) => px
+-- | Really need a "builder" function for pixel
+emptyPx = colorMap (const emptyValue) $ unpackPixel 0
 

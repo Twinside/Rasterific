@@ -154,7 +154,6 @@ import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
                           , PixelRGBA8
-                          , unpackPixel
                           , pixelMapXY )
 
 import qualified Data.ByteString.Lazy as LB
@@ -451,10 +450,6 @@ renderDrawingAtDpi width height dpi background drawing =
     runST $ runDrawContext width height background
           $ mapM_ fillOrder
           $ drawOrdersOfDrawing width height dpi background drawing
-
-emptyPx :: (RenderablePixel px) => px
--- | Really need a "builder" function for pixel
-emptyPx = colorMap (const emptyValue) $ unpackPixel 0
 
 cacheOrders :: forall px. (RenderablePixel px)
             => Maybe (Image px -> ImageTransformer px) -> [DrawOrder px] -> Drawing px ()

@@ -45,6 +45,7 @@ import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.Proxy
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
@@ -228,7 +229,7 @@ nameStateObject = nameObject "gs" pdfGraphicStates . refOf
 nameOpacityObject :: Float -> PdfEnv Builder
 nameOpacityObject opa = nameObject "gs" pdfGraphicStates opac where
   opb = toPdf opa
-  opac = buildToStrict $ "<< /ca " <> opb <> "/CA " <> opb <> ">> "
+  opac = buildToStrict $ "<< /ca " <> opb <> " /CA " <> opb <> ">> "
 
 nameXObject :: PdfId -> PdfEnv Builder
 nameXObject = nameObject "x" pdfXObjects . refOf
@@ -395,7 +396,8 @@ catalogObject pagesId outlineId = dicObj
   , ("Pages", refOf pagesId)
   ]
 
-pageObject :: PdfColorable px => px -> Int -> Int -> PdfId -> PdfId -> PdfId -> PdfId -> PdfObject
+pageObject :: PdfColorable px
+           => Proxy px -> Int -> Int -> PdfId -> PdfId -> PdfId -> PdfId -> PdfObject
 pageObject px width height parentId contentId resourceId = dicObj
   [ ("Type", "/Page")
   , ("Parent", refOf parentId)
@@ -458,7 +460,7 @@ pathToPdf ps = case ps of
       toPdf (firstPointOf p) <> tp " m\n" <> foldMap toPdf ps <> "\n"
 
 class RenderablePixel px => PdfColorable px where
-  pdfColorSpace :: px -> B.ByteString
+  pdfColorSpace :: Proxy px -> B.ByteString
   colorToPdf :: px -> Builder
 
 instance PdfColorable Pixel8 where
@@ -477,6 +479,14 @@ maskObject maskId = dicObj
   , ("S", "/Luminosity")
   , ("G", refOf maskId)
   ]
+
+alphaMaskObject :: PdfId -> PdfId -> PdfObject
+alphaMaskObject maskId = dicObj
+  [ ("Type", "/Mask")
+  , ("S", "/Alpha")
+  , ("G", refOf maskId)
+  ]
+
 
 opaState :: Float -> PdfId -> PdfObject
 opaState opa = dicObj
@@ -508,7 +518,7 @@ resourceObject :: Resources -> Resources -> Resources -> Resources
                -> PdfId -> PdfObject
 resourceObject shadings extStates patterns xobjects= dicObj $
   ("ProcSet", buildToStrict . arrayOf $ tp "/PDF /Text") :
-       genExt "ExtGState" (("ao", "<< /SMask /None /ca 1 /CA 1 >>") : extStates)
+       genExt "ExtGState" (("ao", "<< /ca 1 /CA 1 >>") : extStates)
     <> genExt "Pattern" patterns
     <> genExt "Shading" shadings
     <> genExt "XObject" xobjects
@@ -564,7 +574,7 @@ tillingPattern w h content res pid = PdfObject
       ]
   }
 
-groupDic :: PdfColorable px => px -> [(B.ByteString, B.ByteString)]
+groupDic :: PdfColorable px => Proxy px -> [(B.ByteString, B.ByteString)]
 groupDic px =
   [ ("Type", "/Group")
   , ("S", "/Transparency")
@@ -574,7 +584,7 @@ groupDic px =
 
 
 formObject :: PdfColorable px
-           =>  Resources -> px -> B.ByteString -> PdfId
+           => Resources -> Proxy px -> B.ByteString -> PdfId
            -> PdfEnv (PdfId -> PdfObject)
 formObject aditionalAttributes px content res = do
   width <- intDec <$> asks _pdfWidth
@@ -685,17 +695,17 @@ gradientObjectGenerator inner rootTrans dom sampler rootGrad generator
   | isGradientTransparent rootGrad = goAlpha rootGrad
   | otherwise = go rootTrans rootGrad
   where
-    alphaPxProxy = undefined :: (PixelBaseComponent px)
+    alphaPxProxy = Proxy :: Proxy (PixelBaseComponent px)
     alphaColorspace = pdfColorSpace alphaPxProxy
-    pxFullProxy = undefined :: px
+    pxFullProxy = Proxy :: Proxy px
     colorSpace = pdfColorSpace pxFullProxy
 
     go trans grad = do
       patternId <- createGradientFunction trans dom sampler grad $ generator colorSpace
       pat <- namePatternObject $ refOf patternId
       pure . pure $
-        tp "/Pattern cs\n" <> pat <> tp " scn\n" <>
-        tp "/Pattern CS\n" <> pat <> tp " SCN\n" <> inner
+        "/Pattern cs\n" <> pat <> " scn\n" <>
+        "/Pattern CS\n" <> pat <> " SCN\n" <> inner
 
     goAlpha grad = do
       let alphaGrad = toAlphaGradient grad
@@ -708,7 +718,7 @@ gradientObjectGenerator inner rootTrans dom sampler rootGrad generator
           opaDicId <- generateObject $ opaState 1
           gsName <-  nameStateObject opaDicId
           fullFill <- fullPageFill
-          pure . buildToStrict $ gsName <> tp " gs /Pattern cs " <> alphaShadingName <> tp " scn\n"
+          pure . buildToStrict $ gsName <> " gs /Pattern cs " <> alphaShadingName <> " scn\n"
                               <> fullFill
       let subInfo = either (const mempty) buildToStrict colorGradCom
       formId <- generateObject =<< formObject [("FormType", "1")] alphaPxProxy command resourceId
@@ -717,7 +727,26 @@ gradientObjectGenerator inner rootTrans dom sampler rootGrad generator
       maskId <- generateObject $ maskObject formId
       maskGraphicStateId <- generateObject $ maskState maskId
       stateName <- nameStateObject maskGraphicStateId
-      pure . pure . localGraphicState $ stateName <> tp " gs\n" <> xObjName <> tp " Do\n"
+      pure . pure . localGraphicState $ stateName <> " gs\n" <> xObjName <> " Do\n"
+
+alphaLayerGenerator :: forall px. PdfBaseColorable px
+                    => Proxy px -> (Builder, PdfId) -> Float -> PdfEnv Builder
+alphaLayerGenerator pxFullProxy (inner, innerResource) alpha = go where
+  generateFill = withLocalSubcontext $do
+    fill <- fullPageFill 
+    shade <- nameOpacityObject alpha
+    let co = colorToPdf (emptyPx :: px)
+    pure . buildToStrict $ co <> " rg\n" <> co <> " RG\n" <> shade <> " gs " <> fill <> " " 
+
+  go = do
+    (transpCall, layerRes) <- generateFill
+    formId <- generateObject =<< formObject mempty pxFullProxy transpCall layerRes
+    maskId <- generateObject $ alphaMaskObject formId
+    maskName <- nameStateObject =<< generateObject (maskState maskId)
+
+    xObjId <- generateObject =<< formObject [] pxFullProxy (buildToStrict inner) innerResource
+    xObjName <- nameXObject xObjId
+    pure . localGraphicState $ maskName <> tp " gs\n" <> xObjName <> tp " Do\n"
 
 sampledDomainOf :: SamplerRepeat -> Domain -> Domain 
 sampledDomainOf _ (beg, end) | abs (beg - end) <= 1 = (0, 1)
@@ -756,6 +785,10 @@ createRadialGradient inner trans sampler grad center focus radius = do
     gradientObjectGenerator inner trans dom sampler grad $
         radialGradientObject dom center focus radius'
 
+opacityToPdf :: forall n. (Integral n, Modulable n) => n -> Float
+opacityToPdf comp = fromIntegral comp / fromIntegral fv where
+  fv = fullValue :: n
+
 textureToPdf :: forall px. PdfBaseColorable px
              => Transformation -> Builder -> Texture px
              -> PdfEnv (Either String Builder)
@@ -767,9 +800,7 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx
     SolidTexture px | isPixelTransparent px -> do
-      let fv = fullValue :: PixelBaseComponent px
-          opa = fromIntegral (pixelOpacity px) / fromIntegral fv
-      localState <- nameOpacityObject opa
+      localState <- nameOpacityObject . opacityToPdf $ pixelOpacity px
       pure . pure . localGraphicState $
           localState <> " gs\n" <> co <> " rg\n" <> co <> " RG\n" <> inner
         where co = colorToPdf px
@@ -862,7 +893,7 @@ toPdfSpace :: Float -> Transformation
 toPdfSpace h = translate (V2 0 h) <> scale 1 (-1)
 
 pdfFromProducer :: PdfBaseColorable px
-                => px -> PdfConfiguration -> PdfEnv Builder -> LB.ByteString
+                => Proxy px -> PdfConfiguration -> PdfEnv Builder -> LB.ByteString
 pdfFromProducer px conf producer = toLazyByteString $
   foldMap byteString objs
     <> xref
@@ -902,9 +933,9 @@ renderDrawingToPdf :: (forall px . PdfColorable px => Drawing px () -> [DrawOrde
                    -> Int -> Int -> Dpi -> Drawing PixelRGBA8 ()
                    -> LB.ByteString
 renderDrawingToPdf toOrders width height dpi =
-    pdfFromProducer emptyPx conf . pdfProducer baseTexture
+    pdfFromProducer px conf . pdfProducer baseTexture
   where
-    emptyPx = PixelRGBA8 0 0 0 0
+    px = Proxy :: Proxy PixelRGBA8
     baseTexture = SolidTexture emptyPx 
     conf = PdfConfiguration
         { _pdfConfDpi     = dpi
@@ -958,8 +989,15 @@ pdfProducer baseTexture draw = do
          coords co = toPdf co <> tp " "
      
      -- Opacity is ignored for now
-     WithGlobalOpacity _opacity sub next ->
+     WithGlobalOpacity opacity sub next | opacity >= fullValue ->
        (<>) <$> recurse (fromF sub) <*> recurse next
+     WithGlobalOpacity opacity sub next -> do
+       inner <- withLocalSubcontext . recurse $ fromF sub
+       after <- recurse next
+       let alpha = opacityToPdf opacity
+           proxy = Proxy :: Proxy px
+       (<> after) <$> alphaLayerGenerator proxy inner alpha
+
      WithImageEffect _f sub next ->
        (<>) <$> recurse (fromF sub) <*> recurse next
 
@@ -1022,7 +1060,8 @@ pdfProducer baseTexture draw = do
 renderOrdersToPdf :: InnerRenderer -> Int -> Int -> Dpi -> [DrawOrder PixelRGBA8]
                   -> LB.ByteString
 renderOrdersToPdf toOrders width height dpi orders =
-  pdfFromProducer (PixelRGBA8 0 0 0 0) conf $ F.fold <$> mapM (orderToPdf rootTrans) orders
+  pdfFromProducer (Proxy :: Proxy PixelRGBA8) conf $
+      F.fold <$> mapM (orderToPdf rootTrans) orders
   where
     rootTrans = toPdfSpace $ fromIntegral height
     conf = PdfConfiguration

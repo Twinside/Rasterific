@@ -654,11 +654,14 @@ clipFail =
 
 doubleCache :: IO ()
 doubleCache = 
-  produceImageAtSize 200 200  "double_opa.png" $
+  produceImageAtSize 200 200  "double_opa.png" $ do
+    withTexture (uniformTexture black) $
+        fill $ rectangle (V2 0 95) 200 10
     withTexture (uniformTexture red) $
-        withGroupOpacity 128 $
+        withGroupOpacity 128 $ do
             withGroupOpacity 128 $
-                fill $ circle (V2 100 100) 70
+                fill $ circle (V2 70 100) 30
+            fill $ circle (V2 120 100) 30
   
 testSuite :: IO ()
 testSuite = do

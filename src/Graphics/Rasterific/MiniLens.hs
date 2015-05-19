@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 module Graphics.Rasterific.MiniLens
     ( -- * Types
@@ -17,11 +16,6 @@ module Graphics.Rasterific.MiniLens
     , (%=)
     , (+=)
     ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( Foldable, foldMap, fold )
-import Data.Monoid( mempty )
-#endif
 
 import Control.Monad.Identity
 import Control.Applicative

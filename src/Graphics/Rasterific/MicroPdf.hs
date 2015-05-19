@@ -12,7 +12,7 @@ module Graphics.Rasterific.MicroPdf( renderDrawingToPdf
                                    ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( Foldable, foldMap, fold )
+import Data.Foldable( Foldable, foldMap )
 import Data.Monoid( mempty )
 import Control.Applicative( (<$>), (<*>), pure )
 #endif
@@ -45,7 +45,6 @@ import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.Proxy
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators

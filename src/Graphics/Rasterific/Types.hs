@@ -44,6 +44,8 @@ module Graphics.Rasterific.Types
     , firstPointOf
     , lastPointOf
 
+      -- * RankNType helper
+    , Proxy( Proxy )
     ) where
 
 import Data.DList( DList, fromList )
@@ -75,6 +77,8 @@ type StrokeWidth = Float
 
 -- | Dash pattern to use
 type DashPattern = [Float]
+
+data Proxy p = Proxy
 
 -- | Describe how we will "finish" the stroking
 -- that don't loop.

@@ -829,7 +829,7 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
       tillingId <- generateObject $ tillingPattern w h content resId
       pat <- namePatternObject $ refOf tillingId
       return . Right $
-            tp "/Pattern cs\n" <> pat <> tp " scn\n" <> inner
+         toPdf rootTrans <> "/Pattern cs\n" <> pat <> " scn\n" <> inner
 
 resplit :: [Primitive] -> [[Primitive]]
 resplit = uncurry (:) . go where

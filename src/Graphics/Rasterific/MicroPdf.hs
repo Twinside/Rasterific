@@ -556,8 +556,8 @@ repeatingFunction reflect begin end fun = dicObj
     encoding i | i `mod` 2 /= 0 && reflect = tp "1 0 "
                | otherwise = tp "0 1 "
 
-tillingPattern :: Int -> Int -> Builder -> PdfId -> PdfId -> PdfObject
-tillingPattern w h content res pid = PdfObject 
+tillingPattern :: Transformation -> Int -> Int -> Builder -> PdfId -> PdfId -> PdfObject
+tillingPattern trans w h content res pid = PdfObject 
   { _pdfId       = pid
   , _pdfRevision = 0
   , _pdfStream   = buildToStrict content
@@ -570,6 +570,7 @@ tillingPattern w h content res pid = PdfObject
       , ("XStep", buildToStrict $ intDec w)
       , ("YStep", buildToStrict $ intDec h)
       , ("Resources", refOf res)
+      , ("Matrix", buildToStrict . toPdf $ Matrix trans)
       ]
   }
 
@@ -826,10 +827,9 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
                (liftF $ Fill FillWinding backRect ()) ()
       (content, resId) <-
           local withPatternSize . withLocalSubcontext $ pdfProducer baseTexture (backDraw >> draw)
-      tillingId <- generateObject $ tillingPattern w h content resId
+      tillingId <- generateObject $ tillingPattern rootTrans w h (content) resId
       pat <- namePatternObject $ refOf tillingId
-      return . Right $
-         toPdf rootTrans <> "/Pattern cs\n" <> pat <> " scn\n" <> inner
+      return . Right $ "/Pattern cs\n" <> pat <> " scn\n" <> inner
 
 resplit :: [Primitive] -> [[Primitive]]
 resplit = uncurry (:) . go where

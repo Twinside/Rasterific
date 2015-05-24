@@ -831,13 +831,6 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
       pat <- namePatternObject $ refOf tillingId
       return . Right $ "/Pattern cs\n" <> pat <> " scn\n" <> inner
 
-resplit :: [Primitive] -> [[Primitive]]
-resplit = uncurry (:) . go where
-  go [] = ([], [])
-  go (x:xs@(y:_)) | lastPointOf x `isDistingableFrom` firstPointOf y =
-      ([x], after:rest) where (after, rest) = go xs
-  go (x:xs) = (x:curr, rest) where (curr, rest) = go xs
-
 reClose :: [Primitive] -> Builder
 reClose [] = mempty
 reClose lst@(x:_)

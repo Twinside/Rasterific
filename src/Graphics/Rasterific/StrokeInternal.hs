@@ -198,12 +198,12 @@ sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 strokize :: Geometry geom
          => StrokeWidth -> Join -> (Cap, Cap) -> geom
          -> Container Primitive
-strokize width join (capStart, capEnd) geom =
-    offseter capEnd sanitized <>
-        offseter capStart (reverse $ reversePrimitive <$> sanitized)
+strokize width join (capStart, capEnd) geom = foldMap pathOffseter sanitized
   where 
-        sanitized = foldMap (listOfContainer . sanitize) $ toPrimitives geom
-        offseter = offsetAndJoin (width / 2) join
+    sanitized = foldMap (listOfContainer . sanitize) <$> resplit (toPrimitives geom)
+    offseter = offsetAndJoin (width / 2) join
+    pathOffseter v =
+        offseter capEnd v <> offseter capStart (reverse $ reversePrimitive <$> v)
 
 flattenPrimitive :: Primitive -> Container Primitive
 flattenPrimitive (BezierPrim bezier) = flattenBezier bezier

@@ -2,8 +2,9 @@
 -- | Module providing basic helper functions to help
 -- build vector/point calculations.
 module Graphics.Rasterific.Operators
-    (  -- * Lifted operators
-      (^&&^)
+    ( Point
+      -- * Lifted operators
+    , (^&&^)
     , (^||^)
     , (^==^)
     , (^/=^)
@@ -42,11 +43,12 @@ import Graphics.Rasterific.Linear
              , normalize
              )
 
-import Graphics.Rasterific.Types
-
 infix  4 ^<, ^<=^, ^<^, ^==^, ^/=^
 infixr 3 ^&&^
 infixr 2 ^||^
+
+-- | Represent a point
+type Point = V2 Float
 
 -- | Pairwise boolean and operator
 (^&&^) :: (Applicative a) => a Bool -> a Bool -> a Bool

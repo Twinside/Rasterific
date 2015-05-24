@@ -43,6 +43,7 @@ module Graphics.Rasterific.Types
     , lastTangeantOf
     , firstPointOf
     , lastPointOf
+    , resplit
 
       -- * RankNType helper
     , Proxy( Proxy )
@@ -56,7 +57,7 @@ import Data.Foldable( Foldable )
 import Data.Foldable( foldl', toList )
 import qualified Data.Foldable as F
 import Graphics.Rasterific.Linear( V2( .. ), (^-^), nearZero )
-
+import Graphics.Rasterific.Operators
 import Foreign.Ptr( castPtr )
 import Foreign.Storable( Storable( sizeOf
                        , alignment
@@ -67,9 +68,6 @@ import Foreign.Storable( Storable( sizeOf
 
 -- | Represent a vector
 type Vector = V2 Float
-
--- | Represent a point
-type Point = V2 Float
 
 -- | Type alias just to get more meaningful
 -- type signatures
@@ -552,4 +550,11 @@ lastPointOf p = case p of
   LinePrim (Line _ p0) -> p0
   BezierPrim (Bezier _ _ p0) -> p0
   CubicBezierPrim (CubicBezier _ _ _ p0) -> p0
+
+resplit :: [Primitive] -> [[Primitive]]
+resplit = uncurry (:) . go where
+  go [] = ([], [])
+  go (x:xs@(y:_)) | lastPointOf x `isDistingableFrom` firstPointOf y =
+      ([x], after:rest) where (after, rest) = go xs
+  go (x:xs) = (x:curr, rest) where (curr, rest) = go xs
 

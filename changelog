@@ -1,32 +1,47 @@
--*-change-log-*-
+Change log
+==========
 
-v0.6 2015
+v0.6 May 2015
+-------------
+
  * Adding: repeating background pattern texture.
- * Added: PDF output
+ * Added: PDF output without images (for now)
 
 v0.5.2.1 April 2015
+-------------------
+
  * Fixed: non-composability of cached elements
  * Fixed: Border size when drawing images was twice too large.
 
 v0.5.2 April 2015
+-----------------
+
  * Enhancement: Added a withGroupOpacity to render elements with
    a global opacity.
 
 v0.5.1 March 2015
+-----------------
+
  * Enhancement: Generalizing geometry description, with automatic
    conversion, reducing the need of type constructor from Primitive,
    and directly filling Path.
 
 v0.5.0.3 February 2015
+----------------------
+
  * Fix: hackage documentation
 
 v0.5.0.2 February 2015
+----------------------
  * Removing test-suite as it's dependent of some repository-local files
 
 v0.5.0.1 February 2015
+----------------------
  * Fix: adding missing Arbitrary file in the distribution.
 
 v0.5 February 2015
+------------------
+
  * Breaking Change: Font size is now a newtype in FontyFruity,
    propagating the changes.
  * Allowing to specify DPI at the top level of the rendering
@@ -35,13 +50,17 @@ v0.5 February 2015
  * Changed: font size switched to float.
 
 v0.4.2 February 2015
+--------------------
  * Fix: Cubic bezier clipping
 
 v0.4.1 January 2015
+-------------------
  * Fix: GHC 7.10 compilation
  * Adding: Various lens to access some primitive informations.
 
 v0.4 December 2014
+------------------
+
  * Breaking change: Changed the original position scheme for
    text, allowing to specify baseline or upper left corner
 
@@ -66,6 +85,8 @@ v0.4 December 2014
    easier complex text rendering
 
 v0.3 June 2014
+--------------
+
  * Enhancement: Switching main free monad type to the church encoded one.
  * Enhancement: Optimized the bezier decomposition, strictness annotations
    made wonders. May require forward differencing in the future.
@@ -82,11 +103,15 @@ v0.3 June 2014
  * Fixing: some numerical stability with the mitter join.
 
 v0.2.1 April 2014
+-----------------
+
  * Fixing: transparency in gradients.
  * Fixing: alpha composition on top of translucent
    background.
 
 v0.2 April 2014
+---------------
+
  * Adding: an ellipse helper.
  * Adding: a polyline helper.
  * Adding: a polygon helper.
@@ -106,5 +131,7 @@ v0.2 April 2014
  * Enhancement: Some modest performance gain.
 
 v0.1 February 2014
+------------------
+
  * Initial version.
 

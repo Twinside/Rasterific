@@ -1,6 +1,11 @@
 Change log
 ==========
 
+v0.6.1 May 2015
+---------------
+
+ * Fix: Correcting bytestring lower bounds
+
 v0.6 May 2015
 -------------
 

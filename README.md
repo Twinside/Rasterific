@@ -10,6 +10,12 @@ Rasterific is a Haskell rasterization engine (a vectorial renderer)
 implemented on top of [JuicyPixels](https://github.com/Twinside/Juicy.Pixels).
 Rasterific bases its text rendering on [FontyFruity](https://github.com/Twinside/FontyFruity).
 
+Main capability
+---------------
+
+ * Draw vector graphics to an image.
+ * Export graphics to PDF (since 0.6).
+
 Design
 ------
 The renderer design is based on the

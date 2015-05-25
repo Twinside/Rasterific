@@ -14,6 +14,8 @@ module Graphics.Rasterific.CubicBezier
     , flattenCubicBezier
     , cubicBezierLengthApproximation
     , cubicBezierBounds
+    , cubicFromQuadraticBezier
+    , isCubicBezierPoint
     ) where
 
 import Prelude hiding( or )
@@ -330,6 +332,11 @@ decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dR
             where !mini = fromIntegral (floor abbcbccdy :: Int)
                   !maxi = fromIntegral (ceiling abbcbccdy :: Int)
 
+isCubicBezierPoint :: CubicBezier -> Bool
+isCubicBezierPoint (CubicBezier a b c d) =
+  not $ a `isDistingableFrom` b || 
+        b `isDistingableFrom` c ||
+        c `isDistingableFrom` d
 
 sanitizeCubicBezier :: CubicBezier -> Container Primitive
 sanitizeCubicBezier bezier@(CubicBezier a b c d)
@@ -346,4 +353,9 @@ sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | otherwise = mempty
     where ac = a `midPoint` c
           bd = a `midPoint` d
+
+cubicFromQuadraticBezier :: Bezier -> CubicBezier
+cubicFromQuadraticBezier (Bezier p0 p1 p2) = CubicBezier p0 pa pb p2 where
+  pa = p0 ^+^ (p1 ^-^ p0) ^* (2 / 3)
+  pb = p2 ^+^ (p1 ^-^ p2) ^* (2 / 3)
 

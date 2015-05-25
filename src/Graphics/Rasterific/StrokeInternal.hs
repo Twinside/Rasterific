@@ -6,6 +6,7 @@ module Graphics.Rasterific.StrokeInternal
     , dashedStrokize
     , splitPrimitiveUntil
     , approximatePathLength
+    , isPrimitivePoint
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -44,6 +45,12 @@ firstPointAndNormal :: Primitive -> (Point, Vector)
 firstPointAndNormal (LinePrim (Line a b)) = (a, a `normal` b)
 firstPointAndNormal (BezierPrim (Bezier a b _)) = (a, a `normal` b)
 firstPointAndNormal (CubicBezierPrim (CubicBezier a b _ _)) = (a, a `normal` b)
+
+isPrimitivePoint :: Primitive -> Bool
+isPrimitivePoint p = case p of
+  LinePrim l -> isLinePoint l
+  BezierPrim b -> isBezierPoint b
+  CubicBezierPrim c -> isCubicBezierPoint c
 
 reversePrimitive :: Primitive -> Primitive
 reversePrimitive (LinePrim (Line a b)) = LinePrim (Line b a)
@@ -125,7 +132,7 @@ miterJoin :: Float -> Float -> Point -> Vector -> Vector
           -> Container Primitive
 miterJoin offset l point u v
   | uDotW > l / max 1 l && uDotW > 0.01 =
-      pure (m `lineFromTo` c) <> pure (a `lineFromTo` m)
+      pure (a `lineFromTo` m) <> pure (m `lineFromTo` c)
   -- A simple straight junction
   | otherwise = pure $ a `lineFromTo` c
   where --      X m
@@ -172,10 +179,10 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
         (firstPoint, _) = firstPointAndNormal firstShape
 
         go prev []
-           | firstPoint `isNearby` lastPoint prev = joiner prev firstShape <> offseter prev
+           | firstPoint `isNearby` lastPoint prev = offseter prev <> joiner prev firstShape
            | otherwise = offseter prev <> cap offset caping prev
         go prev (x:xs) =
-             joiner prev x <> offseter prev <> go x xs
+             offseter prev <> joiner prev x <> go x xs
 
 approximateLength :: Primitive -> Float
 approximateLength (LinePrim l) = lineLength l
@@ -191,12 +198,12 @@ sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 strokize :: Geometry geom
          => StrokeWidth -> Join -> (Cap, Cap) -> geom
          -> Container Primitive
-strokize width join (capStart, capEnd) geom =
-    offseter capEnd sanitized <>
-        offseter capStart (reverse $ reversePrimitive <$> sanitized)
+strokize width join (capStart, capEnd) geom = foldMap pathOffseter sanitized
   where 
-        sanitized = foldMap (listOfContainer . sanitize) $ toPrimitives geom
-        offseter = offsetAndJoin (width / 2) join
+    sanitized = foldMap (listOfContainer . sanitize) <$> resplit (toPrimitives geom)
+    offseter = offsetAndJoin (width / 2) join
+    pathOffseter v =
+        offseter capEnd v <> offseter capStart (reverse $ reversePrimitive <$> v)
 
 flattenPrimitive :: Primitive -> Container Primitive
 flattenPrimitive (BezierPrim bezier) = flattenBezier bezier

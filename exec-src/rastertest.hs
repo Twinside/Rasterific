@@ -21,6 +21,7 @@ import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
 
+import qualified Data.ByteString.Lazy as LB
 import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 import Arbitrary
@@ -47,6 +48,25 @@ sansSerifFont = "test_fonts/DejaVuSans.ttf"
 
 monospaceFont :: FilePath
 monospaceFont =  "test_fonts/DejaVuSansMono.ttf"
+
+produceImageAtSize :: Int -> Int -> FilePath -> Drawing PixelRGBA8 () -> IO ()
+produceImageAtSize width height originalName drawing = do
+    putStrLn $ "Producing " <> filename
+    writePng filename img
+    writePdf $ filename <> ".draw.pdf"
+    writeOrderPdf $ filename <> ".order.pdf"
+  where
+    filename = outFolder </> originalName
+    img = renderDrawing width height background drawing
+
+    writeOrderPdf fname =
+      LB.writeFile fname .
+        renderOrdersAtDpiToPdf width height 92 $
+          drawOrdersOfDrawing width height 92 (PixelRGBA8 0 0 0 0) $ drawing
+
+    writePdf fname =
+      LB.writeFile fname .
+        renderDrawingAtDpiToPDF width height 92 $ drawing
 
 logo :: Int -> Bool -> Vector -> [Bezier]
 logo size inv offset = bezierFromPath . way $ map (^+^ offset)
@@ -118,12 +138,11 @@ fillWithMethod method prims =
 
 logoTest :: Texture PixelRGBA8 -> String -> IO ()
 logoTest texture prefix =
-    writePng (outFolder </> (prefix ++ "logo.png")) img
+  produceImageAtSize 100 100 (prefix ++ "logo.png") drawing
   where 
     beziers = logo 40 False $ V2 10 10
     inverse = logo 20 True $ V2 20 20
     drawing = withTexture texture . fill $ beziers ++ inverse
-    img = renderDrawing 100 100 background drawing
 
 makeBox :: Point -> Point -> [Primitive]
 makeBox (V2 sx sy) (V2 ex ey) = map LinePrim $ lineFromPath
@@ -136,17 +155,13 @@ makeBox (V2 sx sy) (V2 ex ey) = map LinePrim $ lineFromPath
 
 bigBox :: Texture PixelRGBA8 -> String -> IO ()
 bigBox texture prefix =
-    writePng (outFolder </> (prefix ++ "box.png")) img
-  where 
-    drawing = withTexture texture . fill $ makeBox (V2 10 10) (V2 390 390)
-    img = renderDrawing 400 400 background drawing
+  produceImageAtSize 400 400 (prefix ++ "box.png") $
+     withTexture texture . fill $ makeBox (V2 10 10) (V2 390 390)
 
 circleTest :: Texture PixelRGBA8 -> String -> IO ()
 circleTest texture prefix =
-    writePng (outFolder </> (prefix ++ "circle.png")) img
-  where 
-    drawing = withTexture texture . fill $ circle (V2 100 100) 90
-    img = renderDrawing 200 200 background drawing
+  produceImageAtSize 200 200 (prefix ++ "circle.png") $
+      withTexture texture . fill $ circle (V2 100 100) 90
 
 cubicTest :: [CubicBezier]
 cubicTest = cubicBezierFromPath 
@@ -165,164 +180,131 @@ cubicTest = cubicBezierFromPath
     ]
 
 cubicTest1 :: IO ()
-cubicTest1 = writePng (outFolder </> "cubic1.png") img
-  where texture = uniformTexture blue
-        drawing = withTexture texture $ fill cubicTest
-        img = renderDrawing 150 150 background drawing
+cubicTest1 = 
+  produceImageAtSize 150 150 "cubic1.png" $
+      withTexture (uniformTexture blue) $ fill cubicTest
 
 clipTest :: IO ()
-clipTest = writePng (outFolder </> "clip.png") img
-  where texture = uniformTexture blue
-        beziers =
-            [ logo 20 False $ V2 (-10) (-10)
-            , logo 20 False $ V2 80 80
-            , logo 20 False $ V2 0 80
-            , logo 20 False $ V2 80 0
-            ]
-
-        drawing = withTexture texture $ mapM_ fill beziers
-        img = renderDrawing 100 100 background drawing
+clipTest =
+  produceImageAtSize 100 100 "clip.png" $
+      withTexture (uniformTexture blue) $ mapM_ fill beziers
+  where 
+    beziers =
+        [ logo 20 False $ V2 (-10) (-10)
+        , logo 20 False $ V2 80 80
+        , logo 20 False $ V2 0 80
+        , logo 20 False $ V2 80 0
+        ]
 
 strokeTest2 :: (forall g. Stroker g) -> String -> IO ()
 strokeTest2 stroker prefix =
-    writePng (outFolder </> (prefix ++ "stroke2.png")) img
-  where texture = uniformTexture blue
-        points = 
-            [ V2 10 10, V2 100 100
-            , V2 200 20, V2 300 100, V2 450 50]
-        
-        drawing = withTexture texture . sequence_ . concat $
-            [ []
-            , [stroker 9 JoinRound (CapRound, CapStraight 0)
-                    . lineFromPath $
-                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
-                    | ix <- [-5 .. -1] ]
-            , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+    produceImageAtSize 500 500 (prefix ++ "stroke2.png") drawing
+  where
+    texture = uniformTexture blue
+    points = 
+        [ V2 10 10, V2 100 100
+        , V2 200 20, V2 300 100, V2 450 50]
+    
+    drawing = withTexture texture . sequence_ . concat $
+        [ []
+        , [stroker 9 JoinRound (CapRound, CapStraight 0)
                 . lineFromPath $
-                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
-                    | ix <- [0 .. 5] ]
-            ]
-
-        img = renderDrawing 500 500 background drawing
+            (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                | ix <- [-5 .. -1] ]
+        , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+            . lineFromPath $
+            (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                | ix <- [0 .. 5] ]
+        ]
 
 strokeTestCliping :: (forall g. Stroker g) -> String -> IO ()
 strokeTestCliping stroker prefix =
-    writePng (outFolder </> (prefix ++ "stroke_clipping.png")) img
-  where texture = uniformTexture blue
-        points = 
-            [ V2 10 10, V2 100 100
-            , V2 200 20, V2 300 100, V2 450 50]
+  produceImageAtSize 500 500 (prefix ++ "stroke_clipping.png") drawing
+  where
+    texture = uniformTexture blue
+    points = 
+        [ V2 10 10, V2 100 100
+        , V2 200 20, V2 300 100, V2 450 50]
 
-        clipShape = R.fill $ circle (V2 250 250) 200
-        
-        drawing = do
-          withClipping clipShape .
-            withTexture texture . sequence_ . concat $
-            [ []
-            , [stroker 9 JoinRound (CapRound, CapStraight 0)
-                    . lineFromPath $
-                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
-                    | ix <- [-5 .. -1] ]
-            , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+    clipShape = R.fill $ circle (V2 250 250) 200
+    
+    drawing = do
+      withClipping clipShape .
+        withTexture texture . sequence_ . concat $
+        [ []
+        , [stroker 9 JoinRound (CapRound, CapStraight 0)
                 . lineFromPath $
-                (^+^ (V2 15 (20 * (ix + 5)))) <$> points
-                    | ix <- [0 .. 5] ]
-            ]
-          withTexture (uniformTexture $ PixelRGBA8 255 128 100 128)
+            (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                | ix <- [-5 .. -1] ]
+        , [stroker 9 (JoinMiter $ ix * 3) (CapStraight 0, CapRound)
+            . lineFromPath $
+            (^+^ (V2 15 (20 * (ix + 5)))) <$> points
+                | ix <- [0 .. 5] ]
+        ]
+      withTexture (uniformTexture $ PixelRGBA8 255 128 100 128)
                     . fill $ circle (V2 150 150) 40
-
-        img = renderDrawing 500 500 background drawing
 
 strokeLogo :: (forall g. Stroker g) -> String -> IO ()
 strokeLogo stroker prefix =
-  writePng (outFolder </> (prefix ++ "stroke_logo.png")) img
-    where texture = uniformTexture blue
-          beziers = logo 40 False $ V2 10 10
-          inverse = logo 20 True $ V2 20 20
-          img = renderDrawing 100 100 background 
-              . withTexture texture
-              . stroker 4 JoinRound (CapRound, CapRound)
-              $ beziers ++ inverse
+  produceImageAtSize 100 100 (prefix ++ "stroke_logo.png") .
+    withTexture (uniformTexture blue) .
+      stroker 4 JoinRound (CapRound, CapRound) $ beziers ++ inverse
+    where
+      beziers = logo 40 False $ V2 10 10
+      inverse = logo 20 True $ V2 20 20
 
 strokeQuadraticIntersection
     :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String -> IO ()
 strokeQuadraticIntersection stroker texture prefix =
-  writePng (outFolder </> (prefix ++ "stroke_quad_intersection.png")) img
-    where img = renderDrawing 500 500 background 
-              . withTexture texture
-              . stroker 40 JoinRound (CapRound, CapRound)
-              $ bezierFromPath
-                [ V2 30 30
-                , V2 150 200
-                , V2 450 450
-
-                , V2 450 90
-                , V2 30  450
-                ]
+  produceImageAtSize 500 500 (prefix ++ "stroke_quad_intersection.png") $
+    withTexture texture $
+      stroker 40 JoinRound (CapRound, CapRound) . bezierFromPath $
+        [ V2 30 30, V2 150 200, V2 450 450, V2 450 90, V2 30  450 ]
 
 strokeCubic :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String
             -> IO ()
 strokeCubic stroker texture prefix =
-    writePng (outFolder </> (prefix ++ "cubicStroke.png")) img
-  where img = renderDrawing 500 500 background drawing
-        cusp = CubicBezier
-            (V2 10 230)
-            (V2 350 570)
-            (V2 10 570)
-            (V2 350 230)
+  produceImageAtSize 500 500 (prefix ++ "cubicStroke.png") drawing
+  where
+    cusp = CubicBezier (V2 10 230) (V2 350 570) (V2 10 570) (V2 350 230)
+    loop = CubicBezier (V2 160 20) (V2 770 500) (V2 140 500) (V2 480 70)
 
-        loop = CubicBezier
-            (V2 160 20)
-            (V2 770 500)
-            (V2 140 500)
-            (V2 480 70)
+    drawing = withTexture texture . sequence_ . concat $
+        [ []
+        , [stroker 4 JoinRound (CapRound, CapRound)
+                $ take 1 cubicTest ]
 
-        drawing = withTexture texture . sequence_ . concat $
-            [ []
-            , [stroker 4 JoinRound (CapRound, CapRound)
-                    $ take 1 cubicTest ]
+        , [stroker 15 (JoinMiter 0)
+                (CapStraight 0, CapStraight 0)
+                cusp]
 
-            , [stroker 15 (JoinMiter 0)
-                    (CapStraight 0, CapStraight 0)
-                    cusp]
-
-            , [stroker 25 (JoinMiter 0)
-                    (CapStraight 0, CapStraight 0)
-                    loop]
-            ]
+        , [stroker 25 (JoinMiter 0)
+                (CapStraight 0, CapStraight 0)
+                loop]
+        ]
 
 strokeCubicDashed :: (forall g. DashStroker g) -> Texture PixelRGBA8 -> String
                   -> IO ()
 strokeCubicDashed stroker texture prefix =
-    writePng (outFolder </> (prefix ++ "cubicStrokeDashed.png")) img
-  where img = renderDrawing 500 500 background drawing
-        cusp = CubicBezier
-            (V2 10 230)
-            (V2 350 570)
-            (V2 10 570)
-            (V2 350 230)
+    produceImageAtSize 500 500 (prefix ++ "cubicStrokeDashed.png") drawing
+  where
+    cusp = CubicBezier (V2 10 230) (V2 350 570) (V2 10 570) (V2 350 230)
+    loop = CubicBezier (V2 160 20) (V2 770 500) (V2 140 500) (V2 480 70)
+    dashPattern = [10, 5, 20, 10]
 
-        loop = CubicBezier
-            (V2 160 20)
-            (V2 770 500)
-            (V2 140 500)
-            (V2 480 70)
+    drawing = withTexture texture . sequence_ . concat $
+        [ []
+        , [stroker dashPattern 4 JoinRound (CapRound, CapRound)
+                $ take 1 cubicTest ]
 
-        dashPattern = [10, 5, 20, 10]
+        , [stroker dashPattern 15 (JoinMiter 0)
+                (CapStraight 0, CapStraight 0)
+                cusp]
 
-        drawing = withTexture texture . sequence_ . concat $
-            [ []
-            , [stroker dashPattern 4 JoinRound (CapRound, CapRound)
-                    $ take 1 cubicTest ]
-
-            , [stroker dashPattern 15 (JoinMiter 0)
-                    (CapStraight 0, CapStraight 0)
-                    cusp]
-
-            , [stroker dashPattern 25 (JoinMiter 0)
-                    (CapStraight 0, CapStraight 0)
-                    loop]
-            ]
+        , [stroker dashPattern 25 (JoinMiter 0)
+                (CapStraight 0, CapStraight 0)
+                loop]
+        ]
 
 textAlignStringTest :: String -> String -> String -> IO ()
 textAlignStringTest fontName filename txt = do
@@ -331,10 +313,9 @@ textAlignStringTest fontName filename txt = do
     case fontErr of
       Left err -> putStrLn err
       Right font ->
-        writePng (outFolder </> filename) .
-            renderDrawing 300 70 white
-                . withTexture (uniformTexture black) $
-                        printTextAt font (PointSize 12) (V2 20 40) txt
+        produceImageAtSize 300 70 filename .
+            withTexture (uniformTexture black) $
+              printTextAt font (PointSize 12) (V2 20 40) txt
 
 textStrokeTest :: String -> String -> String -> IO ()
 textStrokeTest fontName filename txt = do
@@ -345,16 +326,14 @@ textStrokeTest fontName filename txt = do
       Right font -> do
         let drawing = printTextAt font (PointSize 20) (V2 30 30) txt
             orders = drawOrdersOfDrawing 300 300 96 (PixelRGBA8 0 0 0 0) drawing
-        writePng (outFolder </> filename) .
-            renderDrawing 300 70 white .
-                withTexture (uniformTexture black) .
-                    mapM_ (mapM_ (stroke 1 (JoinMiter 0) (CapRound, CapRound)
-                            ) . _orderPrimitives) $ orders
+        produceImageAtSize 300 70 filename .
+            withTexture (uniformTexture black) $
+                mapM_ (mapM_ (stroke 1 (JoinMiter 0) (CapRound, CapRound)) . _orderPrimitives) orders
 
 strokeTest :: (forall g. Stroker g) -> Texture PixelRGBA8 -> String
            -> IO ()
 strokeTest stroker texture prefix =
-    writePng (outFolder </> (prefix ++ "stroke.png")) img
+    produceImageAtSize 500 500 (prefix ++ "stroke.png") drawing
   where beziers base = take 1 <$>
             take 3 [ logo 100 False $ V2 ix ix | ix <- [base, base + 20 ..] ]
         drawing = withTexture texture $ sequence_ . concat $
@@ -375,13 +354,11 @@ strokeTest stroker texture prefix =
                     (JoinMiter 1) (CapStraight 0, CapStraight 0) $
                    logo 100 False $ V2 240 240]
           ]
-        img = renderDrawing 500 500 background drawing
 
 orientationAxisText :: IO ()
 orientationAxisText =
     let trans = translate (V2 200 200) <> toNewXBase (V2 1 (-0.5)) in
-    writePng (outFolder </> "axis_transform.png")
-        . renderDrawing 400 400 white
+    produceImageAtSize 400 400 "axis_transform.png"
         . withTexture (uniformTexture blue)
         . fill . transform (applyTransformation trans)
         $ Path (V2 (-100) (-10)) True
@@ -415,8 +392,8 @@ complexEvenOddTest size texture = mapM_ tester [(filling, ix)
      ]
 
   tester ((method, name), i) =
-    writePng (outFolder </> ("complex_" ++ name ++ "_" ++ show i ++ "_" ++ show size ++ "px.png"))
-        . renderDrawing size size white
+    produceImageAtSize size size
+        ("complex_" ++ name ++ "_" ++ show i ++ "_" ++ show size ++ "px.png")
         . withTexture texture
         . fillWithMethod method
         . fmap (transform . applyTransformation $
@@ -433,8 +410,7 @@ evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
       , PathLineTo (V2 177 301)
       ]
   tester i =
-    writePng (outFolder </> ("even_odd" ++ show i ++ ".png"))
-        . renderDrawing 300 300 white
+    produceImageAtSize 300 300 ("even_odd" ++ show i ++ ".png")
         . withTexture texture
         . fillWithMethod FillEvenOdd
         $ transform (applyTransformation $
@@ -444,9 +420,8 @@ evenOddTest texture = mapM_ tester [1 :: Int .. 3] where
 
 crash :: Texture PixelRGBA8 -> IO ()
 crash texture = do
-    writePng (outFolder </> "crash00.png") $
-        renderDrawing 600 600 background $
-            withTexture texture $ fill geom
+  produceImageAtSize 600 600 "crash00.png" $
+     withTexture texture $ fill geom
   where
     geom =
         [line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
@@ -459,30 +434,29 @@ crash texture = do
         ,line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
         ,line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
         ]
+
 strokeCrash :: IO ()
 strokeCrash = do
  let drawColor = PixelRGBA8 0 0x86 0xc1 255
-     img = renderDrawing 600 600 white $
-        withTexture (uniformTexture drawColor) $ do
-           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
-            [Line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
-            ,Line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
-            ,Line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
-            ,Line (V2 27.272728 572.7273) (V2 572.72723 572.7273)
-            ]
-           stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
-            [Line (V2 481.81818 481.81818) (V2 118.18182 481.81818)
-            ,Line (V2 118.181816 481.81818) (V2 118.181816 118.18182)
-            ,Line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
-            ,Line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
-            ]
-
- writePng (outFolder </> "stroke_crash.png") img
+ produceImageAtSize 600 600 "stroke_crash.png" $
+   withTexture (uniformTexture drawColor) $ do
+      stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+        [Line (V2 572.7273 572.7273) (V2 572.7273 27.272766)
+        ,Line (V2 572.7273 27.272728) (V2 27.272766 27.272728)
+        ,Line (V2 27.272728 27.272728) (V2 27.272728 572.72723)
+        ,Line (V2 27.272728 572.7273) (V2 572.72723 572.7273)
+        ]
+      stroke 5 (JoinMiter 0) (CapStraight 0, CapStraight 0)
+        [Line (V2 481.81818 481.81818) (V2 118.18182 481.81818)
+        ,Line (V2 118.181816 481.81818) (V2 118.181816 118.18182)
+        ,Line (V2 118.181816 118.181816) (V2 481.81818 118.181816)
+        ,Line (V2 481.81818 118.181816) (V2 481.81818 481.81818)
+        ]
 
 dashTest :: IO ()
-dashTest = writePng (outFolder </> "dashed_wheel.png")
-         . renderDrawing 550 550 white
-         $ withTexture (uniformTexture black) drawing
+dashTest = 
+  produceImageAtSize 550 550 "dashed_wheel.png" $
+     withTexture (uniformTexture black) drawing
   where
     drawing =
         dashedStrokeWithOffset 0.0 [4.0,4.0] 10.0
@@ -491,11 +465,9 @@ dashTest = writePng (outFolder </> "dashed_wheel.png")
                              (V2 413.0712 25.0) (V2 275.0 25.0))
 
 weirdCircle :: IO ()
-weirdCircle = writePng (outFolder </> "bad_circle.png")
-            . renderDrawing 400 200 white
-            $ withTexture (uniformTexture black) drawing
-  where
-    drawing =
+weirdCircle =
+  produceImageAtSize 400 200 "bad_circle.png" $
+     withTexture (uniformTexture black) $
         fill [CubicBezier (V2 375.0 125.0) (V2 375.0 55.96441)
                           (V2 319.03558 0.0) (V2 250.0 0.0)
              ,CubicBezier (V2 250.0 (-1.4210855e-14)) (V2 180.96442 (-1.8438066e-14))
@@ -506,41 +478,89 @@ weirdCircle = writePng (outFolder </> "bad_circle.png")
                           (V2 375.0 194.0356) (V2 375.0 125.0)
              ]
 
+compositionClip :: IO ()
+compositionClip =
+  produceImageAtSize 500 500 "composition_clip.png" $ do
+    withClipping clipPath $
+      withTexture (uniformTexture blue) $
+        fill $ rectangle (V2 0 0) 500 500
+  where
+    clipPath  =
+      withClipping (R.fill $ rectangle (V2 0 200) 500 100) .
+        R.fill $ ellipse (V2 250 250) 180 170
+
+compositionTransparentGradient :: IO ()
+compositionTransparentGradient =
+  produceImageAtSize 600 800 "composition_gradient.png" $ do
+    row $ texture SamplerPad gradDef
+    withTransformation (translate $ V2 0 200) $
+        row $ texture SamplerPad opaqueGrad
+    withTransformation (translate $ V2 0 400) $
+        strokeRow $ texture SamplerRepeat opaqueGrad
+    withTransformation (translate $ V2 0 600) $
+        strokeRow $ texture SamplerReflect gradDef
+
+  where
+    row tx = do
+      baseDrawing tx
+      withTransformation (translate (V2 200 0)) $ baseDrawing tx
+      withTransformation (translate (V2 400 0) <> scale 0.5 0.5) $ baseDrawing tx
+      withTransformation (translate (V2 440 100) <> rotate 0.4 <> scale 0.3 0.5) $ baseDrawing tx
+
+    strokeElem tx =
+      withTransformation (scale (1 / 2.5) (1/ 2.5)) $
+        withTexture tx $
+          stroke 40 JoinRound (CapRound, CapRound) . bezierFromPath $
+            [ V2 30 30, V2 150 200, V2 450 450, V2 450 90, V2 30  450 ]
+
+    strokeRow tx =
+      strokeElem tx
+
+    baseDrawing tx = 
+      withTexture tx . fill $ circle (V2 100 100) 100
+
+    texture samp grad =
+      withSampler samp $
+        linearGradientTexture grad (V2 40 40) (V2 130 130)
+
+    opaqueGrad = [(0, PixelRGBA8 0 0x86 0xc1 255)
+                 ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+                 ,(1, PixelRGBA8 0xFF 0x53 0x73 255)]
+
+    gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+              ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+              ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
+
 transparentGradient :: IO ()
 transparentGradient =
-    writePng (outFolder </> "transparent_gradient.png") $ renderDrawing 400 200 white img
-  where img = withTexture (withSampler SamplerPad
-                          (linearGradientTexture gradDef
-                          (V2 40 40) (V2 130 130))) $
+  produceImageAtSize 400 200 "transparent_gradient.png" $
+    withTexture (withSampler SamplerPad
+                    (linearGradientTexture gradDef (V2 40 40) (V2 130 130))) $
                           fill $ circle (V2 100 100) 100
-        gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
-                  ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
-                  ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
+  where
+    gradDef = [(0, PixelRGBA8 0 0x86 0xc1 255)
+              ,(0.5, PixelRGBA8 0xff 0xf4 0xc1 255)
+              ,(1, PixelRGBA8 0xFF 0x53 0x73 50)]
   
 gradientRadial :: String -> PixelRGBA8 -> IO ()
-gradientRadial name back =
-    writePng (outFolder </> ("rad_opacity" ++ name ++ ".png")) $
-        renderDrawing 500 500 back img
-  where img = withTexture (withSampler SamplerRepeat
-                          (radialGradientTexture gradDef
-                          (V2 250 250) 100)) $
+gradientRadial name _back =
+  produceImageAtSize 500 500 ("rad_opacity" ++ name ++ ".png") $
+    withTexture (withSampler SamplerRepeat
+                   (radialGradientTexture gradDef (V2 250 250) 100)) $
                           fill $ rectangle (V2 0 0) 500 500
-        gradDef = 
-            [(0  , PixelRGBA8 255 165 0 102)
-            ,(0.5, PixelRGBA8 255 165 0 102)
-            ,(0.5, PixelRGBA8 255 165 0 102)
-            ,(0.525, PixelRGBA8 255 165 0 255)
-            ,(0.675, PixelRGBA8 128 128 128 64)
-            ,(0.75, PixelRGBA8 0 128 128 255)
-            ,(1, PixelRGBA8 0 128 128 255)
-            ]
+  where
+    gradDef = 
+      [(0  , PixelRGBA8 255 165 0 102)
+      ,(0.5, PixelRGBA8 255 165 0 102)
+      ,(0.525, PixelRGBA8 255 165 0 255)
+      ,(0.675, PixelRGBA8 128 128 128 64)
+      ,(0.75, PixelRGBA8 0 128 128 255)
+      ,(1, PixelRGBA8 0 128 128 255)
+      ]
 
 strokeBad2 :: IO ()
 strokeBad2 =
-    writePng (outFolder </> ("bad_stroke_letter.png")) $
-        renderDrawing 70 70 white drawing
-  where 
-    drawing =
+    produceImageAtSize 70 70 ("bad_stroke_letter.png") $
       withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
         stroke 1.0 (JoinMiter 0.0) (CapRound
                                    ,CapRound) $
@@ -573,42 +593,38 @@ strokeBad2 =
 
 strokeBad :: IO ()
 strokeBad =
-    writePng (outFolder </> ("bad_stroke_tiger.png")) $
-        renderDrawing 500 500 white drawing
-  where 
-    drawing =
-        withTransformation (Transformation { _transformA = 1.6
-                                      , _transformC = 0.0
-                                      , _transformE = 350.0
-                                      , _transformB = 0.0
-                                      , _transformD = 1.6
-                                      , _transformF = 300.0}) $
-            withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
-                stroke 2.0 (JoinMiter 1.0) (CapStraight 0.0
-                                           ,CapStraight 0.0) $
-                        [CubicBezier (V2 21.2 63.0)
-                                     (V2 21.2 63.0)
-                                     (V2 4.200001 55.8)
-                                     (V2 (-10.599998) 53.6)
-                        ,CubicBezier (V2 (-10.599998) 53.6)
-                                     (V2 (-10.599998) 53.6)
-                                     (V2 (-27.199999) 51.0)
-                                     (V2 (-43.8) 58.199997)
-                        ,CubicBezier (V2 (-43.8) 58.199997)
-                                     (V2 (-43.8) 58.199997)
-                                     (V2 (-56.0) 64.2)
-                                     (V2 (-61.4) 74.399994)]
+  produceImageAtSize 500 500 "bad_stroke_tiger.png" $
+    withTransformation (Transformation { _transformA = 1.6
+                                  , _transformC = 0.0
+                                  , _transformE = 350.0
+                                  , _transformB = 0.0
+                                  , _transformD = 1.6
+                                  , _transformF = 300.0}) $
+        withTexture (uniformTexture (PixelRGBA8 76 0 0 255)) $
+            stroke 2.0 (JoinMiter 1.0) (CapStraight 0.0
+                                       ,CapStraight 0.0) $
+                    [CubicBezier (V2 21.2 63.0)
+                                 (V2 21.2 63.0)
+                                 (V2 4.200001 55.8)
+                                 (V2 (-10.599998) 53.6)
+                    ,CubicBezier (V2 (-10.599998) 53.6)
+                                 (V2 (-10.599998) 53.6)
+                                 (V2 (-27.199999) 51.0)
+                                 (V2 (-43.8) 58.199997)
+                    ,CubicBezier (V2 (-43.8) 58.199997)
+                                 (V2 (-43.8) 58.199997)
+                                 (V2 (-56.0) 64.2)
+                                 (V2 (-61.4) 74.399994)]
+
 pledgeTest :: IO ()
 pledgeTest = do
   (Right (ImageRGBA8 png)) <- readImage "exec-src/test_img.png"
-  writePng (outFolder </> "pledge_render.png") .
-    renderDrawing 389 89 white $
-        drawImage png 0 (V2 0 0)
+  produceImageAtSize 289 89 "pledge_render.png" $ drawImage png 0 (V2 0 0)
 
 shouldBeTheSame :: IO ()
 shouldBeTheSame = do
-    writePng (outFolder </> "should_be_same_0.png") $ img prim1
-    writePng (outFolder </> "should_be_same_1.png") $ img prim2
+  produceImageAtSize 400 200 "should_be_same_0.png" $ img prim1
+  produceImageAtSize 400 200 "should_be_same_1.png" $ img prim2
   where
     drawColor = PixelRGBA8 0 0x86 0xc1 255
     prim1 = CubicBezier (V2  10  10) (V2 210 210)
@@ -616,16 +632,16 @@ shouldBeTheSame = do
     prim2 = CubicBezier (V2  10  10) (V2 210 210)
                         (V2 210 210.1) (V2  10 410)
 
-    img bez = renderDrawing 400 200 white $
+    img bez =
       withTexture (uniformTexture drawColor) $
         stroke 4 JoinRound (CapRound, CapRound) bez
 
 clipFail :: IO ()
-clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
+clipFail = 
+  produceImageAtSize 512 256 "cubicbezier_clipError.png" $
+    withTexture (uniformTexture red) $ fill geometry
   where
     trans = applyTransformation $ translate (V2 0 (-20))
-    img = renderDrawing 512 256 white .
-            withTexture (uniformTexture red) $ fill geometry
 
     geometry = transform trans $
       [ CubicBezier (V2 104.707344 88.55418) (V2 153.00671 140.66666)
@@ -637,12 +653,15 @@ clipFail = writePng (outFolder </> "cubicbezier_clipError.png") img
       ]
 
 doubleCache :: IO ()
-doubleCache = writePng (outFolder </> "double_opa.png") img where
-  img = renderDrawing 200 200 white $
-      withTexture (uniformTexture red) $
-          withGroupOpacity 128 $
-              withGroupOpacity 128 $
-                  fill $ circle (V2 100 100) 70
+doubleCache = 
+  produceImageAtSize 200 200  "double_opa.png" $ do
+    withTexture (uniformTexture black) $
+        fill $ rectangle (V2 0 95) 200 10
+    withTexture (uniformTexture red) $
+        withGroupOpacity 128 $ do
+            withGroupOpacity 128 $
+                fill $ circle (V2 70 100) 30
+            fill $ circle (V2 120 100) 30
   
 testSuite :: IO ()
 testSuite = do
@@ -683,6 +702,8 @@ testSuite = do
   logoTest biGradient "gradient_"
   crash uniform
   transparentGradient 
+  compositionTransparentGradient 
+  compositionClip 
   gradientRadial "white_opaque" white
   gradientRadial "black_opaque" black
   gradientRadial "white_transparent" (PixelRGBA8 255 255 255 0)
@@ -731,7 +752,6 @@ testSuite = do
   textAlignStringTest sansSerifFont "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
-  -- -}
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

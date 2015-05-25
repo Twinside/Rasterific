@@ -66,6 +66,8 @@ module Graphics.Rasterific
     , RenderablePixel
     , renderDrawing
     , renderDrawingAtDpi
+    , renderDrawingAtDpiToPDF
+    , renderOrdersAtDpiToPdf 
     , pathToPrimitives
 
       -- * Rasterization types
@@ -151,15 +153,16 @@ import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
-                          , unpackPixel
+                          , PixelRGBA8
                           , pixelMapXY )
 
-import qualified Data.Vector.Unboxed as VU
+import qualified Data.ByteString.Lazy as LB
 import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^), (^*) )
+import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^) )
 import Graphics.Rasterific.Rasterize
-import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Shading
+import Graphics.Rasterific.MicroPdf
+{-import Graphics.Rasterific.Texture-}
+import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.QuadraticBezier
@@ -175,7 +178,7 @@ import Graphics.Rasterific.Command
 import Graphics.Text.TrueType( Font
                              , Dpi
                              , PointSize( .. )
-                             , getStringCurveAtPoint )
+                             )
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -408,6 +411,30 @@ renderDrawing
     -> Image px
 renderDrawing width height = renderDrawingAtDpi width height 96
 
+renderOrdersAtDpiToPdf 
+    :: Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> [DrawOrder PixelRGBA8]  -- ^ Drawing Orders
+    -> LB.ByteString
+renderOrdersAtDpiToPdf w h dpi =
+  renderOrdersToPdf renderer w h dpi
+    where
+      renderer :: forall px . RenderablePixel px => Drawing px () -> [DrawOrder px]
+      renderer = drawOrdersOfDrawing w h dpi emptyPx
+
+renderDrawingAtDpiToPDF
+    :: Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> Drawing PixelRGBA8 () -- ^ Rendering action
+    -> LB.ByteString
+renderDrawingAtDpiToPDF w h dpi =
+  renderDrawingToPdf renderer w h dpi
+    where
+      renderer :: forall px . RenderablePixel px => Drawing px () -> [DrawOrder px]
+      renderer = drawOrdersOfDrawing w h dpi emptyPx
+
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
 -- in other colorspace will probably produce weird results.
@@ -424,10 +451,6 @@ renderDrawingAtDpi width height dpi background drawing =
           $ mapM_ fillOrder
           $ drawOrdersOfDrawing width height dpi background drawing
 
-emptyPx :: (RenderablePixel px) => px
--- | Really need a "builder" function for pixel
-emptyPx = colorMap (const emptyValue) $ unpackPixel 0
-
 cacheOrders :: forall px. (RenderablePixel px)
             => Maybe (Image px -> ImageTransformer px) -> [DrawOrder px] -> Drawing px ()
 cacheOrders imageFilter orders = case imageFilter of
@@ -443,7 +466,7 @@ cacheOrders imageFilter orders = case imageFilter of
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
        order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims 
              , _orderTexture =
-                 transformTexture (translate cornerUpperLeft) $ _orderTexture order
+                 WithTextureTransform (translate cornerUpperLeft) $ _orderTexture order
              }
    
    resultImage =
@@ -485,18 +508,23 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     clipRender =
       renderDrawing width height clipBackground
-            . withTexture (uniformTexture clipForeground)
+            . withTexture (SolidTexture clipForeground)
 
     textureOf ctxt@RenderContext { currentTransformation = Just (_, t) } =
-        transformTexture t $ currentTexture ctxt
+        WithTextureTransform t $ currentTexture ctxt
     textureOf ctxt = currentTexture ctxt
 
+    geometryOf :: Transformable a => RenderContext px -> a -> a
     geometryOf RenderContext { currentTransformation = Just (trans, _) } =
         transform (applyTransformation trans)
     geometryOf _ = id
 
+    geometryOfO RenderContext { currentTransformation = Just (trans, _) } =
+        transformOrder (applyTransformation trans)
+    geometryOfO _ = id
+
     stupidDefaultTexture =
-        uniformTexture $ colorMap (const clipBackground) background
+        SolidTexture $ colorMap (const clipBackground) background
 
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
@@ -521,11 +549,9 @@ drawOrdersOfDrawing width height dpi background drawing =
       final = orders <> go ctxt next rest
       images = go ctxt (fromF sub) []
 
-      drawer trans _ order = modify $ \lst -> finalOrder : lst
-        where
-          toFinalPos = transform $ applyTransformation trans
-          finalOrder =
-            order { _orderPrimitives = toFinalPos $ _orderPrimitives order }
+      drawer trans _ order =
+        modify (transformOrder (applyTransformation trans) order :)
+
       orders = reverse $ execState (drawOrdersOnPath drawer 0 base path images) []
 
     go ctxt (Free (WithTransform trans sub next)) rest = final where
@@ -562,29 +588,9 @@ drawOrdersOfDrawing width height dpi background drawing =
         recurse sub =
             go ctxt (liftF $ Fill FillWinding sub ())
 
-    go ctxt (Free (TextFill (V2 x y) descriptions next)) rest =
-        go ctxt (sequence_ drawCalls) $ go ctxt next rest
-      where
-        floatCurves =
-          getStringCurveAtPoint dpi (x, y)
-            [(_textFont d, _textSize d, _text d) | d <- descriptions]
-
-        linearDescriptions =
-            concat [map (const d) $ _text d | d <- descriptions]
-
-        drawCalls =
-            [texturize d $ beziersOfChar curve
-                | (curve, d) <- zip floatCurves linearDescriptions]
-
-        texturize descr sub = case _textTexture descr of
-            Nothing -> fromF sub
-            Just t -> liftF $ SetTexture t sub ()
-
-        beziersOfChar curves = liftF $ Fill FillWinding bezierCurves ()
-          where
-            bezierCurves = concat
-              [map BezierPrim . bezierFromPath . map (uncurry V2)
-                              $ VU.toList c | c <- curves]
+    go ctxt (Free (TextFill p descriptions next)) rest = calls <> go ctxt next rest where
+      calls =
+        geometryOfO ctxt <$> textToDrawOrders dpi (currentTexture ctxt) p descriptions
 
     go ctxt (Free (WithCliping clipPath path next)) rest =
         go (ctxt { currentClip = newModuler }) (fromF path) $
@@ -597,7 +603,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
         subModuler Nothing = modulationTexture
         subModuler (Just v) =
-            modulateTexture v modulationTexture
+            ModulateTexture v modulationTexture
 
 -- | With stroke geometry with a given stroke width, using
 -- a dash pattern.
@@ -640,32 +646,6 @@ dashedStrokeWithOffset _ [] width join caping prims =
 dashedStrokeWithOffset offset dashing width join caping prims =
     liftF $ DashedStroke offset dashing width join caping (toPrimitives prims) ()
 
--- | Generate a list of primitive representing a circle.
---
--- > fill $ circle (V2 100 100) 75
---
--- <<docimages/fill_circle.png>>
---
-circle :: Point -- ^ Circle center in pixels
-       -> Float -- ^ Circle radius in pixels
-       -> [Primitive]
-circle center radius =
-    CubicBezierPrim . transform mv <$> cubicBezierCircle
-  where
-    mv p = (p ^* radius) ^+^ center
-
--- | Generate a list of primitive representing an ellipse.
---
--- > fill $ ellipse (V2 100 100) 75 30
---
--- <<docimages/fill_ellipse.png>>
---
-ellipse :: Point -> Float -> Float -> [Primitive]
-ellipse center rx ry =
-    CubicBezierPrim . transform mv <$> cubicBezierCircle
-  where
-    mv (V2 x y) = V2 (x * rx) (y * ry) ^+^ center
-
 -- | Generate a strokable line out of points list.
 -- Just an helper around `lineFromPath`.
 --
@@ -690,21 +670,6 @@ polygon [] = []
 polygon [_] = []
 polygon [_,_] = []
 polygon lst@(p:_) = polyline $ lst ++ [p]
-
--- | Generate a list of primitive representing a
--- rectangle
---
--- > fill $ rectangle (V2 30 30) 150 100
---
--- <<docimages/fill_rect.png>>
---
-rectangle :: Point -- ^ Corner upper left
-          -> Float -- ^ Width in pixel
-          -> Float -- ^ Height in pixel
-          -> [Primitive]
-rectangle p@(V2 px py) w h =
-  LinePrim <$> lineFromPath
-    [ p, V2 (px + w) py, V2 (px + w) (py + h), V2 px (py + h), p ]
 
 -- | Simply draw an image into the canvas. Take into account
 -- any previous transformation performed on the geometry.
@@ -738,10 +703,10 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
             reqWidth reqHeight
     | borderSize <= 0 =
         withTransformation (translate p <> scale scaleX scaleY) .
-            withTexture (sampledImageTexture img) $ fill rect
+            withTexture (SampledTexture img) $ fill rect
     | otherwise = do
         withTransformation (translate p <> scale scaleX scaleY) $
-            withTexture (sampledImageTexture img) $ fill rect
+            withTexture (SampledTexture img) $ fill rect
         stroke (borderSize / 2) (JoinMiter 0)
                (CapStraight 0, CapStraight 0) rect'
         where
@@ -755,41 +720,6 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
 
           scaleY | reqHeight == 0 = 1
                  | otherwise = reqHeight / rh
-
--- | Generate a list of primitive representing a rectangle
--- with rounded corner.
---
--- > fill $ roundedRectangle (V2 10 10) 150 150 20 10
---
--- <<docimages/fill_roundedRectangle.png>>
---
-roundedRectangle :: Point -- ^ Corner upper left
-                 -> Float -- ^ Width in pixel
-                 -> Float -- ^ Height in pixel.
-                 -> Float -- ^ Radius along the x axis of the rounded corner. In pixel.
-                 -> Float -- ^ Radius along the y axis of the rounded corner. In pixel.
-                 -> [Primitive]
-roundedRectangle (V2 px py) w h rx ry =
-    [ CubicBezierPrim . transform (^+^ V2 xFar yNear) $ cornerTopR
-    , LinePrim $ Line (V2 xFar py) (V2 xNear py)
-    , CubicBezierPrim . transform (^+^ V2 (px + rx) (py + ry)) $ cornerTopL
-    , LinePrim $ Line (V2 px yNear) (V2 px yFar)
-    , CubicBezierPrim . transform (^+^ V2 (px + rx) yFar) $ cornerBottomL
-    , LinePrim $ Line (V2 xNear (py + h)) (V2 xFar (py + h))
-    , CubicBezierPrim . transform (^+^ V2 xFar yFar) $ cornerBottomR
-    , LinePrim $ Line (V2 (px + w) yFar) (V2 (px + w) yNear)
-    ]
-  where
-   xNear = px + rx
-   xFar = px + w - rx
-
-   yNear = py + ry
-   yFar = py + h - ry
-
-   (cornerBottomR :
-    cornerTopR     :
-    cornerTopL  :
-    cornerBottomL:_) = transform (\(V2 x y) -> V2 (x * rx) (y * ry)) <$> cubicBezierCircle
 
 -- | Return a simple line ready to be stroked.
 --

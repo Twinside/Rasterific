@@ -5,3 +5,6 @@ cabal.sandbox.config
 *.png
 sources
 .hpc
+docimages/*
+test_results/*
+

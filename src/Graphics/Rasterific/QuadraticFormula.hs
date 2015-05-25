@@ -20,8 +20,6 @@ instance Functor QuadraticFormula where
     fmap f (QuadraticFormula a b c) =
         QuadraticFormula (f a) (f b) (f c)
 
-
-
 instance Applicative QuadraticFormula where
   pure a = QuadraticFormula a a a
   {-# INLINE pure #-}

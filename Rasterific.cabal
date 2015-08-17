@@ -80,7 +80,7 @@ library
   build-depends: base        >= 4.5     && < 4.9
                , free        >= 4.7
                , JuicyPixels >= 3.2
-               , FontyFruity >= 0.5     && < 0.6
+               , FontyFruity >= 0.5.2   && < 0.6
                , vector      >= 0.9
                , mtl         >= 1.9
                , dlist       >= 0.6
@@ -104,7 +104,7 @@ Executable doc_builder
     if os(win32)
         cpp-options: -D__WIN32__
 
-    Build-Depends: base >= 4.6
+    Build-Depends: base >= 4.5
                  , Rasterific
                  , JuicyPixels
                  , directory   >= 1.2

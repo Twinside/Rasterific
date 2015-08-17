@@ -87,7 +87,7 @@ library
                , primitive   >= 0.5
                , vector-algorithms >= 0.3
                , bytestring  >= 0.10.2
-               , containers
+               , containers  >= 0.5
 
   if !flag(embed_linear)
       build-depends: linear >= 1.3

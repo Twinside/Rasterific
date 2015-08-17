@@ -123,7 +123,7 @@ Test-Suite test
     other-modules: Arbitrary
                  , Sample
 
-    Build-Depends: base >= 4.6
+    Build-Depends: base >= 4.5
                  , Rasterific
                  , JuicyPixels
                  , directory   >= 1.2

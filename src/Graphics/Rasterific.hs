@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+
 -- | Main module of Rasterific, an Haskell rasterization engine.
 --
 -- Creating an image is rather simple, here is a simple example
@@ -230,9 +231,8 @@ withTexture texture subActions =
 -- >    fill $ circle (V2 120 100) 60
 --
 -- <<docimages/item_opacity.png>>
-withGroupOpacity :: Pixel px => PixelBaseComponent px -> Drawing px ()-> Drawing px ()
-withGroupOpacity opa sub =
-    liftF $ WithGlobalOpacity opa sub ()
+withGroupOpacity :: PixelBaseComponent px -> Drawing px ()-> Drawing px ()
+withGroupOpacity opa sub = liftF $ WithGlobalOpacity opa sub ()
 
 -- | Draw all the sub drawing commands using a transformation.
 withTransformation :: Transformation -> Drawing px () -> Drawing px ()
@@ -678,8 +678,7 @@ polygon lst@(p:_) = polyline $ lst ++ [p]
 --
 -- <<docimages/image_simple.png>>
 --
-drawImage :: ModulablePixel px
-          => Image px       -- ^ Image to be drawn
+drawImage :: Image px       -- ^ Image to be drawn
           -> StrokeWidth    -- ^ Border size, drawn with current texture.
           -> Point          -- ^ Position of the corner upper left of the image.
           -> Drawing px ()
@@ -692,8 +691,7 @@ drawImage img@Image { imageWidth = w, imageHeight = h } s p =
 --
 -- <<docimages/image_resize.png>>
 --
-drawImageAtSize :: (Pixel px, Modulable (PixelBaseComponent px))
-                => Image px    -- ^ Image to be drawn
+drawImageAtSize :: Image px    -- ^ Image to be drawn
                 -> StrokeWidth -- ^ Border size, drawn with current texture.
                 -> Point -- ^ Position of the corner upper left of the image.
                 -> Float -- ^ Width of the drawn image

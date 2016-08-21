@@ -7,6 +7,7 @@ module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
     , cubicBezierFromPath
     , cubicBezierBreakAt
+    , divideCubicBezier
     , clipCubicBezier
     , decomposeCubicBeziers
     , sanitizeCubicBezier
@@ -253,6 +254,12 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
         edgeSeparator = vabs (abbcbccd ^-^ mini) ^<^ vabs (abbcbccd ^-^ maxi)
         edge = vpartition edgeSeparator mini maxi
         m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbcbccd
+
+divideCubicBezier :: CubicBezier -> (CubicBezier, CubicBezier)
+divideCubicBezier bezier@(CubicBezier a _ _ d) = (left, right) where
+  left = CubicBezier a ab abbc abbcbccd
+  right = CubicBezier abbcbccd bccd cd d
+  (ab, bc, cd, abbc, bccd, abbcbccd) = splitCubicBezier bezier
 
 -- | Will subdivide the bezier from 0 to coeff and coeff to 1
 cubicBezierBreakAt :: CubicBezier -> Float

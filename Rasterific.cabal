@@ -72,6 +72,7 @@ library
                , Graphics.Rasterific.Shading
                , Graphics.Rasterific.PlaneBoundable
                , Graphics.Rasterific.QuadraticFormula
+               , Graphics.Rasterific.CoonPatch
 
   ghc-options: -O3 -Wall 
   -- -ddump-simpl -ddump-to-file -dsuppress-module-prefixes -dsuppress-uniques

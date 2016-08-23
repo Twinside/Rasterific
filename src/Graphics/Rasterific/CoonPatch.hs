@@ -4,6 +4,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Implementation using
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
@@ -19,6 +21,7 @@ import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.Texture
 
 import Codec.Picture.Types
     ( PixelRGB8( .. )
@@ -31,11 +34,11 @@ class InterpolablePixel a where
   lerpValue :: CoonColorWeight -> a -> a -> a
 
 instance InterpolablePixel Float where
-  maxDistance a b = abs (a - b)
+  maxDistance a b = 1 - abs (a - b)
   lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
 
 instance InterpolablePixel Word8 where
-  maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
+  maxDistance a b = 1 - abs (fromIntegral b - fromIntegral a) / 255.0
   lerpValue zeroToOne a b = a + floor (fromIntegral (b - a) * zeroToOne)
 
 instance InterpolablePixel PixelRGB8 where
@@ -84,7 +87,7 @@ instance Applicative CoonValues where
         CoonValues (n n') (e e') (s s') (w w')
 
 instance Foldable CoonValues where
-    foldMap f (CoonValues n e s w) = f n <> f e <> f s <> f w
+  foldMap f (CoonValues n e s w) = f n <> f e <> f s <> f w
 
 --
 -- @
@@ -141,11 +144,22 @@ computeWeightToleranceValues values = CoonValues
   CoonValues { _westValue = west, _northValue = north
              , _southValue = south, _eastValue = east } = values
 
+toTolerance :: CoonValues (V2 CoonColorWeight) -> CoonValues CoonColorWeight
+-- Order of substraction is important in order to avoid a call to abs
+toTolerance values = CoonValues (ex - nx) (sy - ey) (sx - wx) (wy - ny) where
+  CoonValues
+    { _northValue = V2 nx ny
+    , _eastValue  = V2 ex ey
+    , _southValue = V2 sx sy
+    , _westValue  = V2 wx wy
+    } = values
+
 isBelowWeightBounds :: CoonValues CoonColorWeight -> CoonValues CoonColorWeight -> Bool
 isBelowWeightBounds bounds values =
-  and $ (<) <$> computeWeightToleranceValues values <*> bounds
+  and $ (<=) <$> computeWeightToleranceValues values <*> bounds
 
-subdivideWeights :: CoonValues CoonColorWeight -> Subdivided (CoonValues CoonColorWeight)
+subdivideWeights :: CoonValues (V2 CoonColorWeight)
+                 -> Subdivided (CoonValues (V2 CoonColorWeight))
 subdivideWeights values = Subdivided { .. } where
   CoonValues
     { _westValue = west
@@ -163,12 +177,12 @@ subdivideWeights values = Subdivided { .. } where
   --      |3      :     2|
   --      +-------+------+
   --  W       midSouth    S
-  midNorthValue = north `middle` east
-  midWestValue = north `middle` west
-  midSoutValue = west `middle` south
-  midEastValue = east `middle` south
+  midNorthValue = north `midPoint` east
+  midWestValue = north `midPoint` west
+  midSoutValue = west `midPoint` south
+  midEastValue = east `midPoint` south
 
-  gridMidValue = midSoutValue  `middle` midNorthValue
+  gridMidValue = midSoutValue `midPoint` midNorthValue
 
   _northWest = CoonValues
     { _northValue = north
@@ -216,7 +230,8 @@ subdivideWeights values = Subdivided { .. } where
 --                       <---------
 -- @
 --
-subdividePatch :: CoonPatch CoonColorWeight -> Subdivided (CoonPatch CoonColorWeight)
+subdividePatch :: CoonPatch (V2 CoonColorWeight)
+               -> Subdivided (CoonPatch (V2 CoonColorWeight))
 subdividePatch patch = Subdivided
     { _northWest = northWest
     , _northEast = northEast
@@ -312,22 +327,42 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
-data P = P !CoonColorWeight !CoonColorWeight
+weightToColor :: InterpolablePixel px
+              => CoonValues px -> V2 CoonColorWeight -> px
+weightToColor CoonValues { .. } (V2 u v) = lerpValue v uTop uBottom where
+  uTop = lerpValue u _northValue _eastValue
+  uBottom = lerpValue u _westValue _southValue
 
-renderCoonPatch :: (PrimMonad m, RenderablePixel px, InterpolablePixel px)
+renderCoonPatch :: forall m px.
+                   (PrimMonad m, RenderablePixel px, InterpolablePixel px)
                 => CoonPatch px -> DrawContext m px ()
-renderCoonPatch originalPatch = go basePatch where
+renderCoonPatch originalPatch = go 6 basePatch where
   globalBounds = computeWeightToleranceValues $ _coonValues originalPatch
+  baseColors = _coonValues originalPatch
+
+  hasReachedColorPrecision =
+      isBelowWeightBounds globalBounds . toTolerance . _coonValues
 
   parametricBase = CoonValues
-    { _northValue = P 0 0
-    , _eastValue = P 1 0
-    , _southValue = P 1 1
-    , _westValue = P 0 1
+    { _northValue = V2 0 0
+    , _eastValue  = V2 1 0
+    , _southValue = V2 1 1
+    , _westValue  = V2 0 1
     }
 
   basePatch = originalPatch { _coonValues = parametricBase }
 
-  -- TODO
-  go patch = return ()
+  toUniformOrder CoonPatch { .. } = DrawOrder
+    { _orderPrimitives = [toPrim <$> [_north, _east, _south, _west]]
+    , _orderTexture =
+        uniformTexture . weightToColor baseColors $ _northValue _coonValues
+    , _orderFillMethod = FillWinding
+    , _orderMask = Nothing
+    }
+
+  go depth patch | depth == 0 || hasReachedColorPrecision patch =
+    fillOrder $ toUniformOrder patch
+  go depth (subdividePatch -> Subdivided { .. }) =
+    let d = depth - (1 :: Int) in
+    go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 

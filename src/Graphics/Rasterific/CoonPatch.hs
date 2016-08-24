@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -11,6 +12,11 @@
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
 module Graphics.Rasterific.CoonPatch where
+
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( Applicative, (<*>) )
+import Data.Foldable( Foldable( foldMap ) )
+#endif
 
 import Control.Monad.Primitive( PrimMonad )
 import Data.Monoid( (<>) )

@@ -56,6 +56,7 @@ library
                  , Graphics.Rasterific.Transformations
                  , Graphics.Rasterific.Immediate
                  , Graphics.Rasterific.PathWalker
+                 , Graphics.Rasterific.CoonPatch
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command
@@ -72,7 +73,6 @@ library
                , Graphics.Rasterific.Shading
                , Graphics.Rasterific.PlaneBoundable
                , Graphics.Rasterific.QuadraticFormula
-               , Graphics.Rasterific.CoonPatch
 
   ghc-options: -O3 -Wall 
   -- -ddump-simpl -ddump-to-file -dsuppress-module-prefixes -dsuppress-uniques

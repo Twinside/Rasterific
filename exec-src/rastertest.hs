@@ -10,6 +10,7 @@ import Control.Applicative( (<$>) )
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
+import Control.Monad.ST( runST )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
@@ -20,6 +21,7 @@ import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.CoonPatch
 
 import qualified Data.ByteString.Lazy as LB
 import Graphics.Text.TrueType( loadFontFile )
@@ -663,6 +665,23 @@ doubleCache =
                 fill $ circle (V2 70 100) 30
             fill $ circle (V2 120 100) 30
   
+coonTest :: IO ()
+coonTest = writePng "coon_01.png" img where
+  img =
+    runST $ runDrawContext 200 200 (PixelRGBA8 255 255 255 255) $ renderCoonPatch patch
+  cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 b c) (V2 e f)
+  [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
+      toPrimitives $ Path (V2 12.5770186 879.516075) False
+        [cc 65.2497086 900.443525 85.8189266 800.254325 184.037108 918.588485
+        ,cc 134.570228 941.259685 122.901328 975.582285 191.830738 1034.7496 
+        ,cc 6.01082732 1059.4889 82.7197786 1027.0056 28.1642986 1023.1336
+        ,cc 67.6276866 968.594245 (-11.1747144) 929.500505 12.5770186 879.516075
+        ]
+  patch = CoonPatch c1 c2 c3 c4 
+            (CoonValues (PixelRGBA8 255 0 0 255)
+                        (PixelRGBA8 0 255 0 255)
+                        (PixelRGBA8 0 0 255 255)
+                        (PixelRGBA8 255 255 0 255))
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -752,6 +771,8 @@ testSuite = do
   textAlignStringTest sansSerifFont "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
+
+  coonTest 
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

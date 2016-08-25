@@ -11,10 +11,15 @@
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
-module Graphics.Rasterific.CoonPatch where
+module Graphics.Rasterific.CoonPatch
+    ( CoonPatch( .. )
+    , CoonValues( .. )
+    , CoonColorWeight
+    , renderCoonPatch 
+    )  where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative, (<*>) )
+import Control.Applicative( Applicative( pure, (<*>) ), (<$>) )
 import Data.Foldable( Foldable( foldMap ) )
 #endif
 
@@ -342,7 +347,7 @@ weightToColor CoonValues { .. } (V2 u v) = lerpValue v uTop uBottom where
 renderCoonPatch :: forall m px.
                    (PrimMonad m, RenderablePixel px, InterpolablePixel px)
                 => CoonPatch px -> DrawContext m px ()
-renderCoonPatch originalPatch = go 6 basePatch where
+renderCoonPatch originalPatch = go 2 basePatch where
   globalBounds = computeWeightToleranceValues $ _coonValues originalPatch
   baseColors = _coonValues originalPatch
 

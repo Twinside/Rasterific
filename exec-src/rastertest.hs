@@ -10,7 +10,7 @@ import Control.Applicative( (<$>) )
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Control.Monad.ST( runST )
+import Control.Monad.ST( ST, runST )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
@@ -18,7 +18,7 @@ import Graphics.Rasterific hiding ( fill
                                   , fillWithMethod, stroke)
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Linear( (^+^), (^-^) )
+import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.CoonPatch
@@ -666,22 +666,31 @@ doubleCache =
             fill $ circle (V2 120 100) 30
   
 coonTest :: IO ()
-coonTest = writePng "coon_01.png" img where
-  img =
-    runST $ runDrawContext 200 200 (PixelRGBA8 255 255 255 255) $ renderCoonPatch patch
-  cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 b c) (V2 e f)
-  [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
-      toPrimitives $ Path (V2 12.5770186 879.516075) False
-        [cc 65.2497086 900.443525 85.8189266 800.254325 184.037108 918.588485
-        ,cc 134.570228 941.259685 122.901328 975.582285 191.830738 1034.7496 
-        ,cc 6.01082732 1059.4889 82.7197786 1027.0056 28.1642986 1023.1336
-        ,cc 67.6276866 968.594245 (-11.1747144) 929.500505 12.5770186 879.516075
-        ]
-  patch = CoonPatch c1 c2 c3 c4 
-            (CoonValues (PixelRGBA8 255 0 0 255)
-                        (PixelRGBA8 0 255 0 255)
-                        (PixelRGBA8 0 0 255 255)
-                        (PixelRGBA8 255 255 0 255))
+coonTest = do
+  writePng "coon_outline.png" . draw $ drawPatchOutline patch
+  let Subdivided nw ne sw se = subdividePatch patch { _coonValues = parametricBase }
+  writePng "coon_outline_sub_nw.png" . draw $ drawPatchOutline nw
+  writePng "coon_outline_sub_ne.png" . draw $ drawPatchOutline ne
+  writePng "coon_outline_sub_sw.png" . draw $ drawPatchOutline sw
+  writePng "coon_outline_sub_se.png" . draw $ drawPatchOutline se
+  writePng "coon_render.png" $ drawImm $ renderCoonPatch patch
+  where
+    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
+    drawImm d = runST $ runDrawContext 200 200 (PixelRGBA8 255 255 255 255) d
+    draw = renderDrawing 200 200 (PixelRGBA8 255 255 255 255) . withTexture (uniformTexture (PixelRGBA8 0 0 0 255))
+    cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
+    [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
+        toPrimitives . transform (^+^ (V2 0 (-852.36))) $ Path (V2 13.21 869.2) False
+          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
+          ,cc 193.9 944.6 109.2 950.4 167.5 1021
+          ,cc 117.7 1025 73.48 1043 18.21 1033
+          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
+          ]
+    patch = CoonPatch c1 c2 c3 c4 
+              (CoonValues (PixelRGBA8 255 0 0 255)
+                          (PixelRGBA8 0 255 0 255)
+                          (PixelRGBA8 0 0 255 255)
+                          (PixelRGBA8 255 255 0 255))
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue

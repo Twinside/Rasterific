@@ -15,7 +15,11 @@ module Graphics.Rasterific.CoonPatch
     ( CoonPatch( .. )
     , CoonValues( .. )
     , CoonColorWeight
+    , Subdivided( .. )
+    , subdividePatch
+    , drawPatchOutline
     , renderCoonPatch 
+    , parametricBase
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -33,6 +37,8 @@ import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Texture
+
+import Graphics.Rasterific
 
 import Codec.Picture.Types
     ( PixelRGB8( .. )
@@ -110,7 +116,7 @@ instance Foldable CoonValues where
 --   |       /                                  /  east   |
 --   | west |                                  /          |
 --          |                                 |           v
---           \                                 \   
+--           \                                 \   .
 --            \                  __-------------+
 --             +----------------/
 --                    South
@@ -234,7 +240,7 @@ subdivideWeights values = Subdivided { .. } where
 --   |       /               :                  /  east   |
 --   | west |               :                  /          |
 --          |               :                 |           v
---           \               :                 \   
+--           \               :                 \    .   
 --            \               :  __-------------+
 --             +--------------+-/
 --                    South
@@ -263,11 +269,11 @@ subdividePatch patch = Subdivided
   (eastTop@(CubicBezier _ _ _ midEast), eastBottom) = divideCubicBezier $ _east patch
 
   midNorthSouth = north `midCurve` south
-  midWestEast = _west patch `midCurve` _east patch
+  midEastWest = _east patch `midCurve` _west patch 
 
   (splitNorthSouthTop, splitNorthSouthBottom) =
       divideCubicBezier $ combine
-        midWestEast
+        midEastWest
         (midNorth `straightLine` midSouth)
         (midNorthLinear `straightLine` midSouthLinear)
 
@@ -344,6 +350,19 @@ weightToColor CoonValues { .. } (V2 u v) = lerpValue v uTop uBottom where
   uTop = lerpValue u _northValue _eastValue
   uBottom = lerpValue u _westValue _southValue
 
+drawPatchOutline :: CoonPatch px -> Drawing pxb ()
+drawPatchOutline CoonPatch { .. } =
+  stroke 2 JoinRound (CapRound, CapRound) [_north, _east, _south, _west]
+
+
+parametricBase :: CoonValues (V2 CoonColorWeight)
+parametricBase = CoonValues
+  { _northValue = V2 0 0
+  , _eastValue  = V2 1 0
+  , _southValue = V2 1 1
+  , _westValue  = V2 0 1
+  }
+
 renderCoonPatch :: forall m px.
                    (PrimMonad m, RenderablePixel px, InterpolablePixel px)
                 => CoonPatch px -> DrawContext m px ()
@@ -353,13 +372,6 @@ renderCoonPatch originalPatch = go 2 basePatch where
 
   hasReachedColorPrecision =
       isBelowWeightBounds globalBounds . toTolerance . _coonValues
-
-  parametricBase = CoonValues
-    { _northValue = V2 0 0
-    , _eastValue  = V2 1 0
-    , _southValue = V2 1 1
-    , _westValue  = V2 0 1
-    }
 
   basePatch = originalPatch { _coonValues = parametricBase }
 

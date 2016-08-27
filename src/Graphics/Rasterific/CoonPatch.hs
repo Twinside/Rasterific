@@ -45,17 +45,20 @@ import Codec.Picture.Types
     , PixelRGBA8( .. )
     )
 
+import Debug.Trace
+import Text.Printf
+
 -- | Meh
 class InterpolablePixel a where
   maxDistance :: a -> a -> CoonColorWeight
   lerpValue :: CoonColorWeight -> a -> a -> a
 
 instance InterpolablePixel Float where
-  maxDistance a b = 1 - abs (a - b)
+  maxDistance a b = abs (a - b)
   lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
 
 instance InterpolablePixel Word8 where
-  maxDistance a b = 1 - abs (fromIntegral b - fromIntegral a) / 255.0
+  maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
   lerpValue zeroToOne a b = a + floor (fromIntegral (b - a) * zeroToOne)
 
 instance InterpolablePixel PixelRGB8 where
@@ -96,7 +99,7 @@ data CoonValues a = CoonValues
     , _southValue :: !a
     , _westValue  :: !a
     }
-    deriving (Functor)
+    deriving (Functor, Show)
 
 instance Applicative CoonValues where
     pure a = CoonValues a a a a
@@ -151,12 +154,11 @@ data Subdivided a = Subdivided
 -- @
 computeWeightToleranceValues :: InterpolablePixel a
                              => CoonValues a -> CoonValues CoonColorWeight
-                             -- TODO: this is false
 computeWeightToleranceValues values = CoonValues
-    { _northValue = maxDistance north east
-    , _eastValue = maxDistance east south
-    , _southValue = maxDistance south west
-    , _westValue = maxDistance west north
+    { _northValue = 1 - maxDistance north east
+    , _eastValue = 1 - maxDistance east south
+    , _southValue = 1 - maxDistance south west
+    , _westValue = 1 - maxDistance west north
     } where
   CoonValues { _westValue = west, _northValue = north
              , _southValue = south, _eastValue = east } = values
@@ -173,7 +175,8 @@ toTolerance values = CoonValues (ex - nx) (sy - ey) (sx - wx) (wy - ny) where
 
 isBelowWeightBounds :: CoonValues CoonColorWeight -> CoonValues CoonColorWeight -> Bool
 isBelowWeightBounds bounds values =
-  and $ (<=) <$> computeWeightToleranceValues values <*> bounds
+    {-(\a -> trace (printf "%s %s %s" (show a) (show values) (show bounds)) a) $ -}
+  and $ (<=) <$> values <*> bounds
 
 subdivideWeights :: CoonValues (V2 CoonColorWeight)
                  -> Subdivided (CoonValues (V2 CoonColorWeight))
@@ -366,8 +369,8 @@ parametricBase = CoonValues
 renderCoonPatch :: forall m px.
                    (PrimMonad m, RenderablePixel px, InterpolablePixel px)
                 => CoonPatch px -> DrawContext m px ()
-renderCoonPatch originalPatch = go 2 basePatch where
-  globalBounds = computeWeightToleranceValues $ _coonValues originalPatch
+renderCoonPatch originalPatch = go 6 basePatch where
+  globalBounds = traceShowId . computeWeightToleranceValues $ _coonValues originalPatch
   baseColors = _coonValues originalPatch
 
   hasReachedColorPrecision =

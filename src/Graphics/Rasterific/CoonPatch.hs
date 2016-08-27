@@ -292,15 +292,15 @@ subdividePatch patch = Subdivided
     { _west = westTop
     , _north = northLeft
     , _east = splitNorthSouthTop
-    , _south = splitWestEastLeft
+    , _south = inverseBezier splitWestEastLeft
     , _coonValues = _northWest weights
     }
 
   northEast = CoonPatch
-    { _west = splitNorthSouthTop
+    { _west = inverseBezier splitNorthSouthTop
     , _north = northRight
     , _east = eastTop
-    , _south = splitWestEastRight
+    , _south = inverseBezier splitWestEastRight
     , _coonValues = _northEast weights
     }
 
@@ -313,7 +313,7 @@ subdividePatch patch = Subdivided
     }
 
   southEast = CoonPatch
-    { _west = splitNorthSouthBottom
+    { _west = inverseBezier splitNorthSouthBottom
     , _north = splitWestEastRight
     , _east = eastBottom
     , _south = southRight
@@ -321,6 +321,10 @@ subdividePatch patch = Subdivided
     }
 
 
+-- | We must reinverse some bezier curve to match the global
+-- direction
+inverseBezier :: CubicBezier -> CubicBezier
+inverseBezier (CubicBezier a b c d) = CubicBezier d c b a
 
 combine :: CubicBezier -> CubicBezier -> CubicBezier -> CubicBezier
 combine (CubicBezier a1 b1 c1 d1)

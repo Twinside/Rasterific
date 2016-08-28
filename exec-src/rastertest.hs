@@ -10,6 +10,7 @@ import Control.Applicative( (<$>) )
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
+import Data.List( mapAccumL )
 import Control.Monad.ST( ST, runST )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
@@ -18,7 +19,7 @@ import Graphics.Rasterific hiding ( fill
                                   , fillWithMethod, stroke)
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Linear( (^+^), (^-^) )
+import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.CoonPatch
@@ -89,12 +90,14 @@ logo size inv offset = bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, yellow, red, white :: PixelRGBA8
+background, blue, black, yellow, red, green, orange, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
+green =  PixelRGBA8 0 255 0 255
 black = PixelRGBA8 0 0 0 255
 {-grey = PixelRGBA8 128 128 128 255-}
+orange = PixelRGBA8 255 0xA5 0 255
 yellow = PixelRGBA8 255 255 0 255
 {-brightblue = PixelRGBA8 0 255 255 255-}
 white = PixelRGBA8 255 255 255 255
@@ -691,6 +694,58 @@ coonTest = do
                           (PixelRGBA8 0 255 0 255)
                           (PixelRGBA8 0 0 255 255)
                           (PixelRGBA8 255 255 0 255))
+
+coonTestColorStop :: IO ()
+coonTestColorStop = do
+  writePng "coon_render_color.png" $ drawImm $ renderCoonPatch $ patch
+  where
+    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
+    drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
+    cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
+    [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
+        toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36))) * 4) $ Path (V2 13.21 869.2) False
+          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
+          ,cc 193.9 944.6 109.2 950.4 167.5 1021
+          ,cc 117.7 1025 73.48 1043 18.21 1033
+          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
+          ]
+    patch = CoonPatch c1 c2 c3 c4 
+              (CoonValues (PixelRGBA8 255 20 0 255)
+                          red
+                          red
+                          red)
+
+toCoon :: V2 Float -> CoonValues px -> [[V2 Float]] -> CoonPatch px
+toCoon st values = build . go st where
+  build [n, e, s, w] = CoonPatch n e s w values
+  build _ = error "toCoon"
+
+  go _ [] = []
+  go p [lst] = case toAbsolute p lst of
+    [c1, c2] -> [CubicBezier p c1 c2 st]
+    _ -> error "Mouh"
+  go p (x : xs) = case toAbsolute p x of
+    [c1, c2, c3] -> CubicBezier p c1 c2 c3 : go c3 xs
+    _ -> error "Mouh"
+
+  toAbsolute p = fmap (p ^+^)
+
+
+coonTestWild :: IO ()
+coonTestWild = do
+  writePng "coon_render_wild.png" $ drawImm $ renderCoonPatch $ patch
+  where
+    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
+    drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
+    patch = toCoon (V2 50 130 ^* 2)
+        (CoonValues red yellow orange green) $
+        fmap (^* 2) <$>
+        [ [V2 150  0, V2 300 (-100), V2 120 (-100)]
+        , [V2 0  100, V2  40   200 , V2  40  220]
+        , [V2 (-250) (-100), V2 50 60, V2 (-160) 0]
+        , [V2 (-20) (-80), V2 20 (-40)]
+        ]
+
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -781,7 +836,9 @@ testSuite = do
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
 
-  coonTest 
+  coonTest
+  coonTestColorStop 
+  coonTestWild 
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

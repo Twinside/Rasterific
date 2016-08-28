@@ -7,4 +7,4 @@ sources
 .hpc
 docimages/*
 test_results/*
-
+.stack-work

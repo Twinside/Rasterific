@@ -206,7 +206,7 @@ subdivideWeights values = Subdivided { .. } where
 
   _northWest = CoonValues
     { _northValue = north
-    , _eastValue = midEastValue
+    , _eastValue = midNorthValue
     , _southValue = gridMidValue
     , _westValue = midWestValue
     }

@@ -28,7 +28,7 @@ import Data.Foldable( Foldable( foldMap ) )
 #endif
 
 import Control.Monad.Primitive( PrimMonad )
-import Data.Monoid( (<>) )
+import Data.Monoid( (<>), Sum( .. ) )
 import Data.Word( Word8 )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
@@ -51,24 +51,30 @@ import Text.Printf
 -- | Meh
 class InterpolablePixel a where
   maxDistance :: a -> a -> CoonColorWeight
+  maxRepresentable :: Proxy a -> CoonColorWeight
   lerpValue :: CoonColorWeight -> a -> a -> a
 
 instance InterpolablePixel Float where
   maxDistance a b = abs (a - b)
+  maxRepresentable Proxy = 255
   lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
 
 instance InterpolablePixel Word8 where
   maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
-  lerpValue zeroToOne a b = a + floor (fromIntegral (b - a) * zeroToOne)
+  maxRepresentable Proxy = 255
+  lerpValue zeroToOne a b = 
+    floor $ (1 - zeroToOne) * fromIntegral a + fromIntegral b * zeroToOne
 
 instance InterpolablePixel PixelRGB8 where
   maxDistance (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
     max (maxDistance b b') . max (maxDistance g g') $ maxDistance r r'
+  maxRepresentable Proxy = 255
   lerpValue zeroToOne (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
       PixelRGB8 (l r r') (l g g') (l b b')
      where l = lerpValue zeroToOne
 
 instance InterpolablePixel PixelRGBA8 where
+  maxRepresentable Proxy = 255
   maxDistance (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
     max (maxDistance a a') 
         . max (maxDistance b b')
@@ -152,14 +158,14 @@ data Subdivided a = Subdivided
 --      +--------------+
 --  West    <-----      South
 -- @
-computeWeightToleranceValues :: InterpolablePixel a
-                             => CoonValues a -> CoonValues CoonColorWeight
-computeWeightToleranceValues values = CoonValues
-    { _northValue = 1 - maxDistance north east
-    , _eastValue = 1 - maxDistance east south
-    , _southValue = 1 - maxDistance south west
-    , _westValue = 1 - maxDistance west north
-    } where
+maxColorDeepness :: forall px. InterpolablePixel px => CoonValues px -> Int
+maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
+  range = maxRepresentable (Proxy :: Proxy px)
+  maxDelta = 
+    maximum [ maxDistance north east
+            , maxDistance east south
+            , maxDistance south west
+            , maxDistance west north]
   CoonValues { _westValue = west, _northValue = north
              , _southValue = south, _eastValue = east } = values
 
@@ -172,6 +178,9 @@ toTolerance values = CoonValues (ex - nx) (sy - ey) (sx - wx) (wy - ny) where
     , _southValue = V2 sx sy
     , _westValue  = V2 wx wy
     } = values
+
+meanValue :: CoonValues (V2 CoonColorWeight) -> V2 CoonColorWeight
+meanValue = (^* 0.25) . getSum . foldMap Sum
 
 isBelowWeightBounds :: CoonValues CoonColorWeight -> CoonValues CoonColorWeight -> Bool
 isBelowWeightBounds bounds values =
@@ -373,25 +382,21 @@ parametricBase = CoonValues
 renderCoonPatch :: forall m px.
                    (PrimMonad m, RenderablePixel px, InterpolablePixel px)
                 => CoonPatch px -> DrawContext m px ()
-renderCoonPatch originalPatch = go 6 basePatch where
-  globalBounds = traceShowId . computeWeightToleranceValues $ _coonValues originalPatch
+renderCoonPatch originalPatch = go maxDeepness basePatch where
+  maxDeepness = maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
-
-  hasReachedColorPrecision =
-      isBelowWeightBounds globalBounds . toTolerance . _coonValues
 
   basePatch = originalPatch { _coonValues = parametricBase }
 
   toUniformOrder CoonPatch { .. } = DrawOrder
     { _orderPrimitives = [toPrim <$> [_north, _east, _south, _west]]
     , _orderTexture =
-        uniformTexture . weightToColor baseColors $ _northValue _coonValues
+        uniformTexture . weightToColor baseColors $ meanValue _coonValues
     , _orderFillMethod = FillWinding
     , _orderMask = Nothing
     }
 
-  go depth patch | depth == 0 || hasReachedColorPrecision patch =
-    fillOrder $ toUniformOrder patch
+  go 0 patch = fillOrder $ toUniformOrder patch
   go depth (subdividePatch -> Subdivided { .. }) =
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast

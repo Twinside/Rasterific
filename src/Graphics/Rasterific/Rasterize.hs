@@ -3,6 +3,7 @@
 module Graphics.Rasterific.Rasterize
     ( CoverageSpan( .. )
     , rasterize
+    , toOpaqueCoverage
     , clip
     ) where
 
@@ -27,6 +28,10 @@ data CoverageSpan = CoverageSpan
     , _coverageLength :: {-# UNPACK #-} !Float
     }
     deriving Show
+
+toOpaqueCoverage :: CoverageSpan -> CoverageSpan
+{-# INLINE toOpaqueCoverage #-}
+toOpaqueCoverage coverage = coverage { _coverageVal = 1 }
 
 combineEdgeSamples :: (Float -> Float) -> V.Vector EdgeSample
                    -> [CoverageSpan]

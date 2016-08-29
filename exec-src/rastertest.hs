@@ -676,10 +676,11 @@ coonTest = do
   writePng "coon_outline_sub_ne.png" . draw $ drawPatchOutline ne
   writePng "coon_outline_sub_sw.png" . draw $ drawPatchOutline sw
   writePng "coon_outline_sub_se.png" . draw $ drawPatchOutline se
-  writePng "coon_render.png" $ drawImm $ renderCoonPatch $ patch
+  writePng "coon_render_small.png" $ drawImm 200 200 $ renderCoonPatch $ patch'
+  writePng "coon_render.png" $ drawImm 800 800 $ renderCoonPatch $ patch
   where
-    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
+    drawImm :: Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
+    drawImm w h d = runST $ runDrawContext w h (PixelRGBA8 255 255 255 255) d
     draw = renderDrawing 800 800 (PixelRGBA8 255 255 255 255) . withTexture (uniformTexture (PixelRGBA8 0 0 0 255))
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
     [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
@@ -689,7 +690,21 @@ coonTest = do
           ,cc 117.7 1025 73.48 1043 18.21 1033
           ,cc 2.253 974.9 13.98 923.5 13.21 869.2
           ]
+    [CubicBezierPrim c1', CubicBezierPrim c2', CubicBezierPrim c3', CubicBezierPrim c4'] =
+        toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36)))) $ Path (V2 13.21 869.2) False
+          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
+          ,cc 193.9 944.6 109.2 950.4 167.5 1021
+          ,cc 117.7 1025 73.48 1043 18.21 1033
+          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
+          ]
+
     patch = CoonPatch c1 c2 c3 c4 
+              (CoonValues (PixelRGBA8 255 0 0 255)
+                          (PixelRGBA8 0 255 0 255)
+                          (PixelRGBA8 0 0 255 255)
+                          (PixelRGBA8 255 255 0 255))
+
+    patch' = CoonPatch c1' c2' c3' c4'
               (CoonValues (PixelRGBA8 255 0 0 255)
                           (PixelRGBA8 0 255 0 255)
                           (PixelRGBA8 0 0 255 255)

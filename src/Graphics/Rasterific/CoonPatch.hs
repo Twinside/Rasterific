@@ -18,7 +18,7 @@ module Graphics.Rasterific.CoonPatch
     , Subdivided( .. )
     , subdividePatch
     , drawPatchOutline
-    , renderCoonPatch 
+    , renderCoonPatch
     , parametricBase
     )  where
 
@@ -44,9 +44,6 @@ import Codec.Picture.Types
     ( PixelRGB8( .. )
     , PixelRGBA8( .. )
     )
-
-import Debug.Trace
-import Text.Printf
 
 -- | Meh
 class InterpolablePixel a where
@@ -169,23 +166,8 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   CoonValues { _westValue = west, _northValue = north
              , _southValue = south, _eastValue = east } = values
 
-toTolerance :: CoonValues (V2 CoonColorWeight) -> CoonValues CoonColorWeight
--- Order of substraction is important in order to avoid a call to abs
-toTolerance values = CoonValues (ex - nx) (sy - ey) (sx - wx) (wy - ny) where
-  CoonValues
-    { _northValue = V2 nx ny
-    , _eastValue  = V2 ex ey
-    , _southValue = V2 sx sy
-    , _westValue  = V2 wx wy
-    } = values
-
 meanValue :: CoonValues (V2 CoonColorWeight) -> V2 CoonColorWeight
 meanValue = (^* 0.25) . getSum . foldMap Sum
-
-isBelowWeightBounds :: CoonValues CoonColorWeight -> CoonValues CoonColorWeight -> Bool
-isBelowWeightBounds bounds values =
-    {-(\a -> trace (printf "%s %s %s" (show a) (show values) (show bounds)) a) $ -}
-  and $ (<=) <$> values <*> bounds
 
 subdivideWeights :: CoonValues (V2 CoonColorWeight)
                  -> Subdivided (CoonValues (V2 CoonColorWeight))
@@ -388,15 +370,11 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
 
   basePatch = originalPatch { _coonValues = parametricBase }
 
-  toUniformOrder CoonPatch { .. } = DrawOrder
-    { _orderPrimitives = [toPrim <$> [_north, _east, _south, _west]]
-    , _orderTexture =
-        uniformTexture . weightToColor baseColors $ meanValue _coonValues
-    , _orderFillMethod = FillWinding
-    , _orderMask = Nothing
-    }
+  drawPatchUniform CoonPatch { .. } = fillWithTextureNoAA FillWinding texture geometry where
+    geometry = toPrim <$> [_north, _east, _south, _west]
+    texture = uniformTexture . weightToColor baseColors $ meanValue _coonValues
 
-  go 0 patch = fillOrder $ toUniformOrder patch
+  go 0 patch = drawPatchUniform patch
   go depth (subdividePatch -> Subdivided { .. }) =
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast

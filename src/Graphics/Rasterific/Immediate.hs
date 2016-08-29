@@ -24,6 +24,7 @@ module Graphics.Rasterific.Immediate
     , runDrawContext
     , fillWithTextureAndMask
     , fillWithTexture
+    , fillWithTextureNoAA
     , fillOrder
 
     , textToDrawOrders
@@ -166,6 +167,25 @@ fillWithTexture fillMethod texture els = do
         clipped = foldMap (clip mini maxi) els
         spans = rasterize fillMethod clipped
     lift . mapExec filler $ filter (isCoverageDrawable img) spans
+
+-- | Function identical to 'fillWithTexture' but with anti-aliasing
+-- disabled.
+fillWithTextureNoAA :: (PrimMonad m, RenderablePixel px,
+                    MonadState (MutableImage (PrimState m) px)
+                               (DrawContext m px)
+                   )
+                => FillMethod
+                -> Texture px  -- ^ Color/Texture used for the filling
+                -> [Primitive] -- ^ Primitives to fill
+                -> DrawContext m px ()
+fillWithTextureNoAA fillMethod texture els = do
+    img@(MutableImage width height _) <- get
+    let !mini = V2 0 0
+        !maxi = V2 (fromIntegral width) (fromIntegral height)
+        !filler = primToPrim . transformTextureToFiller texture img
+        clipped = foldMap (clip mini maxi) els
+        spans = rasterize fillMethod clipped
+    lift . mapExec (filler . toOpaqueCoverage) $ filter (isCoverageDrawable img) spans
 
 -- | Fill some geometry using a composition mask for visibility.
 --

@@ -7,10 +7,10 @@ import Data.Foldable( foldMap )
 import Control.Applicative( (<$>) )
 #endif
 
+import Control.Monad( forM_ )
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Data.List( mapAccumL )
 import Control.Monad.ST( ST, runST )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
@@ -672,15 +672,22 @@ coonTest :: IO ()
 coonTest = do
   writePng "coon_outline.png" . draw $ drawPatchOutline patch
   let Subdivided nw ne sw se = subdividePatch patch { _coonValues = parametricBase }
-  writePng "coon_outline_sub_nw.png" . draw $ drawPatchOutline nw
-  writePng "coon_outline_sub_ne.png" . draw $ drawPatchOutline ne
-  writePng "coon_outline_sub_sw.png" . draw $ drawPatchOutline sw
-  writePng "coon_outline_sub_se.png" . draw $ drawPatchOutline se
+  drawPatchDebug "coon_render_subdiv.png" 800 800 [nw, ne, sw, se]
   writePng "coon_render_small.png" $ drawImm 200 200 $ renderCoonPatch $ patch'
   writePng "coon_render.png" $ drawImm 800 800 $ renderCoonPatch $ patch
+  drawPatchDebug "coon_render_debug.png" 800 800 [patch]
   where
     drawImm :: Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm w h d = runST $ runDrawContext w h (PixelRGBA8 255 255 255 255) d
+    drawImm w h d = runST $ runDrawContext w h emptyPx d
+
+    emptyPx = PixelRGBA8 255 255 255 255
+    drawPatchDebug path w h patches = do
+      putStrLn $ "Writing " ++ path
+      writePng path $ runST $ runDrawContext w h emptyPx $ do
+        renderCoonPatch patch
+        forM_ patches $ \p -> do
+           mapM_ fillOrder $ drawOrdersOfDrawing w h 96 emptyPx $ debugDrawCoonPatch p
+
     draw = renderDrawing 800 800 (PixelRGBA8 255 255 255 255) . withTexture (uniformTexture (PixelRGBA8 0 0 0 255))
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
     [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
@@ -710,10 +717,54 @@ coonTest = do
                                 (PixelRGBA8 0 0 255 255)
                                 (PixelRGBA8 255 255 0 255))
 
+coonTensorTest :: IO ()
+coonTensorTest = do
+  writePng "compare_tensor.png" $ drawImm 800 800 $ renderTensorPatch $ tensorPatch
+  writePng "compare_coon.png" $ drawImm 800 800 $ renderCoonPatch $ coonPatch
+  where
+    drawImm :: Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
+    drawImm w h d = runST $ runDrawContext w h emptyPx d
+
+    emptyPx = PixelRGBA8 255 255 255 255
+
+    [ c00, c01, c02, c03
+      , c10, c11, c12, c13
+      , c20, c21, c22, c23
+      , c30, c31, c32, c33
+      ] = fmap (\p -> (p ^+^ (V2 0 (-852.36))) * 4)
+          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+          ,(V2 13.98 923.5), (V2 90 950),     (V2 117 950),      (V2 193.9 944.6)
+          ,(V2 2.253 974.9), (V2 90 1000),    (V2 117 1000),     (V2 109.2 950.4)
+          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+          ]
+    coonPatch = CoonPatch
+        { _north = CubicBezier c00 c01 c02 c03
+        , _east  = CubicBezier c03 c13 c23 c33
+        , _south = CubicBezier c33 c32 c31 c30
+        , _west  = CubicBezier c30 c20 c10 c00
+        , _coonValues = colors
+        }
+
+
+    tensorPatch = TensorPatch
+      { _curve0 = CubicBezier c00 c01 c02 c03
+      , _curve1 = CubicBezier c10 c11 c12 c13
+      , _curve2 = CubicBezier c20 c21 c22 c23
+      , _curve3 = CubicBezier c30 c31 c32 c33
+      , _tensorValues = colors
+      }
+
+    colors = ParametricValues blue red red red
+
 coonTestColorStop :: IO ()
 coonTestColorStop = do
   writePng "coon_render_color.png" $ drawImm $ renderCoonPatch $ patch
+  writePng "coon_render_color_debug.png" $ drawPatchDebug 800 800 patch
   where
+    emptyPx = PixelRGBA8 255 255 255 255
+    drawPatchDebug w h p = runST $ runDrawContext w h emptyPx $ do
+       renderCoonPatch p
+       mapM_ fillOrder $ drawOrdersOfDrawing w h 96 emptyPx $ debugDrawCoonPatch p
     drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
     drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
@@ -749,7 +800,11 @@ toCoon st values = build . go st where
 coonTestWild :: IO ()
 coonTestWild = do
   writePng "coon_render_wild.png" $ drawImm $ renderCoonPatch $ patch
+  writePng "coon_render_wild_debug.png" $ drawPatchDebug 800 800 patch
   where
+    drawPatchDebug w h p = runST $ runDrawContext w h white $ do
+       renderCoonPatch p
+       mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch p
     drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
     drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
     patch = toCoon (V2 50 130 ^* 2)
@@ -854,6 +909,7 @@ testSuite = do
   coonTest
   coonTestColorStop 
   coonTestWild 
+  coonTensorTest 
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

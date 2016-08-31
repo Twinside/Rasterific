@@ -142,8 +142,7 @@ radialGradientWithFocusTexture = RadialGradientWithFocusTexture
 
 -- | Perform a multiplication operation between a full color texture
 -- and a greyscale one, used for clip-path implementation.
-modulateTexture :: (Pixel px)
-                => Texture px                       -- ^ The full blown texture.
+modulateTexture :: Texture px                       -- ^ The full blown texture.
                 -> Texture (PixelBaseComponent px)  -- ^ A greyscale modulation texture.
                 -> Texture px                       -- ^ The resulting texture.
 modulateTexture = ModulateTexture

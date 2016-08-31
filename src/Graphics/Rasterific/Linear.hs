@@ -5,9 +5,11 @@
 -- just a reexport from the real linear package.
 --
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Graphics.Rasterific.Linear
     ( V2( .. )
     , V1( .. )
+    , V4( .. )
     , Additive( .. )
     , Epsilon( .. )
     , Metric( .. )
@@ -44,13 +46,20 @@ infixl 7 ^*, ^/
 data V2 a = V2 !a !a
     deriving (Eq, Show)
 
+data V4 a = V4 !a !a !a !a
+    deriving (Eq, Show)
+
 -- | A 1-dimensional vector
 newtype V1 a = V1 a
-    deriving (Eq, Show)
+    deriving (Eq, Show, Num)
 
 instance Functor V2 where
     {-# INLINE fmap #-}
     fmap f (V2 a b) = V2 (f a) (f b)
+
+instance Functor V4 where
+    {-# INLINE fmap #-}
+    fmap f (V4 a b c d) = V4 (f a) (f b) (f c) (f d)
 
 instance Num a => Num (V2 a) where
   (V2 a b) + (V2 a' b') = V2 (a + a') (b + b')
@@ -68,9 +77,31 @@ instance Num a => Num (V2 a) where
   fromInteger = pure . fromInteger
   {-# INLINE fromInteger #-}
 
+instance Num a => Num (V4 a) where
+  (V4 a b c d) + (V4 a' b' c' d') = V4 (a + a') (b + b') (c + c') (d + d')
+  {-# INLINE (+) #-}
+  (V4 a b c d) - (V4 a' b' c' d') = V4 (a - a') (b - b') (c - c') (d - d')
+  {-# INLINE (-) #-}
+  (V4 a b c d) * (V4 a' b' c' d') = V4 (a * a') (b * b') (c * c') (d * d')
+  {-# INLINE (*) #-}
+  negate (V4 a b c d) = V4 (negate a) (negate b) (negate c) (negate d)
+  {-# INLINE negate #-}
+  abs (V4 a b c d) = V4 (abs a) (abs b) (abs c) (abs d)
+  {-# INLINE abs #-}
+  signum (V4 a b c d) = V4 (signum a) (signum b) (signum c) (signum d)
+  {-# INLINE signum #-}
+  fromInteger = pure . fromInteger
+  {-# INLINE fromInteger #-}
+
 instance Functor V1 where
     {-# INLINE fmap #-}
     fmap f (V1 a) = V1 $ f a
+
+instance Applicative V4 where
+    {-# INLINE pure #-}
+    pure a = V4 a a a a
+    {-# INLINE (<*>) #-}
+    (V4 f1 f2 f3 f4) <*> (V4 a b c d) = V4 (f1 a) (f2 b) (f3 c) (f4 d)
 
 instance Applicative V2 where
     {-# INLINE pure #-}
@@ -130,9 +161,30 @@ instance Epsilon Double where
   nearZero a = abs a <= 1e-12
   {-# INLINE nearZero #-}
 
+instance Epsilon a => Epsilon (V4 a) where
+  nearZero = nearZero . quadrance
+  {-# INLINE nearZero #-}
+
 instance Epsilon a => Epsilon (V2 a) where
   nearZero = nearZero . quadrance
   {-# INLINE nearZero #-}
+
+instance Epsilon a => Epsilon (V1 a) where
+  nearZero (V1 a) = nearZero a
+  {-# INLINE nearZero #-}
+
+instance Additive V4 where
+    zero = V4 0 0 0 0
+    {-# INLINE zero #-}
+
+    (V4 a b c d) ^+^ (V4 a' b' c' d') = V4 (a + a') (b + b') (c + c') (d + d')
+    {-# INLINE (^+^) #-}
+
+    (V4 a b c d) ^-^ (V4 a' b' c' d') = V4 (a - a') (b - b') (c + c') (d + d')
+    {-# INLINE (^-^) #-}
+
+    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    {-# INLINE lerp #-}
 
 instance Additive V2 where
     zero = V2 0 0
@@ -194,6 +246,16 @@ class Additive f => Metric f where
   signorm :: Floating a => f a -> f a
   signorm v = fmap (/ m) v where
     m = norm v
+
+instance Metric V4 where
+    dot (V4 a b c d) (V4 a' b' c' d') = a * a' + b * b' + c * c' + d * d'
+    {-# INLINE dot #-}
+
+    quadrance (V4 a b c d) = a * a + b * b + c * c + d * d
+    {-# INLINE quadrance #-}
+
+    norm v = sqrt (quadrance v)
+    {-# INLINE norm #-}
 
 instance Metric V2 where
     dot (V2 a b) (V2 a' b') = a * a' + b * b'

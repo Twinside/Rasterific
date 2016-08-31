@@ -22,7 +22,7 @@ import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.CoonPatch
+import Graphics.Rasterific.Patch
 
 import qualified Data.ByteString.Lazy as LB
 import Graphics.Text.TrueType( loadFontFile )
@@ -699,16 +699,16 @@ coonTest = do
           ]
 
     patch = CoonPatch c1 c2 c3 c4 
-              (CoonValues (PixelRGBA8 255 0 0 255)
-                          (PixelRGBA8 0 255 0 255)
-                          (PixelRGBA8 0 0 255 255)
-                          (PixelRGBA8 255 255 0 255))
+              (ParametricValues (PixelRGBA8 255 0 0 255)
+                                (PixelRGBA8 0 255 0 255)
+                                (PixelRGBA8 0 0 255 255)
+                                (PixelRGBA8 255 255 0 255))
 
     patch' = CoonPatch c1' c2' c3' c4'
-              (CoonValues (PixelRGBA8 255 0 0 255)
-                          (PixelRGBA8 0 255 0 255)
-                          (PixelRGBA8 0 0 255 255)
-                          (PixelRGBA8 255 255 0 255))
+              (ParametricValues (PixelRGBA8 255 0 0 255)
+                                (PixelRGBA8 0 255 0 255)
+                                (PixelRGBA8 0 0 255 255)
+                                (PixelRGBA8 255 255 0 255))
 
 coonTestColorStop :: IO ()
 coonTestColorStop = do
@@ -725,12 +725,12 @@ coonTestColorStop = do
           ,cc 2.253 974.9 13.98 923.5 13.21 869.2
           ]
     patch = CoonPatch c1 c2 c3 c4 
-              (CoonValues (PixelRGBA8 255 20 0 255)
+              (ParametricValues (PixelRGBA8 255 20 0 255)
                           red
                           red
                           red)
 
-toCoon :: V2 Float -> CoonValues px -> [[V2 Float]] -> CoonPatch px
+toCoon :: V2 Float -> ParametricValues px -> [[V2 Float]] -> CoonPatch px
 toCoon st values = build . go st where
   build [n, e, s, w] = CoonPatch n e s w values
   build _ = error "toCoon"
@@ -753,7 +753,7 @@ coonTestWild = do
     drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
     drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
     patch = toCoon (V2 50 130 ^* 2)
-        (CoonValues red yellow orange green) $
+        (ParametricValues red yellow orange green) $
         fmap (^* 2) <$>
         [ [V2 150  0, V2 300 (-100), V2 120 (-100)]
         , [V2 0  100, V2  40   200 , V2  40  220]

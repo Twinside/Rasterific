@@ -11,9 +11,9 @@
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
-module Graphics.Rasterific.CoonPatch
+module Graphics.Rasterific.Patch
     ( CoonPatch( .. )
-    , CoonValues( .. )
+    , ParametricValues( .. )
     , CoonColorWeight
     , Subdivided( .. )
     , subdividePatch
@@ -96,7 +96,7 @@ type CoonColorWeight = Float
 --      +--------------+
 --  West                South
 -- @
-data CoonValues a = CoonValues
+data ParametricValues a = ParametricValues
     { _northValue :: !a
     , _eastValue  :: !a
     , _southValue :: !a
@@ -104,13 +104,13 @@ data CoonValues a = CoonValues
     }
     deriving (Functor, Show)
 
-instance Applicative CoonValues where
-    pure a = CoonValues a a a a
-    CoonValues n e s w <*> CoonValues n' e' s' w' =
-        CoonValues (n n') (e e') (s s') (w w')
+instance Applicative ParametricValues where
+    pure a = ParametricValues a a a a
+    ParametricValues n e s w <*> ParametricValues n' e' s' w' =
+        ParametricValues (n n') (e e') (s s') (w w')
 
-instance Foldable CoonValues where
-  foldMap f (CoonValues n e s w) = f n <> f e <> f s <> f w
+instance Foldable ParametricValues where
+  foldMap f (ParametricValues n e s w) = f n <> f e <> f s <> f w
 
 --
 -- @
@@ -134,7 +134,7 @@ data CoonPatch px = CoonPatch
     , _east :: !CubicBezier
     , _south :: !CubicBezier
     , _west :: !CubicBezier
-    , _coonValues :: {-# UNPACK #-} !(CoonValues px)
+    , _coonValues :: {-# UNPACK #-} !(ParametricValues px)
     }
 
 data Subdivided a = Subdivided
@@ -155,7 +155,7 @@ data Subdivided a = Subdivided
 --      +--------------+
 --  West    <-----      South
 -- @
-maxColorDeepness :: forall px. InterpolablePixel px => CoonValues px -> Int
+maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
 maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   range = maxRepresentable (Proxy :: Proxy px)
   maxDelta = 
@@ -163,16 +163,16 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
             , maxDistance east south
             , maxDistance south west
             , maxDistance west north]
-  CoonValues { _westValue = west, _northValue = north
-             , _southValue = south, _eastValue = east } = values
+  ParametricValues { _westValue = west, _northValue = north
+                   , _southValue = south, _eastValue = east } = values
 
-meanValue :: CoonValues (V2 CoonColorWeight) -> V2 CoonColorWeight
+meanValue :: ParametricValues (V2 CoonColorWeight) -> V2 CoonColorWeight
 meanValue = (^* 0.25) . getSum . foldMap Sum
 
-subdivideWeights :: CoonValues (V2 CoonColorWeight)
-                 -> Subdivided (CoonValues (V2 CoonColorWeight))
+subdivideWeights :: ParametricValues (V2 CoonColorWeight)
+                 -> Subdivided (ParametricValues (V2 CoonColorWeight))
 subdivideWeights values = Subdivided { .. } where
-  CoonValues
+  ParametricValues
     { _westValue = west
     , _northValue = north
     , _southValue = south
@@ -195,28 +195,28 @@ subdivideWeights values = Subdivided { .. } where
 
   gridMidValue = midSoutValue `midPoint` midNorthValue
 
-  _northWest = CoonValues
+  _northWest = ParametricValues
     { _northValue = north
     , _eastValue = midNorthValue
     , _southValue = gridMidValue
     , _westValue = midWestValue
     }
 
-  _northEast = CoonValues
+  _northEast = ParametricValues
     { _northValue = midNorthValue
     , _eastValue = east
     , _southValue = midEastValue
     , _westValue = gridMidValue
     }
 
-  _southWest = CoonValues
+  _southWest = ParametricValues
     { _northValue = midWestValue
     , _eastValue  = gridMidValue
     , _southValue = midSoutValue
     , _westValue = west
     }
   
-  _southEast = CoonValues
+  _southEast = ParametricValues
     { _northValue = gridMidValue
     , _eastValue = midEastValue
     , _southValue = south
@@ -343,8 +343,8 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (d `midPoint` d')
 
 weightToColor :: InterpolablePixel px
-              => CoonValues px -> V2 CoonColorWeight -> px
-weightToColor CoonValues { .. } (V2 u v) = lerpValue v uTop uBottom where
+              => ParametricValues px -> V2 CoonColorWeight -> px
+weightToColor ParametricValues { .. } (V2 u v) = lerpValue v uTop uBottom where
   uTop = lerpValue u _northValue _eastValue
   uBottom = lerpValue u _westValue _southValue
 
@@ -353,8 +353,8 @@ drawPatchOutline CoonPatch { .. } =
   stroke 2 JoinRound (CapRound, CapRound) [_north, _east, _south, _west]
 
 
-parametricBase :: CoonValues (V2 CoonColorWeight)
-parametricBase = CoonValues
+parametricBase :: ParametricValues (V2 CoonColorWeight)
+parametricBase = ParametricValues
   { _northValue = V2 0 0
   , _eastValue  = V2 1 0
   , _southValue = V2 1 1

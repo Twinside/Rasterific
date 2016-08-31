@@ -56,7 +56,7 @@ library
                  , Graphics.Rasterific.Transformations
                  , Graphics.Rasterific.Immediate
                  , Graphics.Rasterific.PathWalker
-                 , Graphics.Rasterific.CoonPatch
+                 , Graphics.Rasterific.Patch
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command

@@ -145,24 +145,33 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
 meanValue :: ParametricValues (V2 CoonColorWeight) -> V2 CoonColorWeight
 meanValue = (^* 0.25) . getSum . foldMap Sum
 
+  --  N    midNorthEast   E
+  --      +-------+------+
+  --      |0      :     1|
+  --      |       :      |
+  --      | Left  :Right |
+  --      |       :      |
+  --      |3      :     2|
+  --      +-------+------+
+  --  W    midSouthWest   S
 subdivideHorizontal :: ParametricValues (V2 CoonColorWeight)
                     -> (ParametricValues (V2 CoonColorWeight), ParametricValues (V2 CoonColorWeight))
 subdivideHorizontal ParametricValues { .. } = (l, r) where
-  midNorthEast = _northValue `midPoint` _westValue
+  midNorthEast = _northValue `midPoint` _eastValue
   midSouthWest = _westValue `midPoint` _southValue
 
   l = ParametricValues
     { _northValue = _northValue
-    , _westValue = _westValue
     , _eastValue = midNorthEast
     , _southValue = midSouthWest
+    , _westValue = _westValue
     }
 
   r = ParametricValues
     { _northValue = midNorthEast
-    , _westValue = midSouthWest
     , _eastValue = _eastValue
     , _southValue = _southValue
+    , _westValue = midSouthWest
     }
 
 subdivideWeights :: ParametricValues (V2 CoonColorWeight)
@@ -272,6 +281,50 @@ transposePatch TensorPatch
     }
 
 
+-- | Perform an operation like:
+--
+-- @
+--    o--------o--------o--------o
+--    |        |        |        |
+--    |        |        |        |
+--    |        |        |        |
+--    o--------o--------o--------o
+--    |        |        |        |
+--    |        |        |        |
+--    |        |        |        |
+--    o--------o--------o--------o
+--    |        |        |        |
+--    |        |        |        |
+--    |        |        |        |
+--    o--------o--------o--------o
+--    |        |        |        |
+--    |        |        |        |
+--    |        |        |        |
+--    o--------o--------o--------o
+--
+--       to (more or less)
+--
+--    o----*---o----*----o----*---o
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    o----*---o----*----o----*---o
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    o----*---o----*----o----*---o
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    o----*---o----*----o----*---o
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    |    |   |    |    |    |   |
+--    o----*---o----*----o----*---o
+--    <------------><------------->
+--       Left            Right
+-- @
+--
 horizontalTensorSubdivide :: TensorPatch (V2 CoonColorWeight)
                           -> (TensorPatch (V2 CoonColorWeight), TensorPatch (V2 CoonColorWeight))
 horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 r3 vr) where
@@ -288,10 +341,10 @@ subdivideTensorPatch p = subdivided where
   (northWest, southWest) = horizontalTensorSubdivide $ transposePatch west
   (northEast, southEast) = horizontalTensorSubdivide $ transposePatch east
   subdivided = Subdivided
-    { _northWest = transposePatch northWest
-    , _northEast = transposePatch northEast
-    , _southWest = transposePatch southWest
-    , _southEast = transposePatch southEast
+    { _northWest = northWest
+    , _northEast = northEast
+    , _southWest = southWest
+    , _southEast = southEast
     }
 
 --

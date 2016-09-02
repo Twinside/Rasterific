@@ -7,7 +7,6 @@ import Data.Foldable( foldMap )
 import Control.Applicative( (<$>) )
 #endif
 
-import Control.Monad( forM_ )
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
@@ -668,27 +667,38 @@ doubleCache =
                 fill $ circle (V2 70 100) 30
             fill $ circle (V2 120 100) 30
   
+drawImm :: FilePath -> Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> IO ()
+drawImm path w h d = do
+  putStrLn $ "Rendering " ++ path
+  writePng path $ runST $ runDrawContext w h white d
+
+drawPatchDebug :: FilePath -> Int -> Int -> CoonPatch PixelRGBA8 -> IO ()
+drawPatchDebug path w h p = do
+  putStrLn $ "Rendering " ++ path
+  writePng path $ runST $ runDrawContext w h white $ do
+    renderCoonPatch p
+    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch p
+
+drawTensorDebug :: FilePath -> Int -> Int -> TensorPatch PixelRGBA8 -> IO ()
+drawTensorDebug path w h p = do
+  putStrLn $ "Rendering " ++ path
+  writePng path $ runST $ runDrawContext w h white $ do
+    renderTensorPatch p
+    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawTensorPatch p
+
+
 coonTest :: IO ()
 coonTest = do
-  writePng "coon_outline.png" . draw $ drawPatchOutline patch
-  let Subdivided nw ne sw se = subdividePatch patch { _coonValues = parametricBase }
-  drawPatchDebug "coon_render_subdiv.png" 800 800 [nw, ne, sw, se]
-  writePng "coon_render_small.png" $ drawImm 200 200 $ renderCoonPatch $ patch'
-  writePng "coon_render.png" $ drawImm 800 800 $ renderCoonPatch $ patch
-  drawPatchDebug "coon_render_debug.png" 800 800 [patch]
+  draw "coon_outline.png" $ drawCoonPatchOutline patch
+  drawImm "coon_render_small.png" 200 200 $ renderCoonPatch $ patch'
+  drawImm "coon_render.png" 800 800 $ renderCoonPatch $ patch
+  drawPatchDebug "coon_render_debug.png" 800 800 patch
   where
-    drawImm :: Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm w h d = runST $ runDrawContext w h emptyPx d
+    draw path p = do
+      putStrLn $ "Rendering " ++ path
+      writePng path . renderDrawing 800 800 (PixelRGBA8 255 255 255 255) $
+          withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) p
 
-    emptyPx = PixelRGBA8 255 255 255 255
-    drawPatchDebug path w h patches = do
-      putStrLn $ "Writing " ++ path
-      writePng path $ runST $ runDrawContext w h emptyPx $ do
-        renderCoonPatch patch
-        forM_ patches $ \p -> do
-           mapM_ fillOrder $ drawOrdersOfDrawing w h 96 emptyPx $ debugDrawCoonPatch p
-
-    draw = renderDrawing 800 800 (PixelRGBA8 255 255 255 255) . withTexture (uniformTexture (PixelRGBA8 0 0 0 255))
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
     [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
         toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36))) * 4) $ Path (V2 13.21 869.2) False
@@ -719,14 +729,10 @@ coonTest = do
 
 coonTensorTest :: IO ()
 coonTensorTest = do
-  writePng "compare_tensor.png" $ drawImm 800 800 $ renderTensorPatch $ tensorPatch
-  writePng "compare_coon.png" $ drawImm 800 800 $ renderCoonPatch $ coonPatch
+  drawImm "compare_tensor.png" 800 800 $ renderTensorPatch $ tensorPatch
+  drawTensorDebug "compare_tensor_debug.png" 900 800 tensorPatch
+  drawImm "compare_coon.png" 800 800 $ renderCoonPatch $ coonPatch
   where
-    drawImm :: Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm w h d = runST $ runDrawContext w h emptyPx d
-
-    emptyPx = PixelRGBA8 255 255 255 255
-
     [ c00, c01, c02, c03
       , c10, c11, c12, c13
       , c20, c21, c22, c23
@@ -761,17 +767,51 @@ coonTensorTest = do
 
     colors = ParametricValues blue red red red
 
+tensorSplit :: IO ()
+tensorSplit = do
+  drawImm "split_tensor_orig.png" 800 800 $ renderTensorPatch $ tensorPatch
+  drawTensorDebug "split_tensor_orig_debug.png" 800 800 tensorPatch
+  drawTensorSubdivDebug "split_tensor_orig_subH.png" 800 800 tensorPatch [patchWest, patchEast]
+  drawTensorSubdivDebug "split_tensor_orig_subHVR.png" 800 800 tensorPatch [patchWest, patchNorthEast, patchSouthEast]
+  where
+    drawTensorSubdivDebug path w h p ps = do
+        putStrLn $ "Rendering " ++ path
+        writePng path $ runST $ runDrawContext w h white $ do
+            renderTensorPatch p
+            mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ mapM_ debugDrawTensorPatch ps
+
+    [ c00, c01, c02, c03
+     , c10, c11, c12, c13
+     , c20, c21, c22, c23
+     , c30, c31, c32, c33
+     ] = fmap (\p -> (p ^+^ (V2 30 (-802.36))) * 3)
+        [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+        ,(V2 13.98 923.5), (V2 120 950),     (V2 147 950),      (V2 193.9 944.6)
+        ,(V2 2.253 974.9), (V2 120 1000),    (V2 147 1000),     (V2 220.2 950.4)
+        ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+        ]
+
+    tensorPatch = TensorPatch
+      { _curve0 = CubicBezier c00 c01 c02 c03
+      , _curve1 = CubicBezier c10 c11 c12 c13
+      , _curve2 = CubicBezier c20 c21 c22 c23
+      , _curve3 = CubicBezier c30 c31 c32 c33
+      , _tensorValues = colors
+      }
+
+    (patchWest, patchEast) = horizontalTensorSubdivide tensorPatch { _tensorValues = parametricBase }
+    (patchNorthEast, patchSouthEast) = horizontalTensorSubdivide $ transposePatch patchEast
+    frontColor = PixelRGBA8 0 0x86 0xc1 255
+    accentColor = PixelRGBA8 0xff 0xf4 0xc1 255
+    accent2Color = PixelRGBA8 0xFF 0x53 0x73 255
+
+    colors = ParametricValues frontColor accentColor accent2Color frontColor
+
 coonTestColorStop :: IO ()
 coonTestColorStop = do
-  writePng "coon_render_color.png" $ drawImm $ renderCoonPatch $ patch
-  writePng "coon_render_color_debug.png" $ drawPatchDebug 800 800 patch
+  drawImm "coon_render_color.png" 800 800 $ renderCoonPatch patch
+  drawPatchDebug "coon_render_color_debug.png" 800 800 patch
   where
-    emptyPx = PixelRGBA8 255 255 255 255
-    drawPatchDebug w h p = runST $ runDrawContext w h emptyPx $ do
-       renderCoonPatch p
-       mapM_ fillOrder $ drawOrdersOfDrawing w h 96 emptyPx $ debugDrawCoonPatch p
-    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
     [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
         toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36))) * 4) $ Path (V2 13.21 869.2) False
@@ -804,14 +844,9 @@ toCoon st values = build . go st where
 
 coonTestWild :: IO ()
 coonTestWild = do
-  writePng "coon_render_wild.png" $ drawImm $ renderCoonPatch $ patch
-  writePng "coon_render_wild_debug.png" $ drawPatchDebug 800 800 patch
+  drawImm "coon_render_wild.png" 800 800 $ renderCoonPatch patch
+  drawPatchDebug "coon_render_wild_debug.png" 800 800 patch
   where
-    drawPatchDebug w h p = runST $ runDrawContext w h white $ do
-       renderCoonPatch p
-       mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch p
-    drawImm :: (forall s. DrawContext (ST s) PixelRGBA8 ()) -> Image PixelRGBA8
-    drawImm d = runST $ runDrawContext 800 800 (PixelRGBA8 255 255 255 255) d
     patch = toCoon (V2 50 130 ^* 2)
         (ParametricValues red yellow orange green) $
         fmap (^* 2) <$>
@@ -914,7 +949,8 @@ testSuite = do
   coonTest
   coonTestColorStop 
   coonTestWild 
-  coonTensorTest 
+  coonTensorTest
+  tensorSplit 
 
 benchTest :: [String] -> IO ()
 benchTest _args = do

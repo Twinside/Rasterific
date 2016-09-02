@@ -19,10 +19,13 @@ module Graphics.Rasterific.Patch
     , Subdivided( .. )
     , subdividePatch
     , subdivideTensorPatch
-    , drawPatchOutline
+    , horizontalTensorSubdivide
+    , transposePatch
+    , drawCoonPatchOutline
     , renderCoonPatch
     , renderTensorPatch
     , debugDrawCoonPatch
+    , debugDrawTensorPatch
     , parametricBase
     )  where
 
@@ -517,8 +520,8 @@ weightToColor ParametricValues { .. } (V2 u v) = lerpValue v uTop uBottom where
   uTop = lerpValue u _northValue _eastValue
   uBottom = lerpValue u _westValue _southValue
 
-drawPatchOutline :: CoonPatch px -> Drawing pxb ()
-drawPatchOutline CoonPatch { .. } =
+drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
+drawCoonPatchOutline CoonPatch { .. } =
   stroke 2 JoinRound (CapRound, CapRound) [_north, _east, _south, _west]
 
 pointsOf :: PointFoldable v => v -> [Point]
@@ -528,12 +531,28 @@ debugDrawCoonPatch :: CoonPatch px -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch patch@(CoonPatch { .. }) = do
   let stroker = stroke 2 JoinRound (CapRound, CapRound)
   withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) $
-    drawPatchOutline patch
+    drawCoonPatchOutline patch
   withTexture (uniformTexture (PixelRGBA8 20 20 40 255)) $
     forM_ (pointsOf patch) $ \p -> stroker $ circle p 4
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   withTexture (uniformTexture (PixelRGBA8 50 50 128 255)) $ do
     mapM_ controlDraw [_north, _east, _west, _south]
+
+debugDrawTensorPatch :: TensorPatch px -> Drawing PixelRGBA8 ()
+debugDrawTensorPatch p = do
+  let stroker = stroke 2 JoinRound (CapRound, CapRound)
+      p' = transposePatch p
+  withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) $
+    mapM_ (stroke 2 JoinRound (CapRound, CapRound))
+        [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
+        , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
+  withTexture (uniformTexture (PixelRGBA8 20 20 40 255)) $
+    forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
+  let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
+  withTexture (uniformTexture (PixelRGBA8 50 50 128 255)) $ do
+    mapM_ controlDraw
+        [_curve0 p, _curve1 p, _curve2 p, _curve3 p,
+         _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
 parametricBase :: ParametricValues (V2 CoonColorWeight)
 parametricBase = ParametricValues

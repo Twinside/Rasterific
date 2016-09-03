@@ -86,8 +86,14 @@ transformOrder :: (Point -> Point) -> DrawOrder px -> DrawOrder px
 transformOrder f order =
   order { _orderPrimitives = transform f $ _orderPrimitives order }
 
+transformOrderM :: Monad m => (Point -> m Point) -> DrawOrder px -> m (DrawOrder px)
+transformOrderM f order = do
+  v <- transformM f $ _orderPrimitives order 
+  return $ order { _orderPrimitives = v}
+
 instance Transformable (DrawOrder px) where
   transform = transformOrder
+  transformM = transformOrderM
 
 -- | Transform back a low level drawing order to a more
 -- high level Drawing

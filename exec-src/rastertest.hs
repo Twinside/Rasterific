@@ -677,7 +677,7 @@ drawPatchDebug path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
     renderCoonPatch p
-    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch p
+    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch defaultDebug p
 
 drawTensorDebug :: FilePath -> Int -> Int -> TensorPatch PixelRGBA8 -> IO ()
 drawTensorDebug path w h p = do

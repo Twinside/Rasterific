@@ -57,6 +57,7 @@ library
                  , Graphics.Rasterific.Immediate
                  , Graphics.Rasterific.PathWalker
                  , Graphics.Rasterific.Patch
+                 , Graphics.Rasterific.MeshPatch
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command

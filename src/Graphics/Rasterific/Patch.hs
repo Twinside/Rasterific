@@ -17,6 +17,8 @@ module Graphics.Rasterific.Patch
     , ParametricValues( .. )
     , CoonColorWeight
     , Subdivided( .. )
+    , DebugOption( .. )
+    , InterpolablePixel
     , subdividePatch
     , subdivideTensorPatch
     , horizontalTensorSubdivide
@@ -27,6 +29,7 @@ module Graphics.Rasterific.Patch
     , debugDrawCoonPatch
     , debugDrawTensorPatch
     , parametricBase
+    , defaultDebug
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -34,7 +37,7 @@ import Control.Applicative( Applicative( pure, (<*>) ), (<$>) )
 import Data.Foldable( Foldable( foldMap ) )
 #endif
 
-import Control.Monad( forM_ )
+import Control.Monad( when, forM_ )
 import Control.Monad.Primitive( PrimMonad )
 import Data.Monoid( (<>), Sum( .. ) )
 import Data.Word( Word8 )
@@ -247,6 +250,14 @@ instance Transformable (TensorPatch px) where
         (transform f c2)
         (transform f c3)
         v
+  transformM f (TensorPatch c0 c1 c2 c3 v) =
+    TensorPatch
+        <$> transformM f c0
+        <*> transformM f c1
+        <*> transformM f c2
+        <*> transformM f c3
+        <*> return v
+
 
 instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
   foldPoints f acc (TensorPatch c0 c1 c2 c3 _) = g c3 . g c2 . g c1 $ g c0 acc
@@ -375,6 +386,21 @@ data CoonPatch px = CoonPatch
     , _coonValues :: {-# UNPACK #-} !(ParametricValues px)
     }
 
+basePointOfCoonPatch :: CoonPatch px -> [(Point, px)]
+basePointOfCoonPatch CoonPatch
+    { _north = CubicBezier a _ _ b
+    , _south = CubicBezier c _ _ d
+    , _coonValues = ParametricValues { .. }
+    } = [(a, _northValue), (b, _eastValue), (c, _southValue), (d, _westValue)]
+
+controlPointOfCoonPatch :: CoonPatch px -> [Point]
+controlPointOfCoonPatch CoonPatch
+    { _north = CubicBezier _ a b _
+    , _east  = CubicBezier _ c d _
+    , _south = CubicBezier _ e f _
+    , _west  = CubicBezier _ g h _
+    } = [a, b, c, d, e, f, g, h]
+
 instance Transformable (CoonPatch px) where
   transform f (CoonPatch n e s w v) =
     CoonPatch
@@ -383,6 +409,14 @@ instance Transformable (CoonPatch px) where
         (transform f s)
         (transform f w)
         v
+
+  transformM f (CoonPatch n e s w v) =
+    CoonPatch
+        <$> transformM f n
+        <*> transformM f e
+        <*> transformM f s
+        <*> transformM f w
+        <*> return v
 
 instance {-# OVERLAPPING #-} PointFoldable (CoonPatch px) where
   foldPoints f acc (CoonPatch n e s w _) = g n . g e . g s $ g w acc
@@ -527,16 +561,54 @@ drawCoonPatchOutline CoonPatch { .. } =
 pointsOf :: PointFoldable v => v -> [Point]
 pointsOf = foldPoints (flip (:)) []
 
-debugDrawCoonPatch :: CoonPatch px -> Drawing PixelRGBA8 ()
-debugDrawCoonPatch patch@(CoonPatch { .. }) = do
+data DebugOption = DebugOption
+  { _drawControlMesh    :: !Bool
+  , _drawBaseVertices   :: !Bool
+  , _drawControVertices :: !Bool
+  , _colorVertices      :: !Bool
+  , _drawOutline        :: !Bool
+  , _outlineColor       :: !PixelRGBA8
+  , _controlMeshColor   :: !PixelRGBA8
+  , _vertexColor        :: !PixelRGBA8
+  , _controlColor       :: !PixelRGBA8
+  }
+
+defaultDebug :: DebugOption
+defaultDebug = DebugOption
+  { _drawControlMesh    = True
+  , _drawBaseVertices   = True
+  , _drawControVertices = True
+  , _drawOutline        = True
+  , _colorVertices      = False
+  , _outlineColor       = PixelRGBA8 0 0 0 255
+  , _controlMeshColor   = PixelRGBA8 50 50 128 255
+  , _vertexColor        = PixelRGBA8 20 20 40 255
+  , _controlColor       = PixelRGBA8 20 20 40 255
+  }
+
+debugDrawCoonPatch :: DebugOption -> CoonPatch PixelRGBA8 -> Drawing PixelRGBA8 ()
+debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
   let stroker = stroke 2 JoinRound (CapRound, CapRound)
-  withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) $
-    drawCoonPatchOutline patch
-  withTexture (uniformTexture (PixelRGBA8 20 20 40 255)) $
-    forM_ (pointsOf patch) $ \p -> stroker $ circle p 4
+  when _drawOutline $
+    withTexture (uniformTexture _outlineColor) $
+        drawCoonPatchOutline patch
+
+  when _drawBaseVertices $
+    forM_ (basePointOfCoonPatch patch) $ \(p, c) ->
+       if not _colorVertices then
+         withTexture (uniformTexture _vertexColor) . stroker $ circle p 4
+       else do
+         withTexture (uniformTexture c) . fill $ circle p 4
+         withTexture (uniformTexture _vertexColor) . stroker $ circle p 5
+
+  when _drawControVertices $
+    forM_ (controlPointOfCoonPatch patch) $ \p ->
+       withTexture (uniformTexture _controlColor) . stroker $ circle p 4
+
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
-  withTexture (uniformTexture (PixelRGBA8 50 50 128 255)) $ do
-    mapM_ controlDraw [_north, _east, _west, _south]
+  when _drawControlMesh $
+    withTexture (uniformTexture _controlMeshColor) $ do
+        mapM_ controlDraw [_north, _east, _west, _south]
 
 debugDrawTensorPatch :: TensorPatch px -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch p = do

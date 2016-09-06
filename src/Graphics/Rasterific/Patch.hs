@@ -30,6 +30,7 @@ module Graphics.Rasterific.Patch
     , debugDrawTensorPatch
     , parametricBase
     , defaultDebug
+    , transformCoon
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -385,6 +386,7 @@ data CoonPatch px = CoonPatch
     , _west :: !CubicBezier
     , _coonValues :: {-# UNPACK #-} !(ParametricValues px)
     }
+    deriving Show
 
 basePointOfCoonPatch :: CoonPatch px -> [(Point, px)]
 basePointOfCoonPatch CoonPatch
@@ -401,8 +403,13 @@ controlPointOfCoonPatch CoonPatch
     , _west  = CubicBezier _ g h _
     } = [a, b, c, d, e, f, g, h]
 
-instance Transformable (CoonPatch px) where
-  transform f (CoonPatch n e s w v) =
+transformCoonM :: Monad m => (Point -> m Point) -> CoonPatch px -> m (CoonPatch px)
+transformCoonM f (CoonPatch n e s w v) =
+  CoonPatch <$> transformM f n <*> transformM f e <*> transformM f s <*> transformM f w
+            <*> return v
+
+transformCoon :: (Point -> Point) -> CoonPatch px -> CoonPatch px
+transformCoon f (CoonPatch n e s w v) =
     CoonPatch
         (transform f n)
         (transform f e)
@@ -410,13 +417,9 @@ instance Transformable (CoonPatch px) where
         (transform f w)
         v
 
-  transformM f (CoonPatch n e s w v) =
-    CoonPatch
-        <$> transformM f n
-        <*> transformM f e
-        <*> transformM f s
-        <*> transformM f w
-        <*> return v
+instance {-# OVERLAPPING #-} Transformable (CoonPatch px) where
+  transformM = transformCoonM
+  transform = transformCoon 
 
 instance {-# OVERLAPPING #-} PointFoldable (CoonPatch px) where
   foldPoints f acc (CoonPatch n e s w _) = g n . g e . g s $ g w acc
@@ -463,11 +466,13 @@ subdividePatch patch = Subdivided
   midWestLinear = nw `midPoint` sw
   midEastLinear = ne `midPoint` se
 
+  -- These points are to calculate S_C and S_D
   (northLeft@(CubicBezier _ _ _ midNorth), northRight) = divideCubicBezier north
   (southRight, southLeft@(CubicBezier midSouth _ _ _ )) = divideCubicBezier south
   (westBottom, westTop@(CubicBezier midWest _ _ _)) = divideCubicBezier $ _west patch
   (eastTop@(CubicBezier _ _ _ midEast), eastBottom) = divideCubicBezier $ _east patch
 
+  -- This points are to calculate S_B
   midNorthSouth = north `midCurve` south
   midEastWest = _east patch `midCurve` _west patch 
 
@@ -523,6 +528,7 @@ subdividePatch patch = Subdivided
 inverseBezier :: CubicBezier -> CubicBezier
 inverseBezier (CubicBezier a b c d) = CubicBezier d c b a
 
+-- | Calculate the new cubic bezier using S
 combine :: CubicBezier -> CubicBezier -> CubicBezier -> CubicBezier
 combine (CubicBezier a1 b1 c1 d1)
         (CubicBezier a2 b2 c2 d2)
@@ -610,21 +616,27 @@ debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
     withTexture (uniformTexture _controlMeshColor) $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
-debugDrawTensorPatch :: TensorPatch px -> Drawing PixelRGBA8 ()
-debugDrawTensorPatch p = do
+debugDrawTensorPatch :: DebugOption -> TensorPatch px -> Drawing PixelRGBA8 ()
+debugDrawTensorPatch DebugOption { .. } p = do
   let stroker = stroke 2 JoinRound (CapRound, CapRound)
       p' = transposePatch p
-  withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) $
-    mapM_ (stroke 2 JoinRound (CapRound, CapRound))
-        [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
-        , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
-  withTexture (uniformTexture (PixelRGBA8 20 20 40 255)) $
-    forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
+
+  when _drawOutline $
+    withTexture (uniformTexture _outlineColor) $
+        mapM_ (stroke 2 JoinRound (CapRound, CapRound))
+            [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
+            , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
+
+  when _drawBaseVertices   $
+    withTexture (uniformTexture _vertexColor) $
+        forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
+
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
-  withTexture (uniformTexture (PixelRGBA8 50 50 128 255)) $ do
-    mapM_ controlDraw
-        [_curve0 p, _curve1 p, _curve2 p, _curve3 p,
-         _curve0 p', _curve1 p', _curve2 p', _curve3 p']
+  when _drawControlMesh $
+    withTexture (uniformTexture _controlMeshColor) $ do
+        mapM_ controlDraw
+            [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
+            , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
 parametricBase :: ParametricValues (V2 CoonColorWeight)
 parametricBase = ParametricValues

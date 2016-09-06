@@ -2,17 +2,38 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
-module Graphics.Rasterific.MeshPatch where
+{-# LANGUAGE RankNTypes #-}
+module Graphics.Rasterific.MeshPatch
+    ( InterBezier( .. )
+    , Derivatives( .. )
+    , MeshPatch( .. )
+    , MutableMesh
+    , thawMesh
+    , setVertice
+    , setHorizPoints
+    , setVertPoints
+    , setColor
+    , generateLinearGrid
+    , coonPatchAt
+    , coonPatchesOf
+    , renderCoonMesh
+    , freezeMesh
+    , withMesh
+    ) where
 
+import Control.Monad.ST( runST )
+import Control.Monad.Reader( runReaderT )
+import Control.Monad.Reader.Class
+import Control.Monad.Primitive( PrimMonad, PrimState )
 import Data.Vector( (!) )
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as MV
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Immediate
-import Control.Monad.Primitive( PrimMonad )
-
+{-import Control.Monad.State.Class-}
 
 data InterBezier = InterBezier 
   { _inter0 :: !Point
@@ -64,6 +85,76 @@ data MeshPatch px = MeshPatch
   }
   deriving (Eq, Show, Functor)
 
+data MutableMesh s px = MutableMesh
+  { _meshMutWidth :: !Int
+  , _meshMutHeight :: !Int
+  , _meshMutPrimaryVertices :: !(MV.MVector s Point)
+  , _meshMutHorizSecondary :: !(MV.MVector s InterBezier)
+  , _meshMutVertSecondary :: !(MV.MVector s InterBezier)
+  , _meshMutDer :: !(Maybe (MV.MVector s Derivatives))
+  , _meshMutColors :: !(MV.MVector s px)
+  }
+
+thawMesh :: PrimMonad m => MeshPatch px -> m (MutableMesh (PrimState m) px)
+thawMesh MeshPatch { .. } = do
+  let _meshMutWidth = _meshPatchWidth
+      _meshMutHeight = _meshPatchHeight
+  _meshMutPrimaryVertices <- V.thaw _meshPrimaryVertices 
+  _meshMutHorizSecondary <- V.thaw _meshHorizontalSecondary
+  _meshMutVertSecondary <- V.thaw _meshVerticalSecondary
+  _meshMutDer <- traverse V.thaw _meshDerivatives
+  _meshMutColors <- V.thaw _meshColors
+  return MutableMesh { .. }
+
+freezeMesh :: PrimMonad m => MutableMesh (PrimState m) px -> m (MeshPatch px)
+freezeMesh MutableMesh { .. } = do
+  let _meshPatchWidth = _meshMutWidth
+      _meshPatchHeight = _meshMutHeight
+  _meshPrimaryVertices <- V.freeze _meshMutPrimaryVertices 
+  _meshHorizontalSecondary <- V.freeze _meshMutHorizSecondary
+  _meshVerticalSecondary <- V.freeze _meshMutVertSecondary
+  _meshDerivatives<- traverse V.freeze _meshMutDer 
+  _meshColors <- V.freeze _meshMutColors
+  return MeshPatch { .. }
+
+withMesh :: MeshPatch px
+         -> (forall m. (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m) =>
+                        m a)
+         -> (a, MeshPatch px)
+withMesh mesh act = runST $ do
+  mut <- thawMesh  mesh
+  v <- runReaderT act mut
+  final <- freezeMesh mut
+  return (v, final)
+
+setVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
+           => Int -> Int -> Point -> m ()
+setVertice x y p = do
+  MutableMesh { .. } <- ask
+  let idx = y * (_meshMutWidth + 1) + x
+  MV.write _meshMutPrimaryVertices idx p
+
+setHorizPoints :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
+               => Int -> Int -> InterBezier -> m ()
+setHorizPoints x y p = do
+  MutableMesh { .. } <- ask
+  let idx = y * _meshMutWidth + x
+  MV.write _meshMutHorizSecondary idx p
+
+setVertPoints :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
+              => Int -> Int -> InterBezier -> m ()
+setVertPoints x y p = do
+  MutableMesh { .. } <- ask
+  let idx = y * (_meshMutWidth + 1) + x
+  MV.write _meshMutVertSecondary idx p
+
+
+setColor :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
+         => Int -> Int -> px -> m ()
+setColor x y p = do
+  MutableMesh { .. } <- ask
+  let idx = y * (_meshMutWidth + 1) + x
+  MV.write _meshMutColors idx p
 
 transformMeshM :: Monad m => (Point -> m Point) -> MeshPatch px -> m (MeshPatch px)
 transformMeshM f MeshPatch { .. } = do

@@ -38,19 +38,21 @@ import Control.Applicative( Applicative( pure, (<*>) ), (<$>) )
 import Data.Foldable( Foldable( foldMap ) )
 #endif
 
+import Control.Monad.Free( liftF )
 import Control.Monad( when, forM_ )
 import Control.Monad.Primitive( PrimMonad )
-import Data.Monoid( (<>), Sum( .. ) )
+import Data.Monoid( Sum( .. ) )
 import Data.Word( Word8 )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
+import Graphics.Rasterific.ComplexPrimitive
+import Graphics.Rasterific.Line( lineFromPath )
 import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.Texture
-
-import Graphics.Rasterific
+import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.Command
 
 import Codec.Picture.Types
     ( PixelRGB8( .. )
@@ -93,39 +95,6 @@ instance InterpolablePixel PixelRGBA8 where
   lerpValue zeroToOne (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
       PixelRGBA8 (l r r') (l g g') (l b b') (l a a')
      where l = lerpValue zeroToOne
-
-type CoonColorWeight = Float
-
--- | Values associated to the corner of a patch
--- @
---  North               East
---      +--------------+
---      |0            1|
---      |              |
---      |              |
---      |              |
---      |3            2|
---      +--------------+
---  West                South
--- @
-data ParametricValues a = ParametricValues
-    { _northValue :: !a
-    , _eastValue  :: !a
-    , _southValue :: !a
-    , _westValue  :: !a
-    }
-    deriving (Functor, Show)
-
-instance Applicative ParametricValues where
-    pure a = ParametricValues a a a a
-    ParametricValues n e s w <*> ParametricValues n' e' s' w' =
-        ParametricValues (n n') (e e') (s s') (w w')
-
-instance Foldable ParametricValues where
-  foldMap f (ParametricValues n e s w) = f n <> f e <> f s <> f w
-
-transposeParametricValues :: ParametricValues a -> ParametricValues a
-transposeParametricValues (ParametricValues n e s w) = ParametricValues n w s e
 
 -- @
 --  North    ----->     East
@@ -235,35 +204,6 @@ subdivideWeights values = Subdivided { .. } where
     , _westValue = midSoutValue
     }
 
-data TensorPatch px = TensorPatch
-  { _curve0 :: !CubicBezier
-  , _curve1 :: !CubicBezier
-  , _curve2 :: !CubicBezier
-  , _curve3 :: !CubicBezier
-  , _tensorValues :: !(ParametricValues px)
-  }
-
-instance Transformable (TensorPatch px) where
-  transform f (TensorPatch c0 c1 c2 c3 v) =
-    TensorPatch
-        (transform f c0)
-        (transform f c1)
-        (transform f c2)
-        (transform f c3)
-        v
-  transformM f (TensorPatch c0 c1 c2 c3 v) =
-    TensorPatch
-        <$> transformM f c0
-        <*> transformM f c1
-        <*> transformM f c2
-        <*> transformM f c3
-        <*> return v
-
-
-instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
-  foldPoints f acc (TensorPatch c0 c1 c2 c3 _) = g c3 . g c2 . g c1 $ g c0 acc
-    where g v a = foldPoints f a v
-
 westCurveOfPatch :: TensorPatch px -> CubicBezier
 westCurveOfPatch TensorPatch
   { _curve0 = CubicBezier c0 _ _ _
@@ -362,32 +302,6 @@ subdivideTensorPatch p = subdivided where
     , _southEast = southEast
     }
 
---
--- @
---                        ----->
---                  North     _____----------------+
---   ^          +------------/                     /
---   |         /                                  /       |
---   |        /                                  /        |
---   |       /                                  /  east   |
---   | west |                                  /          |
---          |                                 |           v
---           \                                 \   .
---            \                  __-------------+
---             +----------------/
---                    South
---                       <-----
--- @
---
-data CoonPatch px = CoonPatch
-    { _north :: !CubicBezier
-    , _east :: !CubicBezier
-    , _south :: !CubicBezier
-    , _west :: !CubicBezier
-    , _coonValues :: {-# UNPACK #-} !(ParametricValues px)
-    }
-    deriving Show
-
 basePointOfCoonPatch :: CoonPatch px -> [(Point, px)]
 basePointOfCoonPatch CoonPatch
     { _north = CubicBezier a _ _ b
@@ -402,28 +316,6 @@ controlPointOfCoonPatch CoonPatch
     , _south = CubicBezier _ e f _
     , _west  = CubicBezier _ g h _
     } = [a, b, c, d, e, f, g, h]
-
-transformCoonM :: Monad m => (Point -> m Point) -> CoonPatch px -> m (CoonPatch px)
-transformCoonM f (CoonPatch n e s w v) =
-  CoonPatch <$> transformM f n <*> transformM f e <*> transformM f s <*> transformM f w
-            <*> return v
-
-transformCoon :: (Point -> Point) -> CoonPatch px -> CoonPatch px
-transformCoon f (CoonPatch n e s w v) =
-    CoonPatch
-        (transform f n)
-        (transform f e)
-        (transform f s)
-        (transform f w)
-        v
-
-instance {-# OVERLAPPING #-} Transformable (CoonPatch px) where
-  transformM = transformCoonM
-  transform = transformCoon 
-
-instance {-# OVERLAPPING #-} PointFoldable (CoonPatch px) where
-  foldPoints f acc (CoonPatch n e s w _) = g n . g e . g s $ g w acc
-    where g v a = foldPoints f a v
 
 data Subdivided a = Subdivided
     { _northWest :: !a
@@ -562,7 +454,9 @@ weightToColor ParametricValues { .. } (V2 u v) = lerpValue v uTop uBottom where
 
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =
-  stroke 2 JoinRound (CapRound, CapRound) [_north, _east, _south, _west]
+  liftF $ Stroke 2 JoinRound (CapRound, CapRound) prims ()
+  where
+    prims = toPrimitives [_north, _east, _south, _west]
 
 pointsOf :: PointFoldable v => v -> [Point]
 pointsOf = foldPoints (flip (:)) []
@@ -594,46 +488,49 @@ defaultDebug = DebugOption
 
 debugDrawCoonPatch :: DebugOption -> CoonPatch PixelRGBA8 -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
-  let stroker = stroke 2 JoinRound (CapRound, CapRound)
+  let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
+      fill sub = liftF $ Fill FillWinding sub ()
+      setColor c inner = liftF $ SetTexture (SolidTexture c) inner ()
   when _drawOutline $
-    withTexture (uniformTexture _outlineColor) $
-        drawCoonPatchOutline patch
+    setColor _outlineColor (drawCoonPatchOutline patch)
 
   when _drawBaseVertices $
     forM_ (basePointOfCoonPatch patch) $ \(p, c) ->
        if not _colorVertices then
-         withTexture (uniformTexture _vertexColor) . stroker $ circle p 4
+         setColor _vertexColor (stroker $ circle p 4)
        else do
-         withTexture (uniformTexture c) . fill $ circle p 4
-         withTexture (uniformTexture _vertexColor) . stroker $ circle p 5
+         setColor c . fill $ circle p 4
+         setColor _vertexColor . stroker $ circle p 5
 
   when _drawControVertices $
     forM_ (controlPointOfCoonPatch patch) $ \p ->
-       withTexture (uniformTexture _controlColor) . stroker $ circle p 4
+       setColor _controlColor . stroker $ circle p 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    withTexture (uniformTexture _controlMeshColor) $ do
+    setColor _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
 debugDrawTensorPatch :: DebugOption -> TensorPatch px -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
-  let stroker = stroke 2 JoinRound (CapRound, CapRound)
+  let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
+      setColor c inner =
+          liftF $ SetTexture (SolidTexture c) inner ()
       p' = transposePatch p
 
   when _drawOutline $
-    withTexture (uniformTexture _outlineColor) $
-        mapM_ (stroke 2 JoinRound (CapRound, CapRound))
+    setColor _outlineColor $
+        mapM_ (stroker . toPrimitives)
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
   when _drawBaseVertices   $
-    withTexture (uniformTexture _vertexColor) $
+    setColor _vertexColor $
         forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    withTexture (uniformTexture _controlMeshColor) $ do
+    setColor _controlMeshColor $ do
         mapM_ controlDraw
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
@@ -657,7 +554,7 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
 
   drawPatchUniform CoonPatch { .. } = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_north, _east, _south, _west]
-    texture = uniformTexture . weightToColor baseColors $ meanValue _coonValues
+    texture = SolidTexture . weightToColor baseColors $ meanValue _coonValues
 
   go 0 patch = drawPatchUniform patch
   go depth (subdividePatch -> Subdivided { .. }) =
@@ -675,7 +572,7 @@ renderTensorPatch originalPatch = go maxDeepness basePatch where
 
   drawPatchUniform p = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_curve0 p, westCurveOfPatch p, _curve3 p, eastCurveOfPatch p]
-    texture = uniformTexture . weightToColor baseColors . meanValue $ _tensorValues p
+    texture = SolidTexture . weightToColor baseColors . meanValue $ _tensorValues p
 
   go 0 patch = drawPatchUniform patch
   go depth (subdivideTensorPatch -> Subdivided { .. }) =

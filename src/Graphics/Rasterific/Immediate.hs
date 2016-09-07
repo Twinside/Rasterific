@@ -36,10 +36,11 @@ import Control.Applicative( (<$>) )
 import Data.Foldable( foldMap )
 #endif
 
+import Control.Monad.ST( ST )
 import Data.Maybe( fromMaybe )
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
-import Control.Monad.State( StateT, execStateT, get, lift )
+import Control.Monad.State( execStateT, get, lift )
 import Control.Monad.State.Class(MonadState)
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
@@ -61,10 +62,6 @@ import Graphics.Rasterific.PlaneBoundable
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Text.TrueType( Dpi, getStringCurveAtPoint )
 
--- | Monad used to describe the drawing context.
-type DrawContext m px =
-    StateT (MutableImage (PrimState m) px) m
-
 -- | Reify a filling function call, to be able to manipulate
 -- them in a simpler fashion.
 data DrawOrder px = DrawOrder
@@ -76,6 +73,8 @@ data DrawOrder px = DrawOrder
     , _orderFillMethod :: !FillMethod
       -- | Optional mask used for clipping.
     , _orderMask       :: !(Maybe (Texture (PixelBaseComponent px)))
+      -- | Function to perform direct drawing
+    , _orderDirect     :: !(forall s. DrawContext (ST s) px ())
     }
 
 instance PlaneBoundable (DrawOrder px) where
@@ -247,6 +246,7 @@ textToDrawOrders dpi defaultTexture (V2 x y) descriptions =
     , _orderFillMethod = FillWinding
     , _orderMask = Nothing
     , _orderTexture = fromMaybe defaultTexture $ _textTexture d
+    , _orderDirect = return ()
     }
 
   floatCurves =

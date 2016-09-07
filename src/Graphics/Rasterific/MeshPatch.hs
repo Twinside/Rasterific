@@ -10,13 +10,13 @@ module Graphics.Rasterific.MeshPatch
     , MutableMesh
     , thawMesh
     , setVertice
+    , getVertice
     , setHorizPoints
     , setVertPoints
     , setColor
     , generateLinearGrid
     , coonPatchAt
     , coonPatchesOf
-    , renderCoonMesh
     , freezeMesh
     , withMesh
     ) where
@@ -28,12 +28,10 @@ import Control.Monad.Primitive( PrimMonad, PrimState )
 import Data.Vector( (!) )
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
-import Graphics.Rasterific.Types
+
 import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Patch
-import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Immediate
-{-import Control.Monad.State.Class-}
+import Graphics.Rasterific.Types
+import Graphics.Rasterific.PatchTypes
 
 data InterBezier = InterBezier 
   { _inter0 :: !Point
@@ -133,6 +131,13 @@ setVertice x y p = do
   MutableMesh { .. } <- ask
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutPrimaryVertices idx p
+
+getVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
+           => Int -> Int -> m Point
+getVertice x y = do
+  p <- ask
+  let idx = y * (_meshMutWidth p + 1) + x
+  MV.read (_meshMutPrimaryVertices p) idx
 
 setHorizPoints :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
                => Int -> Int -> InterBezier -> m ()
@@ -253,8 +258,4 @@ coonPatchAt mesh x y = CoonPatch
 coonPatchesOf :: MeshPatch px -> [CoonPatch px]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
-
-renderCoonMesh :: (PrimMonad m, RenderablePixel px, InterpolablePixel px)
-               => MeshPatch px -> DrawContext m px ()
-renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
 

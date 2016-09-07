@@ -174,6 +174,8 @@ import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
+import Graphics.Rasterific.Patch
+import Graphics.Rasterific.MeshPatch
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font
@@ -565,6 +567,16 @@ drawOrdersOfDrawing width height dpi background drawing =
 
       final = go subContext (fromF sub) after
 
+    go ctxt (Free (CustomRender cust next)) rest = order : after where
+      after = go ctxt next rest
+      order = DrawOrder 
+            { _orderPrimitives = []
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = FillWinding
+            , _orderMask       = currentClip ctxt
+            , _orderDirect     = cust
+            }
+
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
       order = DrawOrder 
@@ -572,6 +584,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = method
             , _orderMask       = currentClip ctxt
+            , _orderDirect     = return ()
             }
 
     go ctxt (Free (Stroke w j cap prims next)) rest =

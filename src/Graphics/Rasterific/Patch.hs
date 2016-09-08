@@ -42,7 +42,6 @@ import Control.Monad.Free( liftF )
 import Control.Monad( when, forM_ )
 import Control.Monad.Primitive( PrimMonad )
 import Data.Monoid( Sum( .. ) )
-import Data.Word( Word8 )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.Operators
@@ -54,47 +53,7 @@ import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Command
 
-import Codec.Picture.Types
-    ( PixelRGB8( .. )
-    , PixelRGBA8( .. )
-    )
-
--- | Meh
-class InterpolablePixel a where
-  maxDistance :: a -> a -> CoonColorWeight
-  maxRepresentable :: Proxy a -> CoonColorWeight
-  lerpValue :: CoonColorWeight -> a -> a -> a
-
-instance InterpolablePixel Float where
-  maxDistance a b = abs (a - b)
-  maxRepresentable Proxy = 255
-  lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
-
-instance InterpolablePixel Word8 where
-  maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
-  maxRepresentable Proxy = 255
-  lerpValue zeroToOne a b = 
-    floor $ (1 - zeroToOne) * fromIntegral a + fromIntegral b * zeroToOne
-
-instance InterpolablePixel PixelRGB8 where
-  maxDistance (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
-    max (maxDistance b b') . max (maxDistance g g') $ maxDistance r r'
-  maxRepresentable Proxy = 255
-  lerpValue zeroToOne (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
-      PixelRGB8 (l r r') (l g g') (l b b')
-     where l = lerpValue zeroToOne
-
-instance InterpolablePixel PixelRGBA8 where
-  maxRepresentable Proxy = 255
-  maxDistance (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
-    max (maxDistance a a') 
-        . max (maxDistance b b')
-        . max (maxDistance g g')
-        $ maxDistance r r'
-
-  lerpValue zeroToOne (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
-      PixelRGBA8 (l r r') (l g g') (l b b') (l a a')
-     where l = lerpValue zeroToOne
+import Codec.Picture.Types( PixelRGBA8( .. ) )
 
 -- @
 --  North    ----->     East

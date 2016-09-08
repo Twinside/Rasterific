@@ -45,6 +45,7 @@ module Graphics.Rasterific
       -- ** Filling
       fill
     , fillWithMethod
+    , renderMeshPatch
       -- ** Stroking
     , stroke
     , dashedStroke
@@ -375,6 +376,11 @@ printTextAt font pointSize point string =
         , _textTexture = Nothing
         }
 
+-- | Render a mesh patch as an object. Warning, there is
+-- no antialiasing on mesh patch objects!
+renderMeshPatch :: MeshPatch px -> Drawing px ()
+renderMeshPatch mesh = liftF $ MeshPatchRender mesh ()
+
 -- | Print complex text, using different texture font and
 -- point size for different parts of the text.
 --
@@ -575,6 +581,16 @@ drawOrdersOfDrawing width height dpi background drawing =
             , _orderFillMethod = FillWinding
             , _orderMask       = currentClip ctxt
             , _orderDirect     = cust
+            }
+
+    go ctxt (Free (MeshPatchRender mesh next)) rest = order : after where
+      after = go ctxt next rest
+      order = DrawOrder 
+            { _orderPrimitives = []
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = FillWinding
+            , _orderMask       = currentClip ctxt
+            , _orderDirect     = mapM_ renderCoonPatch $ coonPatchesOf mesh
             }
 
     go ctxt (Free (Fill method prims next)) rest = order : after where

@@ -956,6 +956,7 @@ pdfProducer baseTexture draw = do
      -> DrawCommand px (Free (DrawCommand px) ()) -> PdfEnv Builder
   go forceInverse activeTrans filler prevTexture com = case com of
      CustomRender _mesh next -> recurse next
+     MeshPatchRender _m next -> recurse next
      Fill method prims next -> do
        after <- recurse next
        pure $ foldMap pathToPdf (resplit prims)

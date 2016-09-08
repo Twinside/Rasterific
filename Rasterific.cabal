@@ -67,6 +67,7 @@ library
                , Graphics.Rasterific.Rasterize
                , Graphics.Rasterific.StrokeInternal
                , Graphics.Rasterific.ComplexPrimitive
+               , Graphics.Rasterific.PatchTypes
                , Graphics.Rasterific.Types
                , Graphics.Rasterific.Compositor
                , Graphics.Rasterific.MicroPdf

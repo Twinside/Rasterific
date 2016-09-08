@@ -84,6 +84,7 @@ data Texture (px :: *)
 data DrawCommand px next
   = Fill FillMethod [Primitive] next
   | CustomRender (forall s. DrawContext (ST s) px ()) next
+  | MeshPatchRender (MeshPatch px) next
   | Stroke Float Join (Cap, Cap) [Primitive] next
   | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
   | TextFill Point [TextRange px] next
@@ -116,6 +117,8 @@ dumpDrawing = go . fromF where
 
         ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
+  go (Free (MeshPatchRender m next)) =
+    "renderMeshPatch (" ++ show m ++ ") >>= " ++ go next
   go (Free (CustomRender _r next)) =
     "customRender _ >>= " ++ go next
   go (Free (WithImageEffect _effect sub next)) =
@@ -210,6 +213,8 @@ instance Functor (DrawCommand px) where
         WithTransform trans draw $ f next
     fmap f (WithPathOrientation path point draw next) =
         WithPathOrientation path point draw $ f next
+    fmap f (MeshPatchRender mesh next) =
+        MeshPatchRender mesh $ f next
 
 instance Monoid (Drawing px ()) where
     mempty = return ()

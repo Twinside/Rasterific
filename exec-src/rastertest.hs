@@ -684,7 +684,7 @@ drawTensorDebug path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
     renderTensorPatch p
-    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawTensorPatch p
+    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ (debugDrawTensorPatch defaultDebug) p
 
 
 coonTest :: IO ()
@@ -778,7 +778,7 @@ tensorSplit = do
         putStrLn $ "Rendering " ++ path
         writePng path $ runST $ runDrawContext w h white $ do
             renderTensorPatch p
-            mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ mapM_ debugDrawTensorPatch ps
+            mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ mapM_ (debugDrawTensorPatch defaultDebug) ps
 
     [ c00, c01, c02, c03
      , c10, c11, c12, c13

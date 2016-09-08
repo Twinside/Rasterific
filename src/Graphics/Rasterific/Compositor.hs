@@ -7,8 +7,9 @@
 module Graphics.Rasterific.Compositor
     ( Compositor
     , Modulable( .. )
-    , ModulablePixel
+    , InterpolablePixel( .. )
     , RenderablePixel
+    , ModulablePixel
     , compositionDestination
     , compositionAlpha
     , emptyPx
@@ -18,11 +19,54 @@ import Foreign.Storable( Storable )
 import Data.Bits( unsafeShiftR )
 import Data.Word( Word8, Word32 )
 
-import Codec.Picture.Types( Pixel( .. ), PackeablePixel( .. ) )
+import Codec.Picture.Types
+    ( Pixel( .. )
+    , PixelRGB8( .. )
+    , PixelRGBA8( .. )
+    , PackeablePixel( .. ) )
+
+import Graphics.Rasterific.Types
 
 type Compositor px =
     PixelBaseComponent px ->
         PixelBaseComponent px -> px -> px -> px
+
+-- | Used for Coon patch rendering
+class InterpolablePixel a where
+  maxDistance :: a -> a -> Float
+  maxRepresentable :: Proxy a -> Float
+  lerpValue :: Float -> a -> a -> a
+
+instance InterpolablePixel Float where
+  maxDistance a b = abs (a - b)
+  maxRepresentable Proxy = 255
+  lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
+
+instance InterpolablePixel Word8 where
+  maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
+  maxRepresentable Proxy = 255
+  lerpValue zeroToOne a b = 
+    floor $ (1 - zeroToOne) * fromIntegral a + fromIntegral b * zeroToOne
+
+instance InterpolablePixel PixelRGB8 where
+  maxDistance (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
+    max (maxDistance b b') . max (maxDistance g g') $ maxDistance r r'
+  maxRepresentable Proxy = 255
+  lerpValue zeroToOne (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
+      PixelRGB8 (l r r') (l g g') (l b b')
+     where l = lerpValue zeroToOne
+
+instance InterpolablePixel PixelRGBA8 where
+  maxRepresentable Proxy = 255
+  maxDistance (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
+    max (maxDistance a a') 
+        . max (maxDistance b b')
+        . max (maxDistance g g')
+        $ maxDistance r r'
+
+  lerpValue zeroToOne (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
+      PixelRGBA8 (l r r') (l g g') (l b b') (l a a')
+     where l = lerpValue zeroToOne
 
 -- | This constraint ensure that a type is a pixel
 -- and we're allowed to modulate it's color components
@@ -30,6 +74,8 @@ type Compositor px =
 type ModulablePixel px =
     ( Pixel px
     , PackeablePixel px
+    , InterpolablePixel px
+    , InterpolablePixel (PixelBaseComponent px)
     , Storable (PackedRepresentation px)
     , Modulable (PixelBaseComponent px))
 

@@ -31,6 +31,7 @@ module Graphics.Rasterific.Patch
     , parametricBase
     , defaultDebug
     , transformCoon
+    , renderCoonMesh
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -51,6 +52,7 @@ import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Rasterific.Line( lineFromPath )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Command
 
 import Codec.Picture.Types( PixelRGBA8( .. ) )
@@ -502,8 +504,11 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
-renderCoonPatch :: forall m px.
-                   (PrimMonad m, RenderablePixel px, InterpolablePixel px)
+renderCoonMesh :: forall m px.  (PrimMonad m, RenderablePixel px)
+               => MeshPatch px -> DrawContext m px ()
+renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
+
+renderCoonPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
                 => CoonPatch px -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
   maxDeepness = maxColorDeepness baseColors
@@ -520,8 +525,7 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
-renderTensorPatch :: forall m px.
-                   (PrimMonad m, RenderablePixel px, InterpolablePixel px)
+renderTensorPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
                   => TensorPatch px -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
   maxDeepness = maxColorDeepness baseColors

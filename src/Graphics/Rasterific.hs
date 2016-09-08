@@ -498,6 +498,25 @@ cacheDrawing
 cacheDrawing maxWidth maxHeight dpi sub =
   cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
+preComputeTexture :: (RenderablePixel px)
+                  => Int -> Int -> Texture px -> Texture px
+preComputeTexture w h = go where
+  go :: RenderablePixel px => Texture px -> Texture px
+  go t = case t of
+    SolidTexture _ -> t
+    LinearGradientTexture _ _ -> t
+    RadialGradientTexture _ _ _ -> t
+    RadialGradientWithFocusTexture _ _ _ _ -> t
+    WithSampler s sub -> WithSampler s $ go sub
+    WithTextureTransform trans sub -> WithTextureTransform trans $ go sub
+    SampledTexture _ -> t
+    RawTexture _ -> t
+    ShaderTexture _ -> t
+    ModulateTexture t1 t2 -> ModulateTexture (go t1) (go t2)
+    PatternTexture _ _ _ _ _ -> t
+    MeshPatchTexture m ->
+        RawTexture $ runST $ runDrawContext w h emptyPx $ renderCoonMesh m
+
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
     :: forall px . (RenderablePixel px) 
@@ -608,7 +627,8 @@ drawOrdersOfDrawing width height dpi background drawing =
             where prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =
-        go (ctxt { currentTexture = tx }) (fromF sub) $ go ctxt next rest
+        go (ctxt { currentTexture = preComputeTexture width height tx }) (fromF sub) $
+            go ctxt next rest
 
     go ctxt (Free (DashedStroke o d w j cap prims next)) rest =
         foldr recurse after $ dashedStrokize o d w j cap prims

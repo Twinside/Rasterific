@@ -7,8 +7,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Graphics.Rasterific.Linear
-    ( V2( .. )
-    , V1( .. )
+    ( V1( .. )
+    , V2( .. )
+    , V3( .. )
     , V4( .. )
     , Additive( .. )
     , Epsilon( .. )
@@ -46,6 +47,9 @@ infixl 7 ^*, ^/
 data V2 a = V2 !a !a
     deriving (Eq, Show)
 
+data V3 a = V3 !a !a !a
+    deriving (Eq, Show)
+
 data V4 a = V4 !a !a !a !a
     deriving (Eq, Show)
 
@@ -53,9 +57,17 @@ data V4 a = V4 !a !a !a !a
 newtype V1 a = V1 a
     deriving (Eq, Show, Num)
 
+instance Functor V1 where
+    {-# INLINE fmap #-}
+    fmap f (V1 a) = V1 $ f a
+
 instance Functor V2 where
     {-# INLINE fmap #-}
     fmap f (V2 a b) = V2 (f a) (f b)
+
+instance Functor V3 where
+    {-# INLINE fmap #-}
+    fmap f (V3 a b c) = V3 (f a) (f b) (f c)
 
 instance Functor V4 where
     {-# INLINE fmap #-}
@@ -77,6 +89,22 @@ instance Num a => Num (V2 a) where
   fromInteger = pure . fromInteger
   {-# INLINE fromInteger #-}
 
+instance Num a => Num (V3 a) where
+  (V3 a b c) + (V3 a' b' c') = V3 (a + a') (b + b') (c + c')
+  {-# INLINE (+) #-}
+  (V3 a b c) - (V3 a' b' c') = V3 (a - a') (b - b') (c - c')
+  {-# INLINE (-) #-}
+  (V3 a b c) * (V3 a' b' c') = V3 (a * a') (b * b') (c * c')
+  {-# INLINE (*) #-}
+  negate (V3 a b c) = V3 (negate a) (negate b) (negate c)
+  {-# INLINE negate #-}
+  abs (V3 a b c) = V3 (abs a) (abs b) (abs c)
+  {-# INLINE abs #-}
+  signum (V3 a b c) = V3 (signum a) (signum b) (signum c)
+  {-# INLINE signum #-}
+  fromInteger = pure . fromInteger
+  {-# INLINE fromInteger #-}
+
 instance Num a => Num (V4 a) where
   (V4 a b c d) + (V4 a' b' c' d') = V4 (a + a') (b + b') (c + c') (d + d')
   {-# INLINE (+) #-}
@@ -93,15 +121,17 @@ instance Num a => Num (V4 a) where
   fromInteger = pure . fromInteger
   {-# INLINE fromInteger #-}
 
-instance Functor V1 where
-    {-# INLINE fmap #-}
-    fmap f (V1 a) = V1 $ f a
-
 instance Applicative V4 where
     {-# INLINE pure #-}
     pure a = V4 a a a a
     {-# INLINE (<*>) #-}
     (V4 f1 f2 f3 f4) <*> (V4 a b c d) = V4 (f1 a) (f2 b) (f3 c) (f4 d)
+
+instance Applicative V3 where
+    {-# INLINE pure #-}
+    pure a = V3 a a a
+    {-# INLINE (<*>) #-}
+    (V3 f1 f2 f3) <*> (V3 a b c) = V3 (f1 a) (f2 b) (f3 c)
 
 instance Applicative V2 where
     {-# INLINE pure #-}
@@ -165,6 +195,10 @@ instance Epsilon a => Epsilon (V4 a) where
   nearZero = nearZero . quadrance
   {-# INLINE nearZero #-}
 
+instance Epsilon a => Epsilon (V3 a) where
+  nearZero = nearZero . quadrance
+  {-# INLINE nearZero #-}
+
 instance Epsilon a => Epsilon (V2 a) where
   nearZero = nearZero . quadrance
   {-# INLINE nearZero #-}
@@ -181,6 +215,19 @@ instance Additive V4 where
     {-# INLINE (^+^) #-}
 
     (V4 a b c d) ^-^ (V4 a' b' c' d') = V4 (a - a') (b - b') (c + c') (d + d')
+    {-# INLINE (^-^) #-}
+
+    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    {-# INLINE lerp #-}
+
+instance Additive V3 where
+    zero = V3 0 0 0
+    {-# INLINE zero #-}
+
+    (V3 a b c) ^+^ (V3 a' b' c') = V3 (a + a') (b + b') (c + c')
+    {-# INLINE (^+^) #-}
+
+    (V3 a b c) ^-^ (V3 a' b' c') = V3 (a - a') (b - b') (c + c')
     {-# INLINE (^-^) #-}
 
     lerp v a b = a ^+^ (b ^-^ a) ^* v
@@ -252,6 +299,16 @@ instance Metric V4 where
     {-# INLINE dot #-}
 
     quadrance (V4 a b c d) = a * a + b * b + c * c + d * d
+    {-# INLINE quadrance #-}
+
+    norm v = sqrt (quadrance v)
+    {-# INLINE norm #-}
+
+instance Metric V3 where
+    dot (V3 a b c) (V3 a' b' c') = a * a' + b * b' + c * c'
+    {-# INLINE dot #-}
+
+    quadrance (V3 a b c) = a * a + b * b + c * c
     {-# INLINE quadrance #-}
 
     norm v = sqrt (quadrance v)

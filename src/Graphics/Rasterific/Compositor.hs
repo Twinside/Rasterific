@@ -25,6 +25,7 @@ import Codec.Picture.Types
     , PixelRGBA8( .. )
     , PackeablePixel( .. ) )
 
+import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
 
 type Compositor px =
@@ -32,23 +33,37 @@ type Compositor px =
         PixelBaseComponent px -> px -> px -> px
 
 -- | Used for Coon patch rendering
-class InterpolablePixel a where
+class (Applicative (Holder a), Additive (Holder a)) => InterpolablePixel a where
+  type Holder a :: * -> *
+  toFloatPixel :: a -> Holder a Float
+  fromFloatPixel :: Holder a Float -> a
+
   maxDistance :: a -> a -> Float
   maxRepresentable :: Proxy a -> Float
   lerpValue :: Float -> a -> a -> a
 
 instance InterpolablePixel Float where
+  type Holder Float = V1
+  toFloatPixel = V1
+  fromFloatPixel (V1 f) = f
+
   maxDistance a b = abs (a - b)
   maxRepresentable Proxy = 255
   lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
 
 instance InterpolablePixel Word8 where
+  type Holder Word8 = V1
+
   maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
   maxRepresentable Proxy = 255
   lerpValue zeroToOne a b = 
     floor $ (1 - zeroToOne) * fromIntegral a + fromIntegral b * zeroToOne
 
 instance InterpolablePixel PixelRGB8 where
+  type Holder PixelRGB8 = V3
+  toFloatPixel (PixelRGB8 r g b) = V3 (to r) (to g) (to b) where to n = fromIntegral n
+  fromFloatPixel (V3 r g b) = PixelRGB8 (to r) (to g) (to b) where to = floor
+
   maxDistance (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
     max (maxDistance b b') . max (maxDistance g g') $ maxDistance r r'
   maxRepresentable Proxy = 255
@@ -57,6 +72,12 @@ instance InterpolablePixel PixelRGB8 where
      where l = lerpValue zeroToOne
 
 instance InterpolablePixel PixelRGBA8 where
+  type Holder PixelRGBA8 = V4
+  toFloatPixel (PixelRGBA8 r g b a) = V4 (to r) (to g) (to b) (to a)
+    where to n = fromIntegral n
+  fromFloatPixel (V4 r g b a) = PixelRGBA8 (to r) (to g) (to b) (to a)
+    where to = floor
+
   maxRepresentable Proxy = 255
   maxDistance (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
     max (maxDistance a a') 

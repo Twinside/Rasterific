@@ -259,3 +259,4 @@ coonPatchesOf :: MeshPatch px -> [CoonPatch px]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
+{-derivateValues :: MeshPatch-}

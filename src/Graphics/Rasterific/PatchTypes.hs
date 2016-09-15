@@ -19,12 +19,21 @@ type CoonColorWeight = Float
 --  West                South
 -- @
 data ParametricValues a = ParametricValues
-    { _northValue :: !a
-    , _eastValue  :: !a
-    , _southValue :: !a
-    , _westValue  :: !a
-    }
-    deriving (Functor, Show)
+  { _northValue :: !a
+  , _eastValue  :: !a
+  , _southValue :: !a
+  , _westValue  :: !a
+  }
+  deriving (Functor, Show)
+
+{-
+data Derivative px = Derivative
+  { _derivValues      :: !px
+  , _derivAsFloat     :: !() Float
+  , _derivDerivatives :: !(V2 Float)
+  }
+  deriving (Functor, Show)
+  -- -}
 
 instance Applicative ParametricValues where
     pure a = ParametricValues a a a a

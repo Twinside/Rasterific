@@ -12,6 +12,7 @@ module Graphics.Rasterific.Linear
     , V3( .. )
     , V4( .. )
     , R1( .. )
+    , R2( .. )
     , Additive( .. )
     , Epsilon( .. )
     , Metric( .. )

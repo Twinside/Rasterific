@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Module defining the type of mesh patch grid.
 module Graphics.Rasterific.MeshPatch
     ( -- * Types
@@ -40,6 +41,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
 
 import Graphics.Rasterific.Linear
+import Graphics.Rasterific.MiniLens
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.PatchTypes
@@ -124,7 +126,7 @@ slopeOf prevColor thisColor nextColor
           | abs sp < abs sn = 3 * sp
           | otherwise = 3 * sn
 
-calculateMeshColorDerivative :: InterpolablePixel px
+calculateMeshColorDerivative :: forall px. InterpolablePixel px
                              => MeshPatch px -> MeshPatch (Derivative px)
 calculateMeshColorDerivative mesh = mesh { _meshColors = colorDerivatives } where
   colorDerivatives =
@@ -139,13 +141,22 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = colorDerivatives } wher
   pointAt = verticeAt mesh
   derivAt x y = colorDerivatives  V.! (y * w + x)
 
-  topDerivative x
-    | nearZero d = zero
-    | otherwise = V2 (c ^/ d - dx) 0
+  topDerivative, bottomDerivative, leftDerivative, rightDerivative :: Int -> Derivative px
+  topDerivative x = edgeDerivative _y 0 1 x 0
+  bottomDerivative x = edgeDerivative _y 0 (-1) x (w - 1)
+  leftDerivative y = edgeDerivative _x 1 0 0 y
+  rightDerivative y = edgeDerivative _x (-1) 0 (h - 1) y
+
+  edgeDerivative :: Lens' (V2 Float) Float -> Int -> Int -> Int -> Int
+                 -> Derivative px
+  edgeDerivative coord dx dy x y
+    | nearZero d = Derivative rc zero
+    | otherwise = Derivative rc $ set zero coord <$> (c ^/ d) ^-^ dxs
     where
-      V2 dx _ = _derivDerivatives $ derivAt 1 x
-      c = (atColor x 1 ^-^ atColor x 0) ^* 2
-      d = pointAt x 1 `distance` pointAt x 0
+      dxs = fmap (.^ coord) . _derivDerivatives $ derivAt 1 x
+      rc = rawColorAt x y
+      c = (atColor (x+dx) (y+dy) ^-^ atColor x y) ^* 2
+      d = pointAt (x+dx) (y+dy) `distance` pointAt x y
 
   -- General case
   interiorDerivative x y | isAtBorder x y =

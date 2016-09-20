@@ -9,6 +9,7 @@ module Graphics.Rasterific.MiniLens
 
       -- * Getter
     , (.^)
+    , view
     , use
 
       -- * Setter
@@ -16,11 +17,16 @@ module Graphics.Rasterific.MiniLens
     , (.=)
     , (%=)
     , (+=)
+    , set
+
+      -- * Helper
+    , (&)
     ) where
 
 import Control.Monad.Identity
 import Control.Applicative
 import Control.Monad.State        as State
+import Data.Function( (&) )
 
 infixl 8 .^
 infixr 4 .~
@@ -49,13 +55,21 @@ lens :: (s -> a)
 lens accessor setter = \f src ->
   fmap (setter src) $ f (accessor src)
 
+view :: s -> Lens s t a b -> a
+{-# INLINE view #-}
+view v l = getConst (l Const v)
+
 (.^) :: s -> Lens s t a b -> a
 {-# INLINE (.^) #-}
-(.^) v l = getConst (l Const v)
+(.^) = view
+
+set :: s -> Lens' s a -> a -> s
+{-# INLINE set #-}
+set v l new = runIdentity $ l (\_ -> Identity new) v
 
 (.~) :: s -> Lens' s a -> a -> s
 {-# INLINE (.~) #-}
-(.~) v l new = runIdentity $ l (\_ -> Identity new) v
+(.~) = set
 
 (.=) :: MonadState s m => Lens' s a -> a -> m ()
 {-# INLINE (.=) #-}

@@ -338,14 +338,73 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
                   delta = p1 ^-^ p0
             ]
 
+type ColorPreparator px pxt = ParametricValues px -> ParametricValues pxt
 
 coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch px
-coonPatchAt mesh x y = CoonPatch 
+coonPatchAt = coonPatchAt' id
+
+cubicPreparator :: ParametricValues () -> ParametricValues ()
+cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
+  Derivative c00 v00 = _northValue
+  Derivative c10 v10 = _eastValue
+  Derivative c01 v01 = _westValue
+  Derivative c11 v11 = _southValue
+
+  xOf = fmap (^. _x)
+  yOf = fmap (^. _y)
+
+  fx00 = xOf v00
+  fy00 = y0f v00
+
+  fx10 = xOf v10
+  fy10 = yOf v10
+
+  fx01 = xOf v01
+  fy01 = yOf v01
+
+  fx11 = xOf v11
+  fy11 = yOf v11
+
+  a = V4
+    c00
+    fx00
+    ((c10 ^-^ c00) ^* 3 ^-^ fx00 ^* 2 ^-^ fx10)
+    ((c00 ^-^ c10) ^* 2 ^+^ fx00 ^+^ fx10)
+
+  b = V4
+    fy00
+    zero
+    ((fy10 ^-^ fy00) ^* 3)
+    ((fy00 ^-^ fy10) ^* 2)
+
+  c = V4
+    ((c01 ^-^ c00) ^* 3* ^-^ fy00 ^* 2 ^-^ fy01)
+    ((fx01 ^-^ fx00) ^* 3)
+    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 3 ^+^
+      (fx00 ^-^ fx01 ^+^ fy00 ^-^ fy10) ^* 2 ^+^ 
+      fx10 - fx11+ fy01 - fy11) ^* 3)
+    ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
+     (fx01 ^-^ fx00 ^-^ fx10 ^+^ fx11) ^* 3 ^+^
+     (fy10 ^-^ fy00) ^* 4 ^+^
+     (fy11 ^-^ fy01) ^* 2 )
+
+  d = V4
+    ((c00 ^-^ c01) ^* 2 ^+^ fy00 ^+^ fy01)
+    ((fx00 ^-^ fx01) ^* 2)
+    (-6*c00 + 6*c01 + 6*c10 - 6*c11 +
+      4*fx01 - 4*fx00 +
+      2*fx11 - 2*fx10 +
+      3*fy10 - 3*fy00 - 3*fy01 + 3*fy11)
+    (2*(2*c00 - 2*c01 - 2*c10 + 2*c11 + fx00 - fx01 + fx10 - fx11 + fy00 + fy01 - fy10 - fy11))
+
+coonPatchAt' :: ColorPreparator px pt
+             -> MeshPatch px -> Int -> Int -> CoonPatch pxt
+coonPatchAt' preparator mesh x y = CoonPatch 
     { _north = CubicBezier p00 p01 p02 p03
     , _east  = CubicBezier p03 p13 p23 p33
     , _south = CubicBezier p33 p32 p31 p30
     , _west  = CubicBezier p30 p20 p10 p00
-    , _coonValues = ParametricValues
+    , _coonValues = preparator $ ParametricValues
         { _northValue = c00
         , _eastValue  = c03
         , _southValue = c33

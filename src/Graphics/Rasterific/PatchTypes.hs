@@ -30,7 +30,7 @@ data ParametricValues a = ParametricValues
   deriving (Functor, Show)
 
 data Derivative px = Derivative
-  { _derivValues      :: !px
+  { _derivValues      :: !(Holder px Float)
   , _derivDerivatives :: !(Holder px (V2 Float))
   }
 

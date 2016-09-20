@@ -409,9 +409,9 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
 
 weightToColor :: InterpolablePixel px
               => ParametricValues px -> V2 CoonColorWeight -> px
-weightToColor ParametricValues { .. } (V2 u v) = lerpValue v uTop uBottom where
-  uTop = lerpValue u _northValue _eastValue
-  uBottom = lerpValue u _westValue _southValue
+weightToColor ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uTop uBottom where
+  uTop = lerp u (toFloatPixel _northValue) (toFloatPixel _eastValue)
+  uBottom = lerp u (toFloatPixel _westValue) (toFloatPixel _southValue)
 
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =

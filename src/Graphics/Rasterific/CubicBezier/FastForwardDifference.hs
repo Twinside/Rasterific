@@ -30,9 +30,9 @@ bezierToForwardDifferenceCoeff (CubicBezier x y z w) = (xCoeffs, yCoeffs)
     xCoeffs = ForwardDifferenceCoefficient { _fdA = ax, _fdB = bx, _fdC = cx }
     yCoeffs = ForwardDifferenceCoefficient { _fdA = ay, _fdB = by, _fdC = cy }
 
-    V2 ax ay = (w ^-^ z ^* 3 ^+^ y ^* 3 ^-^ x) ^* 6
+    V2 ax ay = w ^-^ x
     V2 bx by = (w ^-^ z ^* 2 ^+^ y) ^* 6
-    V2 cx cy = w ^-^ x
+    V2 cx cy = (w ^-^ z ^* 3 ^+^ y ^* 3 ^-^ x) ^* 6
 
 {-
 doubleFDCoefficients :: ForwardDifferenceCoefficient -> ForwardDifferenceCoefficient
@@ -48,14 +48,14 @@ halveFDCoefficients :: ForwardDifferenceCoefficient -> ForwardDifferenceCoeffici
 halveFDCoefficients (ForwardDifferenceCoefficient a b c) =
     ForwardDifferenceCoefficient { _fdA = a', _fdB = b', _fdC = c' }
   where
-    a' = a * 0.125
-    b' = b * 0.25 - a'
-    c' = (c - b') * 0.5
+    c' = c * 0.125
+    b' = b * 0.25 - c'
+    a' = (a - b') * 0.5
 
 updateForwardDifferencing :: Float -> ForwardDifferenceCoefficient
                           -> (Float, ForwardDifferenceCoefficient)
 updateForwardDifferencing v (ForwardDifferenceCoefficient a b c) =
-    (v + c, ForwardDifferenceCoefficient a (b + a) (c + b))
+    (v + a, ForwardDifferenceCoefficient (a + b) (b + c) c)
 
 estimateFDStepCount :: CubicBezier -> Int
 estimateFDStepCount (CubicBezier p0 p1 p2 p3) =

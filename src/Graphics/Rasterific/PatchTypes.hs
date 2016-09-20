@@ -1,8 +1,11 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RecordWildCards #-}
 module Graphics.Rasterific.PatchTypes where
 
 import Data.Monoid( (<>) )
+import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.Compositor
 
 type CoonColorWeight = Float
 
@@ -26,14 +29,15 @@ data ParametricValues a = ParametricValues
   }
   deriving (Functor, Show)
 
-{-
 data Derivative px = Derivative
   { _derivValues      :: !px
-  , _derivAsFloat     :: !() Float
-  , _derivDerivatives :: !(V2 Float)
+  , _derivDerivatives :: !(Holder px (V2 Float))
   }
-  deriving (Functor, Show)
-  -- -}
+
+mapDerivative :: (Holder px (V2 Float) -> Holder px (V2 Float))
+              -> Derivative px -> Derivative px
+mapDerivative f Derivative { .. } =
+  Derivative _derivValues $ f _derivDerivatives
 
 instance Applicative ParametricValues where
     pure a = ParametricValues a a a a

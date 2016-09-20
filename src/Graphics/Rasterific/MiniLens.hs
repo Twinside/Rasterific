@@ -5,6 +5,7 @@ module Graphics.Rasterific.MiniLens
     , Lens'
     , Traversal
     , Traversal'
+    , lens
 
       -- * Getter
     , (.^)
@@ -40,6 +41,13 @@ type Traversal s t a b =
 
 type Traversal' s a = Traversal s s a a
 
+-- | Create a full lens out of setter and getter
+lens :: (s -> a)
+     -> (s -> b -> t)
+     -> Lens s t a b
+{-# INLINE lens #-}
+lens accessor setter = \f src ->
+  fmap (setter src) $ f (accessor src)
 
 (.^) :: s -> Lens s t a b -> a
 {-# INLINE (.^) #-}

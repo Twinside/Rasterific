@@ -179,6 +179,7 @@ shaderOfTexture :: forall px . RenderablePixel px
     shaderOfTexture :: Maybe Transformation -> SamplerRepeat -> Texture Pixel8
                     -> ShaderFunction Pixel8 #-}
 shaderOfTexture _ _ (SolidTexture px) = \_ _ -> px
+shaderOfTexture _ _ (MeshPatchTexture _) = error "MeshPatch should be precomputed"
 shaderOfTexture trans sampling (LinearGradientTexture grad (Line a b)) =
   withTrans trans $ linearGradientShader grad a b sampling
 shaderOfTexture trans sampling (RadialGradientTexture grad center radius) =

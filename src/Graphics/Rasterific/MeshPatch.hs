@@ -3,22 +3,32 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
+-- | Module defining the type of mesh patch grid.
 module Graphics.Rasterific.MeshPatch
-    ( InterBezier( .. )
+    ( -- * Types
+      InterBezier( .. )
     , Derivatives( .. )
     , MeshPatch( .. )
+
+     -- * Functions
+    , calculateMeshColorDerivative
+    , verticeAt
+    , generateLinearGrid
+    , coonPatchAt
+    , coonPatchesOf
+
+      -- * Mutable mesh
     , MutableMesh
     , thawMesh
+    , freezeMesh
+
+     -- * Monadic mesh creation
+    , withMesh
     , setVertice
     , getVertice
     , setHorizPoints
     , setVertPoints
     , setColor
-    , generateLinearGrid
-    , coonPatchAt
-    , coonPatchesOf
-    , freezeMesh
-    , withMesh
     ) where
 
 import Control.Monad.ST( runST )
@@ -31,6 +41,7 @@ import qualified Data.Vector.Mutable as MV
 
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.PatchTypes
 
 data InterBezier = InterBezier 
@@ -57,6 +68,9 @@ instance Transformable Derivatives where
   transformM f (Derivatives a b c d) =
      Derivatives <$> f a <*> f b <*> f c <*> f d
 
+-- | Define a mesh patch grid, the grid is conceptually
+-- a regular grid of _meshPatchWidth * _meshPatchHeight
+-- patches but with shared edges
 data MeshPatch px = MeshPatch
   { -- | Count of horizontal of *patch*
     _meshPatchWidth  :: !Int
@@ -83,6 +97,84 @@ data MeshPatch px = MeshPatch
   }
   deriving (Eq, Show, Functor)
 
+
+slopeOf :: (Additive h, Applicative h)
+        => h Float -> h Float -> h Float
+        -> Point -> Point -> Point
+        -> h Float
+slopeOf prevColor thisColor nextColor
+        prevPoint thisPoint nextPoint 
+  | nearZero distPrev || nearZero distNext = zero
+  | otherwise = slopeVal <$> slopePrev <*> slope <*> slopeNext
+  where
+    distPrev = thisPoint `distance` prevPoint
+    distNext = thisPoint `distance` nextPoint
+
+    slopePrev = (thisColor ^-^ prevColor) ^/ distPrev
+    slopeNext = (nextColor ^-^ thisColor) ^/ distNext
+    slope = (slopePrev ^+^ slopeNext) ^* 0.5
+
+    slopeVal :: Float -> Float -> Float -> Float
+    slopeVal sp s sn
+      | signum sp /= signum sn = 0
+      | abs s > abs minSlope = minSlope
+      | otherwise = s
+      where
+        minSlope
+          | abs sp < abs sn = 3 * sp
+          | otherwise = 3 * sn
+
+calculateMeshColorDerivative :: InterpolablePixel px
+                             => MeshPatch px -> MeshPatch (Derivative px)
+calculateMeshColorDerivative mesh = mesh { _meshColors = colorDerivatives } where
+  colorDerivatives =
+     V.fromListN (w * h) [interiorDerivative x y | y <- [0 .. w - 1], x <- [0 .. h - 1]]
+
+  w = _meshPatchWidth mesh + 1
+  h = _meshPatchHeight mesh + 1
+  rawColorAt x y =_meshColors mesh V.! (y * w + x)
+  atColor x y = toFloatPixel $ rawColorAt x y
+  isAtBorder x y = x == 0 || y == 0 || x == w - 1 || y == h - 1
+
+  pointAt = verticeAt mesh
+  derivAt x y = colorDerivatives  V.! (y * w + x)
+
+  topDerivative x
+    | nearZero d = zero
+    | otherwise = V2 (c ^/ d - dx) 0
+    where
+      V2 dx _ = _derivDerivatives $ derivAt 1 x
+      c = (atColor x 1 ^-^ atColor x 0) ^* 2
+      d = pointAt x 1 `distance` pointAt x 0
+
+  -- General case
+  interiorDerivative x y | isAtBorder x y =
+    Derivative (rawColorAt x y) zero
+  interiorDerivative x y = Derivative rawColor $ V2 <$> dx <*> dy where
+    dx = slopeOf
+        cxPrev thisColor cxNext
+        xPrev this xNext
+
+    dy = slopeOf
+        cyPrev thisColor cyNext
+        yPrev this yNext
+
+    rawColor = rawColorAt x y
+    cxPrev = atColor (x - 1) y
+    thisColor = atColor x y
+    cxNext = atColor (x + 1) y
+
+    cyPrev = atColor x (y - 1)
+    cyNext = atColor x (y + 1)
+
+    xPrev = pointAt (x - 1) y
+    this  = pointAt x y
+    xNext = pointAt (x + 1) y
+
+    yPrev = pointAt x (y - 1)
+    yNext = pointAt x (y + 1)
+
+-- | Mutable version of a MeshPatch
 data MutableMesh s px = MutableMesh
   { _meshMutWidth :: !Int
   , _meshMutHeight :: !Int
@@ -115,6 +207,16 @@ freezeMesh MutableMesh { .. } = do
   _meshColors <- V.freeze _meshMutColors
   return MeshPatch { .. }
 
+-- | Retrieve a mesh primary vertice purely
+verticeAt :: MeshPatch px
+          -> Int -- ^ Between 0 and _meshPatchWidth + 1 (excluded)
+          -> Int -- ^ Between 0 and _meshPatchHeight + 1 (excluded)
+          -> Point
+verticeAt m x y = _meshPrimaryVertices m ! idx where
+    idx = y * (_meshPatchWidth m + 1) + x
+
+-- | Given an original MeshPatch, provide context to mutate it through
+-- modification functions.
 withMesh :: MeshPatch px
          -> (forall m. (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m) =>
                         m a)
@@ -125,12 +227,17 @@ withMesh mesh act = runST $ do
   final <- freezeMesh mut
   return (v, final)
 
+-- | Set the vertice of a mesh at a given coordinate
 setVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
-           => Int -> Int -> Point -> m ()
+           => Int   -- ^ x coordinate in [0, w]
+           -> Int   -- ^ y coordinate in [0, h]
+           -> Point -- ^ new point value
+           -> m ()
 setVertice x y p = do
   MutableMesh { .. } <- ask
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutPrimaryVertices idx p
+
 
 getVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
            => Int -> Int -> m Point
@@ -259,4 +366,3 @@ coonPatchesOf :: MeshPatch px -> [CoonPatch px]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
-{-derivateValues :: MeshPatch-}

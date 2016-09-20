@@ -32,6 +32,7 @@ module Graphics.Rasterific.MeshPatch
     , setColor
     ) where
 
+import Data.Monoid( (<>) )
 import Control.Monad.ST( runST )
 import Control.Monad.Reader( runReaderT )
 import Control.Monad.Reader.Class
@@ -128,7 +129,9 @@ slopeOf prevColor thisColor nextColor
 
 calculateMeshColorDerivative :: forall px. InterpolablePixel px
                              => MeshPatch px -> MeshPatch (Derivative px)
-calculateMeshColorDerivative mesh = mesh { _meshColors = colorDerivatives } where
+calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } where
+  withEdgesDerivatives =
+     colorDerivatives V.// (topDerivative <> bottomDerivative <> leftDerivative <> rightDerivative)
   colorDerivatives =
      V.fromListN (w * h) [interiorDerivative x y | y <- [0 .. w - 1], x <- [0 .. h - 1]]
 
@@ -141,18 +144,22 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = colorDerivatives } wher
   pointAt = verticeAt mesh
   derivAt x y = colorDerivatives  V.! (y * w + x)
 
-  topDerivative, bottomDerivative, leftDerivative, rightDerivative :: Int -> Derivative px
-  topDerivative x = edgeDerivative _y 0 1 x 0
-  bottomDerivative x = edgeDerivative _y 0 (-1) x (w - 1)
-  leftDerivative y = edgeDerivative _x 1 0 0 y
-  rightDerivative y = edgeDerivative _x (-1) 0 (h - 1) y
+  topDerivative = 
+    [edgeDerivative _y 0 1 x 0 | x <- [1 .. w - 2]]
+  bottomDerivative = 
+    [edgeDerivative _y 0 (-1) x (h - 1) | x <- [1 .. w - 2]]
+  leftDerivative =
+    [edgeDerivative _x 1 0 0 y | y <- [1 .. h - 2]]
+  rightDerivative = 
+    [edgeDerivative _x (-1) 0 (w - 1) y | y <- [1 .. h - 2]]
 
   edgeDerivative :: Lens' (V2 Float) Float -> Int -> Int -> Int -> Int
-                 -> Derivative px
+                 -> (Int, Derivative px)
   edgeDerivative coord dx dy x y
-    | nearZero d = Derivative rc zero
-    | otherwise = Derivative rc $ set zero coord <$> (c ^/ d) ^-^ dxs
+    | nearZero d = (ix, Derivative rc zero)
+    | otherwise = (ix, Derivative rc $ set zero coord <$> (c ^/ d) ^-^ dxs)
     where
+      ix = y * w + x
       dxs = fmap (.^ coord) . _derivDerivatives $ derivAt 1 x
       rc = rawColorAt x y
       c = (atColor (x+dx) (y+dy) ^-^ atColor x y) ^* 2

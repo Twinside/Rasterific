@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | Implementation using
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
@@ -68,6 +69,8 @@ import Codec.Picture.Types( PixelRGBA8( .. ) )
 --      +--------------+
 --  West    <-----      South
 -- @
+
+-- TODO: find a new way to calculate that...
 maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
 maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   range = maxRepresentable (Proxy :: Proxy px)
@@ -407,6 +410,18 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
+class Interpolator a px where
+  interpolate :: ParametricValues a -> V2 CoonColorWeight  -> px
+
+-- | Basic bilinear interpolator
+instance InterpolablePixel px => Interpolator px px where
+  interpolate = weightToColor
+
+-- | Bicubic interpolator
+-- TODO
+instance InterpolablePixel px => Interpolator (Derivative px) px where
+  interpolate = undefined
+
 weightToColor :: InterpolablePixel px
               => ParametricValues px -> V2 CoonColorWeight -> px
 weightToColor ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uTop uBottom where
@@ -508,8 +523,9 @@ renderCoonMesh :: forall m px.  (PrimMonad m, RenderablePixel px)
                => MeshPatch px -> DrawContext m px ()
 renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
 
-renderCoonPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
-                => CoonPatch px -> DrawContext m px ()
+renderCoonPatch :: forall m interp px.
+                   (PrimMonad m, RenderablePixel px, Interpolator interp px)
+                => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
   maxDeepness = maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
@@ -518,24 +534,25 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
 
   drawPatchUniform CoonPatch { .. } = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_north, _east, _south, _west]
-    texture = SolidTexture . weightToColor baseColors $ meanValue _coonValues
+    texture = SolidTexture . interpolate baseColors $ meanValue _coonValues
 
   go 0 patch = drawPatchUniform patch
   go depth (subdividePatch -> Subdivided { .. }) =
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
-renderTensorPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
-                  => TensorPatch px -> DrawContext m px ()
+renderTensorPatch :: forall m interp px. 
+                     (PrimMonad m, RenderablePixel px, Interpolator interp px)
+                  => TensorPatch interp -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }
 
   drawPatchUniform p = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_curve0 p, westCurveOfPatch p, _curve3 p, eastCurveOfPatch p]
-    texture = SolidTexture . weightToColor baseColors . meanValue $ _tensorValues p
+    texture = SolidTexture . interpolate baseColors . meanValue $ _tensorValues p
 
   go 0 patch = drawPatchUniform patch
   go depth (subdivideTensorPatch -> Subdivided { .. }) =

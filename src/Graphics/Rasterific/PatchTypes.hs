@@ -3,7 +3,7 @@
 module Graphics.Rasterific.PatchTypes where
 
 import Data.Monoid( (<>) )
-import Graphics.Rasterific.Linear
+import Graphics.Rasterific.MiniLens
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
 
@@ -30,14 +30,18 @@ data ParametricValues a = ParametricValues
   deriving (Functor, Show)
 
 data Derivative px = Derivative
-  { _derivValues      :: !(Holder px Float)
-  , _derivDerivatives :: !(Holder px (V2 Float))
+  { _derivValues :: !(Holder px Float)
+  , _xDerivative :: !(Holder px Float)
+  , _yDerivative :: !(Holder px Float)
   }
 
-mapDerivative :: (Holder px (V2 Float) -> Holder px (V2 Float))
-              -> Derivative px -> Derivative px
-mapDerivative f Derivative { .. } =
-  Derivative _derivValues $ f _derivDerivatives
+xDerivative :: Lens' (Derivative px) (Holder px Float)
+xDerivative = lens _xDerivative setter where
+  setter o v = o { _xDerivative = v }
+
+yDerivative :: Lens' (Derivative px) (Holder px Float)
+yDerivative = lens _yDerivative setter where
+  setter o v = o { _yDerivative = v }
 
 instance Applicative ParametricValues where
     pure a = ParametricValues a a a a

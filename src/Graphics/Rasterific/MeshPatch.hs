@@ -16,6 +16,7 @@ module Graphics.Rasterific.MeshPatch
     , verticeAt
     , generateLinearGrid
     , coonPatchAt
+    , coonPatchAtWithDerivative
     , coonPatchesOf
 
       -- * Mutable mesh
@@ -139,58 +140,61 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
   h = _meshPatchHeight mesh + 1
   rawColorAt x y =_meshColors mesh V.! (y * w + x)
   atColor x y = toFloatPixel $ rawColorAt x y
-  isAtBorder x y = x == 0 || y == 0 || x == w - 1 || y == h - 1
+  isOnVerticalBorder x = x == 0 || x == w - 1 
+  isOnHorizontalBorder y = y == 0 || y == h - 1
 
   pointAt = verticeAt mesh
   derivAt x y = colorDerivatives  V.! (y * w + x)
 
   topDerivative = 
-    [edgeDerivative _y 0 1 x 0 | x <- [1 .. w - 2]]
+    [edgeDerivative yDerivative 0 1 x 0 | x <- [1 .. w - 2]]
   bottomDerivative = 
-    [edgeDerivative _y 0 (-1) x (h - 1) | x <- [1 .. w - 2]]
+    [edgeDerivative yDerivative 0 (-1) x (h - 1) | x <- [1 .. w - 2]]
   leftDerivative =
-    [edgeDerivative _x 1 0 0 y | y <- [1 .. h - 2]]
+    [edgeDerivative xDerivative 1 0 0 y | y <- [1 .. h - 2]]
   rightDerivative = 
-    [edgeDerivative _x (-1) 0 (w - 1) y | y <- [1 .. h - 2]]
+    [edgeDerivative xDerivative (-1) 0 (w - 1) y | y <- [1 .. h - 2]]
 
-  edgeDerivative :: Lens' (V2 Float) Float -> Int -> Int -> Int -> Int
+  edgeDerivative :: Lens' (Derivative px) (Holder px Float) -> Int -> Int -> Int -> Int
                  -> (Int, Derivative px)
   edgeDerivative coord dx dy x y
-    | nearZero d = (ix, Derivative rc zero)
-    | otherwise = (ix, Derivative rc $ set zero coord <$> (c ^/ d) ^-^ dxs)
+    | nearZero d = (ix, oldDeriv)
+    | otherwise = (ix, oldDeriv & coord .~ otherDeriv)
     where
       ix = y * w + x
-      dxs = fmap (.^ coord) . _derivDerivatives $ derivAt 1 x
-      rc = rawColorAt x y
+      oldDeriv = derivAt 1 x
+      derivs = oldDeriv .^ coord
+      otherDeriv = (c ^/ d) ^-^ derivs
       c = (atColor (x+dx) (y+dy) ^-^ atColor x y) ^* 2
       d = pointAt (x+dx) (y+dy) `distance` pointAt x y
 
   -- General case
-  interiorDerivative x y | isAtBorder x y =
-    Derivative (rawColorAt x y) zero
-  interiorDerivative x y = Derivative rawColor $ V2 <$> dx <*> dy where
-    dx = slopeOf
-        cxPrev thisColor cxNext
-        xPrev this xNext
-
-    dy = slopeOf
-        cyPrev thisColor cyNext
-        yPrev this yNext
-
-    rawColor = rawColorAt x y
-    cxPrev = atColor (x - 1) y
-    thisColor = atColor x y
-    cxNext = atColor (x + 1) y
-
-    cyPrev = atColor x (y - 1)
-    cyNext = atColor x (y + 1)
-
-    xPrev = pointAt (x - 1) y
-    this  = pointAt x y
-    xNext = pointAt (x + 1) y
-
-    yPrev = pointAt x (y - 1)
-    yNext = pointAt x (y + 1)
+  interiorDerivative x y
+    | isOnHorizontalBorder y = Derivative thisColor dx zero
+    | isOnVerticalBorder x = Derivative thisColor zero dy
+    | otherwise = Derivative thisColor dx dy
+    where
+      dx = slopeOf
+          cxPrev thisColor cxNext
+          xPrev this xNext
+      
+      dy = slopeOf
+          cyPrev thisColor cyNext
+          yPrev this yNext
+      
+      cxPrev = atColor (x - 1) y
+      thisColor = atColor x y
+      cxNext = atColor (x + 1) y
+      
+      cyPrev = atColor x (y - 1)
+      cyNext = atColor x (y + 1)
+      
+      xPrev = pointAt (x - 1) y
+      this  = pointAt x y
+      xNext = pointAt (x + 1) y
+      
+      yPrev = pointAt x (y - 1)
+      yNext = pointAt x (y + 1)
 
 -- | Mutable version of a MeshPatch
 data MutableMesh s px = MutableMesh
@@ -343,27 +347,19 @@ type ColorPreparator px pxt = ParametricValues px -> ParametricValues pxt
 coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch px
 coonPatchAt = coonPatchAt' id
 
-cubicPreparator :: ParametricValues () -> ParametricValues ()
+coonPatchAtWithDerivative :: InterpolablePixel px
+                          => MeshPatch (Derivative px) -> Int -> Int
+                          -> CoonPatch (V4 (Holder px Float))
+coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
+
+cubicPreparator :: InterpolablePixel px
+                => ParametricValues (Derivative px)
+                -> ParametricValues (V4 (Holder px Float))
 cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
-  Derivative c00 v00 = _northValue
-  Derivative c10 v10 = _eastValue
-  Derivative c01 v01 = _westValue
-  Derivative c11 v11 = _southValue
-
-  xOf = fmap (.^ _x)
-  yOf = fmap (.^ _y)
-
-  fx00 = xOf v00
-  fy00 = yOf v00
-
-  fx10 = xOf v10
-  fy10 = yOf v10
-
-  fx01 = xOf v01
-  fy01 = yOf v01
-
-  fx11 = xOf v11
-  fy11 = yOf v11
+  Derivative c00 fx00 fy00 = _northValue
+  Derivative c10 fx10 fy10 = _eastValue
+  Derivative c01 fx01 fy01 = _westValue
+  Derivative c11 fx11 fy11 = _southValue
 
   a = V4
     c00
@@ -382,7 +378,7 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
     ((fx01 ^-^ fx00) ^* 3)
     (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 3 ^+^
       (fx00 ^-^ fx01 ^+^ fy00 ^-^ fy10) ^* 2 ^+^ 
-      fx10 - fx11+ fy01 - fy11) ^* 3)
+      fx10 ^-^ fx11 ^+^ fy01 ^-^ fy11) ^* 3)
     ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
      (fx01 ^-^ fx00 ^-^ fx10 ^+^ fx11) ^* 3 ^+^
      (fy10 ^-^ fy00) ^* 4 ^+^
@@ -393,12 +389,12 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
     ((fx00 ^-^ fx01) ^* 2)
     ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
      (fx01 ^-^ fx00) ^* 4 ^+^
-     (fx11 ^-^ fx10) ^* 2 +
+     (fx11 ^-^ fx10) ^* 2 ^+^
      (fy10 ^-^ fy00 ^-^ fy01 ^+^ fy11) ^* 3)
-    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 2 +
+    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 2 ^+^
        fx00 ^-^ fx01 ^+^ fx10 ^-^ fx11 ^+^ fy00 ^+^ fy01 ^-^ fy10 ^-^ fy11) ^* 2)
 
-coonPatchAt' :: ColorPreparator px pt
+coonPatchAt' :: ColorPreparator px pxt
              -> MeshPatch px -> Int -> Int -> CoonPatch pxt
 coonPatchAt' preparator mesh x y = CoonPatch 
     { _north = CubicBezier p00 p01 p02 p03

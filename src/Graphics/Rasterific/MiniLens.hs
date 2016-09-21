@@ -63,21 +63,21 @@ view v l = getConst (l Const v)
 {-# INLINE (.^) #-}
 (.^) = view
 
-set :: s -> Lens' s a -> a -> s
+set :: Lens' s a -> a -> s -> s
 {-# INLINE set #-}
-set v l new = runIdentity $ l (\_ -> Identity new) v
+set l new v = runIdentity $ l (\_ -> Identity new) v
 
-(.~) :: s -> Lens' s a -> a -> s
+(.~) :: Lens' s a -> a -> s -> s
 {-# INLINE (.~) #-}
 (.~) = set
 
 (.=) :: MonadState s m => Lens' s a -> a -> m ()
 {-# INLINE (.=) #-}
-(.=) l v = State.modify $ \s -> (s .~ l) v
+(.=) l v = State.modify (l .~ v)
 
 (%=) :: MonadState s m => Lens' s a -> (a -> a) -> m ()
 {-# INLINE (%=) #-}
-(%=) l f = State.modify $ \s -> (s .~ l) $ f (s .^ l)
+(%=) l f = State.modify $ \s -> s & l .~ f (s .^ l)
 
 (+=) :: (Num a, MonadState s m) => Lens' s a -> a -> m ()
 {-# INLINE (+=) #-}

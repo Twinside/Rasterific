@@ -35,6 +35,7 @@ type Compositor px =
 
 -- | Used for Coon patch rendering
 class ( Applicative (Holder a)
+      , Functor  (Holder a)
       , Foldable (Holder a)
       , Additive (Holder a) ) => InterpolablePixel a where
   type Holder a :: * -> *

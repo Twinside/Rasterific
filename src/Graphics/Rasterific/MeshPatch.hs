@@ -350,11 +350,11 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
   Derivative c01 v01 = _westValue
   Derivative c11 v11 = _southValue
 
-  xOf = fmap (^. _x)
-  yOf = fmap (^. _y)
+  xOf = fmap (.^ _x)
+  yOf = fmap (.^ _y)
 
   fx00 = xOf v00
-  fy00 = y0f v00
+  fy00 = yOf v00
 
   fx10 = xOf v10
   fy10 = yOf v10
@@ -378,7 +378,7 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
     ((fy00 ^-^ fy10) ^* 2)
 
   c = V4
-    ((c01 ^-^ c00) ^* 3* ^-^ fy00 ^* 2 ^-^ fy01)
+    ((c01 ^-^ c00) ^* 3 ^-^ fy00 ^* 2 ^-^ fy01)
     ((fx01 ^-^ fx00) ^* 3)
     (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 3 ^+^
       (fx00 ^-^ fx01 ^+^ fy00 ^-^ fy10) ^* 2 ^+^ 
@@ -391,11 +391,12 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
   d = V4
     ((c00 ^-^ c01) ^* 2 ^+^ fy00 ^+^ fy01)
     ((fx00 ^-^ fx01) ^* 2)
-    (-6*c00 + 6*c01 + 6*c10 - 6*c11 +
-      4*fx01 - 4*fx00 +
-      2*fx11 - 2*fx10 +
-      3*fy10 - 3*fy00 - 3*fy01 + 3*fy11)
-    (2*(2*c00 - 2*c01 - 2*c10 + 2*c11 + fx00 - fx01 + fx10 - fx11 + fy00 + fy01 - fy10 - fy11))
+    ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
+     (fx01 ^-^ fx00) ^* 4 ^+^
+     (fx11 ^-^ fx10) ^* 2 +
+     (fy10 ^-^ fy00 ^-^ fy01 ^+^ fy11) ^* 3)
+    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 2 +
+       fx00 ^-^ fx01 ^+^ fx10 ^-^ fx11 ^+^ fy00 ^+^ fy01 ^-^ fy10 ^-^ fy11) ^* 2)
 
 coonPatchAt' :: ColorPreparator px pt
              -> MeshPatch px -> Int -> Int -> CoonPatch pxt

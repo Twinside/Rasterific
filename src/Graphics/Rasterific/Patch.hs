@@ -8,6 +8,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 -- | Implementation using
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
@@ -410,23 +411,42 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
-class Interpolator a px where
+class Interpolator a px | a -> px where
   interpolate :: ParametricValues a -> V2 CoonColorWeight  -> px
 
 -- | Basic bilinear interpolator
 instance InterpolablePixel px => Interpolator px px where
-  interpolate = weightToColor
+  interpolate = bilinearInterpolation
 
 -- | Bicubic interpolator
--- TODO
-instance InterpolablePixel px => Interpolator (Derivative px) px where
-  interpolate = undefined
+instance ( InterpolablePixel px
+         , Num (Holder px Float)
+         , v ~ Holder px Float
+         ) => Interpolator (V4 v) px where
+  interpolate = bicubicInterpolation
 
-weightToColor :: InterpolablePixel px
-              => ParametricValues px -> V2 CoonColorWeight -> px
-weightToColor ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uTop uBottom where
+bilinearInterpolation :: InterpolablePixel px
+                      => ParametricValues px -> V2 CoonColorWeight -> px
+bilinearInterpolation ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uTop uBottom where
   uTop = lerp u (toFloatPixel _northValue) (toFloatPixel _eastValue)
   uBottom = lerp u (toFloatPixel _westValue) (toFloatPixel _southValue)
+
+bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
+                     => ParametricValues (V4 (Holder px Float))
+                     -> V2 CoonColorWeight
+                     -> px
+bicubicInterpolation (ParametricValues a b c d) (V2 x y) =
+  fromFloatPixel $ af ^+^ bf ^+^ cf ^+^ df
+  where
+    xv, vy, vyy, vyyy :: V4 Float
+    xv = V4 1 x (x*x) (x*x*x)
+    vy = xv ^* y
+    vyy = vy ^* y
+    vyyy = vy ^* y
+
+    v1 ^^*^ v2 = (^*) <$> v1 <*> v2
+
+    V4 af bf cf df = (a ^^*^ xv) ^+^ (b ^^*^ vy) ^+^ (c ^^*^ vyy) ^+^ (d ^^*^ vyyy)
 
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =
@@ -519,15 +539,16 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
-renderCoonMesh :: forall m px.  (PrimMonad m, RenderablePixel px)
-               => MeshPatch px -> DrawContext m px ()
+renderCoonMesh :: forall m interp px.
+                  (PrimMonad m, RenderablePixel px, Interpolator interp px)
+               => MeshPatch interp -> DrawContext m px ()
 renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
 
 renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, Interpolator interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }

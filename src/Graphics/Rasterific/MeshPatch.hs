@@ -34,6 +34,9 @@ module Graphics.Rasterific.MeshPatch
     , setColor
     ) where
 
+import Debug.Trace
+import Text.Printf
+
 import Data.Monoid( (<>) )
 import Control.Monad.ST( runST )
 import Control.Monad.Reader( runReaderT )
@@ -135,7 +138,7 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
   withEdgesDerivatives =
      colorDerivatives V.// (topDerivative <> bottomDerivative <> leftDerivative <> rightDerivative)
   colorDerivatives =
-     V.fromListN (w * h) [interiorDerivative x y | y <- [0 .. w - 1], x <- [0 .. h - 1]]
+     V.fromListN (w * h) [interiorDerivative x y | y <- [0 .. h - 1], x <- [0 .. w - 1]]
 
   w = _meshPatchWidth mesh + 1
   h = _meshPatchHeight mesh + 1
@@ -146,6 +149,7 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   pointAt = verticeAt mesh
   derivAt x y = colorDerivatives  V.! (y * w + x)
+
 
   topDerivative = 
     [edgeDerivative yDerivative 0 1 x 0 | x <- [1 .. w - 2]]
@@ -163,7 +167,7 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
     | otherwise = (ix, oldDeriv & coord .~ otherDeriv)
     where
       ix = y * w + x
-      oldDeriv = derivAt 1 x
+      oldDeriv = derivAt x y
       derivs = oldDeriv .^ coord
       otherDeriv = (c ^/ d) ^-^ derivs
       c = (atColor (x+dx) (y+dy) ^-^ atColor x y) ^* 2
@@ -171,6 +175,7 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   -- General case
   interiorDerivative x y
+    | isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero
     | isOnHorizontalBorder y = Derivative thisColor dx zero
     | isOnVerticalBorder x = Derivative thisColor zero dy
     | otherwise = Derivative thisColor dx dy

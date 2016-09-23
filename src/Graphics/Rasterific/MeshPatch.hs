@@ -18,6 +18,7 @@ module Graphics.Rasterific.MeshPatch
     , coonPatchAt
     , coonPatchAtWithDerivative
     , coonPatchesOf
+    , cubicCoonPatchesOf
 
       -- * Mutable mesh
     , MutableMesh
@@ -439,4 +440,11 @@ coonPatchAt' preparator mesh x y = CoonPatch
 coonPatchesOf :: MeshPatch px -> [CoonPatch px]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
+
+cubicCoonPatchesOf :: InterpolablePixel px
+                   => MeshPatch (Derivative px) -> [CoonPatch (V4 (Holder px Float))]
+cubicCoonPatchesOf mesh@MeshPatch { .. } =
+  [coonPatchAtWithDerivative mesh x y
+        | y <- [0 .. _meshPatchHeight - 1]
+        , x <- [0 .. _meshPatchWidth - 1] ]
 

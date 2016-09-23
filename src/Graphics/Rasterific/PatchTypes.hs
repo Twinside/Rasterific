@@ -9,6 +9,11 @@ import Graphics.Rasterific.Compositor
 
 type CoonColorWeight = Float
 
+data PatchInterpolation
+  = PatchBilinear
+  | PatchBicubic
+  deriving (Eq, Show)
+
 -- | Values associated to the corner of a patch
 -- @
 --  North               East

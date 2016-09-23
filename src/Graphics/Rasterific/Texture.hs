@@ -31,6 +31,7 @@ import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
 import Graphics.Text.TrueType( Dpi )
 import Graphics.Rasterific
 import Graphics.Rasterific.MeshPatch
+import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.Transformations
 
@@ -83,7 +84,7 @@ uniformTexture = SolidTexture
 
 
 -- | Texture using a mesh patch as definition
-meshPatchTexture :: MeshPatch px -> Texture px
+meshPatchTexture :: PatchInterpolation -> MeshPatch px -> Texture px
 meshPatchTexture = MeshPatchTexture
 
 -- | Linear gradient texture.

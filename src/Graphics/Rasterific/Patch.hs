@@ -8,7 +8,6 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 -- | Implementation using
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
@@ -411,15 +410,16 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
-class Interpolator a px | a -> px where
+class Interpolator a px where
   interpolate :: ParametricValues a -> V2 CoonColorWeight  -> px
 
 -- | Basic bilinear interpolator
-instance InterpolablePixel px => Interpolator px px where
+instance {-# INCOHERENT #-} InterpolablePixel px => Interpolator px px where
   interpolate = bilinearInterpolation
 
 -- | Bicubic interpolator
-instance ( InterpolablePixel px
+instance {-# INCOHERENT #-}
+         ( InterpolablePixel px
          , Num (Holder px Float)
          , v ~ Holder px Float
          ) => Interpolator (V4 v) px where
@@ -486,47 +486,47 @@ debugDrawCoonPatch :: DebugOption -> CoonPatch PixelRGBA8 -> Drawing PixelRGBA8 
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
       fill sub = liftF $ Fill FillWinding sub ()
-      setColor c inner = liftF $ SetTexture (SolidTexture c) inner ()
+      setColor' c inner = liftF $ SetTexture (SolidTexture c) inner ()
   when _drawOutline $
-    setColor _outlineColor (drawCoonPatchOutline patch)
+    setColor' _outlineColor (drawCoonPatchOutline patch)
 
   when _drawBaseVertices $
     forM_ (basePointOfCoonPatch patch) $ \(p, c) ->
        if not _colorVertices then
-         setColor _vertexColor (stroker $ circle p 4)
+         setColor' _vertexColor (stroker $ circle p 4)
        else do
-         setColor c . fill $ circle p 4
-         setColor _vertexColor . stroker $ circle p 5
+         setColor' c . fill $ circle p 4
+         setColor' _vertexColor . stroker $ circle p 5
 
   when _drawControVertices $
     forM_ (controlPointOfCoonPatch patch) $ \p ->
-       setColor _controlColor . stroker $ circle p 4
+       setColor' _controlColor . stroker $ circle p 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    setColor _controlMeshColor $ do
+    setColor' _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
 debugDrawTensorPatch :: DebugOption -> TensorPatch px -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
-      setColor c inner =
+      setColor' c inner =
           liftF $ SetTexture (SolidTexture c) inner ()
       p' = transposePatch p
 
   when _drawOutline $
-    setColor _outlineColor $
+    setColor' _outlineColor $
         mapM_ (stroker . toPrimitives)
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
   when _drawBaseVertices   $
-    setColor _vertexColor $
+    setColor' _vertexColor $
         forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    setColor _controlMeshColor $ do
+    setColor' _controlMeshColor $ do
         mapM_ controlDraw
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']

@@ -94,6 +94,8 @@ type RenderablePixel px =
     , PackeablePixel (PixelBaseComponent px)
     , Num (PackedRepresentation px)
     , Num (PackedRepresentation (PixelBaseComponent px))
+    , Num (Holder px Float)
+    , Num (Holder (PixelBaseComponent px) Float)
     , Storable (PackedRepresentation (PixelBaseComponent px))
     , PixelBaseComponent (PixelBaseComponent px)
             ~ (PixelBaseComponent px)

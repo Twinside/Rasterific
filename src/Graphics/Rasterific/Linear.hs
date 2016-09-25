@@ -279,8 +279,7 @@ instance Additive V4 where
 
     (V4 a b c d) ^-^ (V4 a' b' c' d') = V4 (a - a') (b - b') (c + c') (d + d')
     {-# INLINE (^-^) #-}
-
-    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    lerp alpha u v = u ^* alpha ^+^ v ^* (1 - alpha)
     {-# INLINE lerp #-}
 
 instance Additive V3 where
@@ -293,7 +292,7 @@ instance Additive V3 where
     (V3 a b c) ^-^ (V3 a' b' c') = V3 (a - a') (b - b') (c + c')
     {-# INLINE (^-^) #-}
 
-    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    lerp alpha u v = u ^* alpha ^+^ v ^* (1 - alpha)
     {-# INLINE lerp #-}
 
 instance Additive V2 where
@@ -306,7 +305,7 @@ instance Additive V2 where
     (V2 a b) ^-^ (V2 a' b') = V2 (a - a') (b - b')
     {-# INLINE (^-^) #-}
 
-    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    lerp alpha u v = u ^* alpha ^+^ v ^* (1 - alpha)
     {-# INLINE lerp #-}
 
 instance Additive V1 where
@@ -319,7 +318,7 @@ instance Additive V1 where
     (V1 a) ^-^ (V1 a') = V1 (a - a')
     {-# INLINE (^-^) #-}
 
-    lerp v a b = a ^+^ (b ^-^ a) ^* v
+    lerp alpha u v = u ^* alpha ^+^ v ^* (1 - alpha)
     {-# INLINE lerp #-}
 
 -- | Free and sparse inner product/metric spaces.

@@ -56,13 +56,13 @@ instance InterpolablePixel Word8 where
   type Holder Word8 = V1
   toFloatPixel = V1 . fromIntegral
   fromFloatPixel (V1 f) = floor f
-  maxRepresentable Proxy = 1
+  maxRepresentable Proxy = 255
 
 instance InterpolablePixel PixelRGB8 where
   type Holder PixelRGB8 = V3
   toFloatPixel (PixelRGB8 r g b) = V3 (to r) (to g) (to b) where to n = fromIntegral n
   fromFloatPixel (V3 r g b) = PixelRGB8 (to r) (to g) (to b) where to = floor
-  maxRepresentable Proxy = 1
+  maxRepresentable Proxy = 255
 
 instance InterpolablePixel PixelRGBA8 where
   type Holder PixelRGBA8 = V4
@@ -70,7 +70,7 @@ instance InterpolablePixel PixelRGBA8 where
     where to n = fromIntegral n
   fromFloatPixel (V4 r g b a) = PixelRGBA8 (to r) (to g) (to b) (to a)
     where to = floor
-  maxRepresentable Proxy = 1
+  maxRepresentable Proxy = 255
 
 -- | This constraint ensure that a type is a pixel
 -- and we're allowed to modulate it's color components

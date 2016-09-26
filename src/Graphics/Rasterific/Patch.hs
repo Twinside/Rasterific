@@ -118,10 +118,10 @@ subdivideWeights :: ParametricValues (V2 CoonColorWeight)
                  -> Subdivided (ParametricValues (V2 CoonColorWeight))
 subdivideWeights values = Subdivided { .. } where
   ParametricValues
-    { _westValue = west
-    , _northValue = north
-    , _southValue = south
+    { _northValue = north
     , _eastValue = east
+    , _southValue = south
+    , _westValue = west
     } = values
 
   --  N       midNorth    E
@@ -397,8 +397,8 @@ combine (CubicBezier a1 b1 c1 d1)
 
 straightLine :: Point -> Point -> CubicBezier
 straightLine a b = CubicBezier a p1 p2 b where
-  p1 = lerp (1/3) a b
-  p2 = lerp (2/3) a b
+  p1 = lerp (2/3) a b
+  p2 = lerp (1/3) a b
 
 
 -- | The curves in the coon patch are inversed!
@@ -427,9 +427,11 @@ instance {-# INCOHERENT #-}
 
 bilinearInterpolation :: InterpolablePixel px
                       => ParametricValues px -> V2 CoonColorWeight -> px
-bilinearInterpolation ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uTop uBottom where
-  uTop = lerp u (toFloatPixel _northValue) (toFloatPixel _eastValue)
-  uBottom = lerp u (toFloatPixel _westValue) (toFloatPixel _southValue)
+bilinearInterpolation ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uBottom uTop where
+  -- The arguments are flipped, because the lerp function from Linear is...
+  -- inversed in u v
+  uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
+  uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
 
 bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
                      => ParametricValues (V4 (Holder px Float))

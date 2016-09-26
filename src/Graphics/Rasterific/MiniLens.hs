@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.MiniLens
     ( -- * Types
       Lens
@@ -26,11 +27,21 @@ module Graphics.Rasterific.MiniLens
 import Control.Monad.Identity
 import Control.Applicative
 import Control.Monad.State        as State
+
+#if MIN_VERSION_base(4,8,0)
 import Data.Function( (&) )
+#endif
 
 infixl 8 .^
 infixr 4 .~
 infix  4 .=,%=,+=
+
+#if !MIN_VERSION_base(4,8,0)
+infixl 1 &
+
+(&) :: a -> (a -> b) -> b
+x & f = f x
+#endif
 
 -- | Does it look familiar? yes it's the official
 -- Lens type.

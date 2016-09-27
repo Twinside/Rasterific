@@ -27,7 +27,8 @@ import Linear
 #else
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative, pure, (<*>) )
+import Control.Applicative( Applicative, pure, (<$>), (<*>) )
+import Data.Monoid( mappend )
 import Data.Foldable( Foldable( .. ) )
 import Data.Traversable( Traversable( .. ) )
 #endif

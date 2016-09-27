@@ -287,6 +287,47 @@ grid = do
       forM_ varPatchIndices $ \(x, y) -> do
           debugDrawCoonPatch opt $ coonPatchAt mesh x y
 
+debugCubic :: IO ()
+debugCubic = do
+    drawImm "coon_img/gradient_mesh_bilinear_debug.png" 500 500 $ renderCoonMesh mesh
+    drawImm "coon_img/gradient_mesh_bicubic_debug.png" 500 500 $ renderCoonMeshBicubic mesh
+  where
+    px r g b = PixelRGBA8 r g b 255
+    mesh =
+      generateLinearGrid 4 4 (V2 10 10) (V2 100 100) colors
+  
+    colors = V.fromListN (5 * 5)
+      [ px 205 255 41
+      , px 255 196 0
+      , px 255 103 0
+      , px 255 103 0
+      , px 0   176 255
+  
+      , px 241 7   0
+      , px 127 0   0
+      , px 0   76  255
+      , px 41  255 205
+      , px 255 196 0
+  
+      , px 0   76  255
+      , px 255 103 0
+      , px 0   76  255
+      , px 124 255 121
+      , px 255 103 0
+  
+      , px 0   76  255
+      , px 241 7   0
+      , px 0   176 255
+      , px 255 103 0
+      , px 0   76  255
+  
+      , px 241 7   0
+      , px 0   0   241
+      , px 241 7   0
+      , px 41  255 205
+      , px 41  255 205
+      ]
+
 coonTestWild :: IO ()
 coonTestWild = do
   drawImm "coon_render_wild.png" 800 800 $ renderCoonPatch patch
@@ -304,6 +345,7 @@ coonTestWild = do
 main :: IO ()
 main = do
   grid
+  debugCubic 
   coonTest
   coonTestColorStop 
   coonTestWild 

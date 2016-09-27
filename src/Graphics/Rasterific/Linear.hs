@@ -28,6 +28,8 @@ import Linear
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( Applicative, pure, (<*>) )
+import Data.Foldable( Foldable( .. ) )
+import Data.Traversable( Traversable( .. ) )
 #endif
 
 import Graphics.Rasterific.MiniLens

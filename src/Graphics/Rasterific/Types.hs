@@ -53,6 +53,7 @@ import Data.DList( DList, fromList )
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable )
+import Control.Applicative( (<$>), (<*>) )
 #endif
 import Control.Monad.Identity( runIdentity )
 import Data.Foldable( foldl', toList )

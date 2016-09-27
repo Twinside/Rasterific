@@ -68,7 +68,7 @@ instance InterpolablePixel PixelRGBA8 where
   type Holder PixelRGBA8 = V4
   toFloatPixel (PixelRGBA8 r g b a) = V4 (to r) (to g) (to b) (to a)
     where to n = fromIntegral n
-  fromFloatPixel (V4 r g b a) = PixelRGBA8 (to r) (to g) (to b) (to a)
+  fromFloatPixel (V4 r g b a) = PixelRGBA8 (to r) (to g) (to b) 255-- (to b) (to a)
     where to = floor
   maxRepresentable Proxy = 255
 

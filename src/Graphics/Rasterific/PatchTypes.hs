@@ -1,5 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Graphics.Rasterific.PatchTypes where
 
 import Data.Monoid( (<>) )
@@ -38,7 +41,10 @@ data Derivative px = Derivative
   { _derivValues :: !(Holder px Float)
   , _xDerivative :: !(Holder px Float)
   , _yDerivative :: !(Holder px Float)
+  , _xyDerivative :: !(Holder px Float)
   }
+
+deriving instance Show (Holder px Float) => Show (Derivative px)
 
 xDerivative :: Lens' (Derivative px) (Holder px Float)
 xDerivative = lens _xDerivative setter where

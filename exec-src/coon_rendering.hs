@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving #-}
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( foldMap )
 import Control.Applicative( (<$>) )

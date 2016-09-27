@@ -438,8 +438,9 @@ bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float)
                      -> V2 CoonColorWeight
                      -> px
 bicubicInterpolation (ParametricValues a b c d) (V2 x y) =
-  fromFloatPixel $ af ^+^ bf ^+^ cf ^+^ df
+  fromFloatPixel . fmap clamp $ af ^+^ bf ^+^ cf ^+^ df
   where
+    clamp = max 0 . min 255
     xv, vy, vyy, vyyy :: V4 Float
     xv = V4 1 x (x*x) (x*x*x)
     vy = xv ^* y
@@ -550,7 +551,7 @@ renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, Interpolator interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 6 -- maxColorDeepness baseColors
+  maxDeepness = 7 -- maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }

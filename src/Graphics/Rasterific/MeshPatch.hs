@@ -37,6 +37,7 @@ module Graphics.Rasterific.MeshPatch
 import Debug.Trace
 import Text.Printf
 
+import Data.Foldable( foldl' )
 import Data.Monoid( (<>) )
 import Control.Monad.ST( runST )
 import Control.Monad.Reader( runReaderT )
@@ -132,9 +133,9 @@ slopeOf prevColor thisColor nextColor
           | abs sp < abs sn = 3 * sp
           | otherwise = 3 * sn
 
-calculateMeshColorDerivative :: forall px. InterpolablePixel px
+calculateMeshColorDerivative :: forall px. (InterpolablePixel px, Show (Derivative px))
                              => MeshPatch px -> MeshPatch (Derivative px)
-calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } where
+calculateMeshColorDerivative mesh = trace (unlines . fmap show $ V.toList withEdgesDerivatives) $ mesh { _meshColors = withEdgesDerivatives } where
   withEdgesDerivatives =
      colorDerivatives V.// (topDerivative <> bottomDerivative <> leftDerivative <> rightDerivative)
   colorDerivatives =
@@ -142,12 +143,15 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   w = _meshPatchWidth mesh + 1
   h = _meshPatchHeight mesh + 1
+  clampX = max 0 . min (w - 1)
+  clampY = max 0 . min (h - 1)
+
   rawColorAt x y =_meshColors mesh V.! (y * w + x)
-  atColor x y = toFloatPixel $ rawColorAt x y
+  atColor x y = toFloatPixel $ rawColorAt (clampX x) (clampY y)
   isOnVerticalBorder x = x == 0 || x == w - 1 
   isOnHorizontalBorder y = y == 0 || y == h - 1
 
-  pointAt = verticeAt mesh
+  pointAt x y = verticeAt mesh (clampX x) (clampY y)
   derivAt x y = colorDerivatives  V.! (y * w + x)
 
 
@@ -175,10 +179,10 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   -- General case
   interiorDerivative x y
-    | isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero
-    | isOnHorizontalBorder y = Derivative thisColor dx zero
-    | isOnVerticalBorder x = Derivative thisColor zero dy
-    | otherwise = Derivative thisColor dx dy
+    {-| isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero-}
+    {-| isOnHorizontalBorder y = Derivative thisColor dx zero-}
+    {-| isOnVerticalBorder x = Derivative thisColor zero dy-}
+    | otherwise = Derivative thisColor dx dy zero
     where
       dx = slopeOf
           cxPrev thisColor cxNext
@@ -188,6 +192,25 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
           cyPrev thisColor cyNext
           yPrev this yNext
       
+      {-  
+y12a[j][k]=(ya[j+1][k+1]-
+            ya[j+1][k-1]-
+            ya[j-1][k+1]+
+            ya[j-1][k-1])
+/((x1a[j+1]-x1a[j-1])*(x2a[k+1]-x2a[k-1]));
+---}
+      cxyPrev = atColor (x - 1) (y - 1)
+      xyPrev = pointAt (x - 1) (y - 1)
+
+      cxyNext = atColor (x + 1) (y + 1)
+      xyNext = pointAt (x + 1) (y + 1)
+
+      cyxPrev = atColor (x - 1) (y + 1)
+      yxPrev = pointAt (x - 1) (y + 1)
+
+      cyxNext = atColor (x + 1) (y - 1)
+      yxNext = pointAt (x + 1) (y - 1)
+
       cxPrev = atColor (x - 1) y
       thisColor = atColor x y
       cxNext = atColor (x + 1) y
@@ -353,20 +376,59 @@ type ColorPreparator px pxt = ParametricValues px -> ParametricValues pxt
 coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch px
 coonPatchAt = coonPatchAt' id
 
-coonPatchAtWithDerivative :: InterpolablePixel px
+coonPatchAtWithDerivative :: (InterpolablePixel px, Show (Holder px Float))
                           => MeshPatch (Derivative px) -> Int -> Int
                           -> CoonPatch (V4 (Holder px Float))
 coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
 
-cubicPreparator :: InterpolablePixel px
+
+rawMatrix :: [[Float]]
+rawMatrix =
+  [ [ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
+    [ 0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
+    [-3, 3, 0, 0, -2,-1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
+    [ 2,-2, 0, 0,  1, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
+    [ 0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0 ],
+    [ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0 ],
+    [ 0, 0, 0, 0,  0, 0, 0, 0, -3, 3, 0, 0, -2,-1, 0, 0 ],
+    [ 0, 0, 0, 0,  0, 0, 0, 0,  2,-2, 0, 0,  1, 1, 0, 0 ],
+    [-3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0,  0, 0, 0, 0 ],
+    [ 0, 0, 0, 0, -3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0 ],
+    [ 9,-9,-9, 9,  6, 3,-6,-3,  6,-6, 3,-3,  4, 2, 2, 1 ],
+    [-6, 6, 6,-6, -3,-3, 3, 3, -4, 4,-2, 2, -2,-2,-1,-1 ],
+    [ 2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0,  0, 0, 0, 0 ],
+    [ 0, 0, 0, 0,  2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0 ],
+    [-6, 6, 6,-6, -4,-2, 4, 2, -3, 3,-3, 3, -2,-1,-2,-1 ],
+    [ 4,-4,-4, 4,  2, 2,-2,-2,  2,-2, 2,-2,  1, 1, 1, 1 ] ]
+
+{-mulVec :: [[Float]] -> [Float] -> [Float]-}
+mulVec mtrx vec = [foldl' (^+^) zero $ zipWith (^*) vec l | l <- mtrx]
+
+cubicPreparator :: (InterpolablePixel px, Show (Holder px Float))
                 => ParametricValues (Derivative px)
                 -> ParametricValues (V4 (Holder px Float))
-cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
-  Derivative c00 fx00 fy00 = _northValue
-  Derivative c10 fx10 fy10 = _eastValue
-  Derivative c01 fx01 fy01 = _westValue
-  Derivative c11 fx11 fy11 = _southValue
+cubicPreparator ParametricValues { .. } = traceShowId $ ParametricValues a' b' c' d' where
+  Derivative c00 fx00 fy00 _ = _northValue
+  Derivative c10 fx10 fy10 _ = _eastValue
+  Derivative c01 fx01 fy01 _ = _westValue
+  Derivative c11 fx11 fy11 _ = _southValue
 
+  vec = [c00, c10, c01, c11
+        ,fx00, fx10, fx01, fx11 
+        ,fy00, fy10, fy01, fy11 
+        ,zero, zero, zero, zero
+        ]
+
+  a' = V4 a b c d
+  b' = V4 e f g h
+  c' = V4 i j k l
+  d' = V4 m n o p
+  [a, b, c, d
+    ,e, f, g, h
+    ,i, j, k, l
+    ,m, n, o, p] = mulVec rawMatrix vec
+
+{-  
   a = V4
     c00
     fx00
@@ -376,7 +438,7 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
   b = V4
     fy00
     zero
-    ((fy10 ^-^ fy00) ^* 3)
+    ((fy00 ^-^ fy10) ^* (-3))
     ((fy00 ^-^ fy10) ^* 2)
 
   c = V4
@@ -399,7 +461,7 @@ cubicPreparator ParametricValues { .. } = ParametricValues a b c d where
      (fy10 ^-^ fy00 ^-^ fy01 ^+^ fy11) ^* 3)
     (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 2 ^+^
        fx00 ^-^ fx01 ^+^ fx10 ^-^ fx11 ^+^ fy00 ^+^ fy01 ^-^ fy10 ^-^ fy11) ^* 2)
-
+---}
 coonPatchAt' :: ColorPreparator px pxt
              -> MeshPatch px -> Int -> Int -> CoonPatch pxt
 coonPatchAt' preparator mesh x y = CoonPatch 
@@ -446,7 +508,7 @@ coonPatchesOf :: MeshPatch px -> [CoonPatch px]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
-cubicCoonPatchesOf :: InterpolablePixel px
+cubicCoonPatchesOf :: (InterpolablePixel px, Show (Holder px Float))
                    => MeshPatch (Derivative px) -> [CoonPatch (V4 (Holder px Float))]
 cubicCoonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAtWithDerivative mesh x y

@@ -445,7 +445,7 @@ bicubicInterpolation (ParametricValues a b c d) (V2 x y) =
     xv = V4 1 x (x*x) (x*x*x)
     vy = xv ^* y
     vyy = vy ^* y
-    vyyy = vy ^* y
+    vyyy = vyy ^* y
 
     v1 ^^*^ v2 = (^*) <$> v1 <*> v2
 

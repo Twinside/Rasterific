@@ -34,8 +34,8 @@ module Graphics.Rasterific.MeshPatch
     , setColor
     ) where
 
-import Debug.Trace
-import Text.Printf
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 import Data.Foldable( foldl' )
 import Data.Monoid( (<>) )
@@ -98,15 +98,21 @@ data MeshPatch px = MeshPatch
     -- _meshPatchHeight * (_meshPatchWidth + 1)
   , _meshVerticalSecondary :: !(V.Vector InterBezier)
 
-   -- | Derivatives used for Tensor patch
-  , _meshDerivatives :: !(Maybe (V.Vector Derivatives))
-
    -- | Colors for each vertex points
   , _meshColors :: !(V.Vector px)
   }
   deriving (Eq, Show, Functor)
 
-
+slopeBasic :: (Additive h, Applicative h)
+           => h Float -> h Float
+           -> Point -> Point
+           -> h Float
+slopeBasic prevColor nextColor prevPoint nextPoint 
+  | nearZero d = zero
+  | otherwise = (nextColor ^-^ prevColor) ^/ d
+  where
+    d = prevPoint `distance` nextPoint
+          
 slopeOf :: (Additive h, Applicative h)
         => h Float -> h Float -> h Float
         -> Point -> Point -> Point
@@ -119,23 +125,25 @@ slopeOf prevColor thisColor nextColor
     distPrev = thisPoint `distance` prevPoint
     distNext = thisPoint `distance` nextPoint
 
-    slopePrev = (thisColor ^-^ prevColor) ^/ distPrev
-    slopeNext = (nextColor ^-^ thisColor) ^/ distNext
+    slopePrev | nearZero distPrev = zero
+              | otherwise = (thisColor ^-^ prevColor) ^/ distPrev
+    slopeNext | nearZero distNext = zero
+              | otherwise = (nextColor ^-^ thisColor) ^/ distNext
     slope = (slopePrev ^+^ slopeNext) ^* 0.5
 
     slopeVal :: Float -> Float -> Float -> Float
     slopeVal sp s sn
-      | signum sp /= signum sn = 0
-      | abs s > abs minSlope = minSlope
+      {-| signum sp /= signum sn = 0-}
+      {-| abs s > abs minSlope = minSlope-}
       | otherwise = s
       where
-        minSlope
-          | abs sp < abs sn = 3 * sp
-          | otherwise = 3 * sn
+        {-minSlope-}
+          {-| abs sp < abs sn = 3 * sp-}
+          {-| otherwise = 3 * sn-}
 
 calculateMeshColorDerivative :: forall px. (InterpolablePixel px, Show (Derivative px))
                              => MeshPatch px -> MeshPatch (Derivative px)
-calculateMeshColorDerivative mesh = trace (unlines . fmap show $ V.toList withEdgesDerivatives) $ mesh { _meshColors = withEdgesDerivatives } where
+calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } where
   withEdgesDerivatives =
      colorDerivatives V.// (topDerivative <> bottomDerivative <> leftDerivative <> rightDerivative)
   colorDerivatives =
@@ -182,8 +190,12 @@ calculateMeshColorDerivative mesh = trace (unlines . fmap show $ V.toList withEd
     {-| isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero-}
     {-| isOnHorizontalBorder y = Derivative thisColor dx zero-}
     {-| isOnVerticalBorder x = Derivative thisColor zero dy-}
-    | otherwise = Derivative thisColor dx dy zero
+    | otherwise = Derivative thisColor dx dy dxy
     where
+      dx = slopeBasic cxPrev cxNext xPrev xNext
+      dy = slopeBasic cyPrev cyNext yPrev yNext
+
+{-
       dx = slopeOf
           cxPrev thisColor cxNext
           xPrev this xNext
@@ -191,7 +203,11 @@ calculateMeshColorDerivative mesh = trace (unlines . fmap show $ V.toList withEd
       dy = slopeOf
           cyPrev thisColor cyNext
           yPrev this yNext
+          -- -}
       
+      dxy | nearZero xyDist = zero
+          | otherwise = (cxyNext ^-^ cyxPrev ^-^ cyxNext ^+^ cxyPrev) ^/ (xyDist)
+      xyDist = (xNext `distance` xPrev) * (yNext `distance` yPrev)
       {-  
 y12a[j][k]=(ya[j+1][k+1]-
             ya[j+1][k-1]-
@@ -232,7 +248,6 @@ data MutableMesh s px = MutableMesh
   , _meshMutPrimaryVertices :: !(MV.MVector s Point)
   , _meshMutHorizSecondary :: !(MV.MVector s InterBezier)
   , _meshMutVertSecondary :: !(MV.MVector s InterBezier)
-  , _meshMutDer :: !(Maybe (MV.MVector s Derivatives))
   , _meshMutColors :: !(MV.MVector s px)
   }
 
@@ -243,7 +258,6 @@ thawMesh MeshPatch { .. } = do
   _meshMutPrimaryVertices <- V.thaw _meshPrimaryVertices 
   _meshMutHorizSecondary <- V.thaw _meshHorizontalSecondary
   _meshMutVertSecondary <- V.thaw _meshVerticalSecondary
-  _meshMutDer <- traverse V.thaw _meshDerivatives
   _meshMutColors <- V.thaw _meshColors
   return MutableMesh { .. }
 
@@ -254,7 +268,6 @@ freezeMesh MutableMesh { .. } = do
   _meshPrimaryVertices <- V.freeze _meshMutPrimaryVertices 
   _meshHorizontalSecondary <- V.freeze _meshMutHorizSecondary
   _meshVerticalSecondary <- V.freeze _meshMutVertSecondary
-  _meshDerivatives<- traverse V.freeze _meshMutDer 
   _meshColors <- V.freeze _meshMutColors
   return MeshPatch { .. }
 
@@ -324,14 +337,12 @@ transformMeshM f MeshPatch { .. } = do
   vertices <- mapM f _meshPrimaryVertices
   hSecondary <- mapM (transformM f) _meshHorizontalSecondary
   vSecondary <- mapM (transformM f) _meshVerticalSecondary
-  derivatives <- mapM (mapM (transformM f)) _meshDerivatives
   return $ MeshPatch
       { _meshPatchWidth = _meshPatchWidth 
       , _meshPatchHeight = _meshPatchHeight
       , _meshPrimaryVertices = vertices 
       , _meshHorizontalSecondary = hSecondary 
       , _meshVerticalSecondary = vSecondary
-      , _meshDerivatives = derivatives
       , _meshColors = _meshColors
       }
 
@@ -346,7 +357,6 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
   , _meshPrimaryVertices = vertices 
   , _meshHorizontalSecondary = hSecondary 
   , _meshVerticalSecondary = vSecondary
-  , _meshDerivatives = Nothing
   , _meshColors = colors
   }
   where
@@ -384,22 +394,23 @@ coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
 
 rawMatrix :: [[Float]]
 rawMatrix =
-  [ [ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
-    [ 0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
-    [-3, 3, 0, 0, -2,-1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
-    [ 2,-2, 0, 0,  1, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ],
-    [ 0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0 ],
-    [ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0 ],
-    [ 0, 0, 0, 0,  0, 0, 0, 0, -3, 3, 0, 0, -2,-1, 0, 0 ],
-    [ 0, 0, 0, 0,  0, 0, 0, 0,  2,-2, 0, 0,  1, 1, 0, 0 ],
-    [-3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0,  0, 0, 0, 0 ],
-    [ 0, 0, 0, 0, -3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0 ],
-    [ 9,-9,-9, 9,  6, 3,-6,-3,  6,-6, 3,-3,  4, 2, 2, 1 ],
-    [-6, 6, 6,-6, -3,-3, 3, 3, -4, 4,-2, 2, -2,-2,-1,-1 ],
-    [ 2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0,  0, 0, 0, 0 ],
-    [ 0, 0, 0, 0,  2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0 ],
-    [-6, 6, 6,-6, -4,-2, 4, 2, -3, 3,-3, 3, -2,-1,-2,-1 ],
-    [ 4,-4,-4, 4,  2, 2,-2,-2,  2,-2, 2,-2,  1, 1, 1, 1 ] ]
+  [ [ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
+  , [ 0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
+  , [-3, 3, 0, 0, -2,-1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
+  , [ 2,-2, 0, 0,  1, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
+  , [ 0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0 ]
+  , [ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  1, 0, 0, 0 ]
+  , [ 0, 0, 0, 0,  0, 0, 0, 0, -3, 3, 0, 0, -2,-1, 0, 0 ]
+  , [ 0, 0, 0, 0,  0, 0, 0, 0,  2,-2, 0, 0,  1, 1, 0, 0 ]
+  , [-3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0,  0, 0, 0, 0 ]
+  , [ 0, 0, 0, 0, -3, 0, 3, 0,  0, 0, 0, 0, -2, 0,-1, 0 ]
+  , [ 9,-9,-9, 9,  6, 3,-6,-3,  6,-6, 3,-3,  4, 2, 2, 1 ]
+  , [-6, 6, 6,-6, -3,-3, 3, 3, -4, 4,-2, 2, -2,-2,-1,-1 ]
+  , [ 2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0,  0, 0, 0, 0 ]
+  , [ 0, 0, 0, 0,  2, 0,-2, 0,  0, 0, 0, 0,  1, 0, 1, 0 ]
+  , [-6, 6, 6,-6, -4,-2, 4, 2, -3, 3,-3, 3, -2,-1,-2,-1 ]
+  , [ 4,-4,-4, 4,  2, 2,-2,-2,  2,-2, 2,-2,  1, 1, 1, 1 ]
+  ]
 
 {-mulVec :: [[Float]] -> [Float] -> [Float]-}
 mulVec mtrx vec = [foldl' (^+^) zero $ zipWith (^*) vec l | l <- mtrx]
@@ -407,16 +418,16 @@ mulVec mtrx vec = [foldl' (^+^) zero $ zipWith (^*) vec l | l <- mtrx]
 cubicPreparator :: (InterpolablePixel px, Show (Holder px Float))
                 => ParametricValues (Derivative px)
                 -> ParametricValues (V4 (Holder px Float))
-cubicPreparator ParametricValues { .. } = traceShowId $ ParametricValues a' b' c' d' where
-  Derivative c00 fx00 fy00 _ = _northValue
-  Derivative c10 fx10 fy10 _ = _eastValue
-  Derivative c01 fx01 fy01 _ = _westValue
-  Derivative c11 fx11 fy11 _ = _southValue
+cubicPreparator ParametricValues { .. } = ParametricValues a' b' c' d' where
+  Derivative c00 fx00 fy00 fxy00 = _northValue
+  Derivative c10 fx10 fy10 fxy10 = _eastValue
+  Derivative c01 fx01 fy01 fxy01 = _westValue
+  Derivative c11 fx11 fy11 fxy11 = _southValue
 
-  vec = [c00, c10, c01, c11
-        ,fx00, fx10, fx01, fx11 
-        ,fy00, fy10, fy01, fy11 
-        ,zero, zero, zero, zero
+  vec = [  c00,   c10,   c01,   c11
+        , fx00,  fx10,  fx01,  fx11 
+        , fy00,  fy10,  fy01,  fy11 
+        ,fxy00, fxy10, fxy01, fxy11
         ]
 
   a' = V4 a b c d

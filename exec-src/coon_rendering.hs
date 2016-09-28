@@ -292,12 +292,46 @@ debugCubic :: IO ()
 debugCubic = do
     drawImm "coon_img/gradient_mesh_bilinear_debug.png" 500 500 $ renderCoonMesh mesh
     drawImm "coon_img/gradient_mesh_bicubic_debug.png" 500 500 $ renderCoonMeshBicubic mesh
+    drawImm "coon_img/gradient_mesh_bilinear_debug2.png" 500 500 $ renderCoonMesh mesh2
+    drawImm "coon_img/gradient_mesh_bicubic_debug2.png" 500 500 $ renderCoonMeshBicubic mesh2
+    drawImm "coon_img/gradient_mesh_bilinear_debug3.png" 1000 1000 $ renderCoonMesh mesh3
+    drawImm "coon_img/gradient_mesh_bicubic_debug3.png" 1000 1000 $ renderCoonMeshBicubic mesh3
   where
     px r g b = PixelRGBA8 r g b 255
     mesh =
       generateLinearGrid 4 4 (V2 10 10) (V2 100 100) colors
+
+    mesh2 =
+      generateLinearGrid 3 3 (V2 10 10) (V2 100 100) colors
+
+    mesh3 =
+      generateLinearGrid 9 9 (V2 10 10) (V2 100 100) . V.fromListN (10 * 10) $ cycle colorBase
   
-    colors = V.fromListN (5 * 5)
+    colors2 = V.fromListN (4 * 4)
+      [ px 255 179  47
+      , px 255 242  34
+      , px  61 227 206
+      , px  90 255   0
+
+      , px 255 242  34
+      , px  61 227 206
+      , px 103 157 255
+      , px 255 179  47
+
+      , px 255  74  74
+      , px  90 255   0
+      , px 255 179  47
+      , px  61 227 206
+
+      , px 103 157 255
+      , px  61 227 206
+      , px 255 242  34
+      , px 103 157 255
+      ]
+
+    colors = V.fromListN (5 * 5) colorBase
+
+    colorBase =
       [ px 205 255 41
       , px 255 196 0
       , px 255 103 0
@@ -346,7 +380,7 @@ coonTestWild = do
 main :: IO ()
 main = do
   grid
-  debugCubic 
+  debugCubic
   coonTest
   coonTestColorStop 
   coonTestWild 

@@ -4,20 +4,26 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
+#define SVG_2
 -- | Module defining the type of mesh patch grid.
 module Graphics.Rasterific.MeshPatch
     ( -- * Types
       InterBezier( .. )
     , Derivatives( .. )
     , MeshPatch( .. )
+    , CubicCoefficient( .. )
 
      -- * Functions
     , calculateMeshColorDerivative
     , verticeAt
     , generateLinearGrid
+    , generateImageMesh
     , coonPatchAt
+    , coonImagePatchAt
     , coonPatchAtWithDerivative
     , coonPatchesOf
+    , imagePatchesOf
     , cubicCoonPatchesOf
 
       -- * Mutable mesh
@@ -37,7 +43,6 @@ module Graphics.Rasterific.MeshPatch
 {-import Debug.Trace-}
 {-import Text.Printf-}
 
-import Data.Foldable( foldl' )
 import Data.Monoid( (<>) )
 import Control.Monad.ST( runST )
 import Control.Monad.Reader( runReaderT )
@@ -46,73 +51,17 @@ import Control.Monad.Primitive( PrimMonad, PrimState )
 import Data.Vector( (!) )
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector.Generic as VG
 
+import Codec.Picture( Image( imageWidth, imageHeight ) )
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.MiniLens
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
+import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PatchTypes
 
-data InterBezier = InterBezier 
-  { _inter0 :: !Point
-  , _inter1 :: !Point
-  }
-  deriving (Eq, Show)
-
-instance Transformable InterBezier where
-  transform f (InterBezier a b) = InterBezier (f a) (f b)
-  transformM f (InterBezier a b) = InterBezier <$> f a <*> f b
-
-data Derivatives = Derivatives
-  { _interNorthWest :: !Point
-  , _interNorthEast :: !Point
-  , _interSouthWest :: !Point
-  , _interSouthEast :: !Point
-  }
-  deriving (Eq, Show)
-
-instance Transformable Derivatives where
-  transform f (Derivatives a b c d) =
-     Derivatives (f a) (f b) (f c) (f d)
-  transformM f (Derivatives a b c d) =
-     Derivatives <$> f a <*> f b <*> f c <*> f d
-
--- | Define a mesh patch grid, the grid is conceptually
--- a regular grid of _meshPatchWidth * _meshPatchHeight
--- patches but with shared edges
-data MeshPatch px = MeshPatch
-  { -- | Count of horizontal of *patch*
-    _meshPatchWidth  :: !Int
-    -- | Count of vertical of *patch*
-  , _meshPatchHeight :: !Int
-    -- | Main points defining the patch, of size
-    -- (_meshPatchWidth + 1) * (_meshPatchHeight + 1)
-  , _meshPrimaryVertices :: !(V.Vector Point)
-
-    -- | For each line, store the points in between each
-    -- vertex. There is two points between each vertex, so
-    -- _meshPatchWidth * (_meshPatchHeight + 1) points
-  , _meshHorizontalSecondary :: !(V.Vector InterBezier)
-    -- | For each colun, store the points in between each
-    -- vertex. Two points between each vertex, so
-    -- _meshPatchHeight * (_meshPatchWidth + 1)
-  , _meshVerticalSecondary :: !(V.Vector InterBezier)
-
-   -- | Colors for each vertex points
-  , _meshColors :: !(V.Vector px)
-  }
-  deriving (Eq, Show, Functor)
-
-slopeBasic :: (Additive h, Applicative h)
-           => h Float -> h Float
-           -> Point -> Point
-           -> h Float
-slopeBasic prevColor nextColor prevPoint nextPoint 
-  | nearZero d = zero
-  | otherwise = (nextColor ^-^ prevColor) ^/ d
-  where
-    d = prevPoint `distance` nextPoint
-          
+#ifdef SVG_2
 slopeOf :: (Additive h, Applicative h)
         => h Float -> h Float -> h Float
         -> Point -> Point -> Point
@@ -133,15 +82,26 @@ slopeOf prevColor thisColor nextColor
 
     slopeVal :: Float -> Float -> Float -> Float
     slopeVal sp s sn
-      {-| signum sp /= signum sn = 0-}
-      {-| abs s > abs minSlope = minSlope-}
+      | signum sp /= signum sn = 0
+      | abs s > abs minSlope = minSlope
       | otherwise = s
       where
-        {-minSlope-}
-          {-| abs sp < abs sn = 3 * sp-}
-          {-| otherwise = 3 * sn-}
+        minSlope
+          | abs sp < abs sn = 3 * sp
+          | otherwise = 3 * sn
+#else
+slopeBasic :: (Additive h)
+           => h Float -> h Float
+           -> Point -> Point
+           -> h Float
+slopeBasic prevColor nextColor prevPoint nextPoint 
+  | nearZero d = zero
+  | otherwise = (nextColor ^-^ prevColor) ^/ d
+  where
+    d = prevPoint `distance` nextPoint
+#endif
 
-calculateMeshColorDerivative :: forall px. (InterpolablePixel px, Show (Derivative px))
+calculateMeshColorDerivative :: forall px. (InterpolablePixel px)
                              => MeshPatch px -> MeshPatch (Derivative px)
 calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } where
   withEdgesDerivatives =
@@ -156,8 +116,8 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   rawColorAt x y =_meshColors mesh V.! (y * w + x)
   atColor x y = toFloatPixel $ rawColorAt (clampX x) (clampY y)
-  isOnVerticalBorder x = x == 0 || x == w - 1 
-  isOnHorizontalBorder y = y == 0 || y == h - 1
+  {-isOnVerticalBorder x = x == 0 || x == w - 1 -}
+  {-isOnHorizontalBorder y = y == 0 || y == h - 1-}
 
   pointAt x y = verticeAt mesh (clampX x) (clampY y)
   derivAt x y = colorDerivatives  V.! (y * w + x)
@@ -192,10 +152,7 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
     {-| isOnVerticalBorder x = Derivative thisColor zero dy-}
     | otherwise = Derivative thisColor dx dy dxy
     where
-      dx = slopeBasic cxPrev cxNext xPrev xNext
-      dy = slopeBasic cyPrev cyNext yPrev yNext
-
-{-
+#ifdef SVG_2
       dx = slopeOf
           cxPrev thisColor cxNext
           xPrev this xNext
@@ -205,16 +162,15 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
           yPrev this yNext
           -- -}
       
+      dxy = zero
+#else
+      dx = slopeBasic cxPrev cxNext xPrev xNext
+      dy = slopeBasic cyPrev cyNext yPrev yNext
+
       dxy | nearZero xyDist = zero
           | otherwise = (cxyNext ^-^ cyxPrev ^-^ cyxNext ^+^ cxyPrev) ^/ (xyDist)
       xyDist = (xNext `distance` xPrev) * (yNext `distance` yPrev)
-      {-  
-y12a[j][k]=(ya[j+1][k+1]-
-            ya[j+1][k-1]-
-            ya[j-1][k+1]+
-            ya[j-1][k-1])
-/((x1a[j+1]-x1a[j-1])*(x2a[k+1]-x2a[k-1]));
----}
+
       cxyPrev = atColor (x - 1) (y - 1)
       xyPrev = pointAt (x - 1) (y - 1)
 
@@ -226,6 +182,7 @@ y12a[j][k]=(ya[j+1][k+1]-
 
       cyxNext = atColor (x + 1) (y - 1)
       yxNext = pointAt (x + 1) (y - 1)
+#endif
 
       cxPrev = atColor (x - 1) y
       thisColor = atColor x y
@@ -332,22 +289,18 @@ setColor x y p = do
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutColors idx p
 
-transformMeshM :: Monad m => (Point -> m Point) -> MeshPatch px -> m (MeshPatch px)
-transformMeshM f MeshPatch { .. } = do
-  vertices <- mapM f _meshPrimaryVertices
-  hSecondary <- mapM (transformM f) _meshHorizontalSecondary
-  vSecondary <- mapM (transformM f) _meshVerticalSecondary
-  return $ MeshPatch
-      { _meshPatchWidth = _meshPatchWidth 
-      , _meshPatchHeight = _meshPatchHeight
-      , _meshPrimaryVertices = vertices 
-      , _meshHorizontalSecondary = hSecondary 
-      , _meshVerticalSecondary = vSecondary
-      , _meshColors = _meshColors
-      }
-
-instance {-# OVERLAPPING  #-} Transformable (MeshPatch px) where
-  transformM = transformMeshM
+generateImageMesh :: Int -> Int -> Point -> Image px -> MeshPatch (ImageMesh px)
+generateImageMesh w h base img = generateLinearGrid w h base (V2 dx dy) infos where
+  dx = fromIntegral (imageWidth img) / fromIntegral w
+  dy = fromIntegral (imageHeight img) / fromIntegral h
+  infos = V.fromListN ((w + 1) * (h + 1))
+    [ImageMesh img $ trans <> scaling
+        | y <- [0 .. h]
+        , x <- [0 .. w]
+        , let fx = fromIntegral x
+              fy = fromIntegral y
+              trans = translate (V2 (fx * dx) (fy * dy))
+              scaling = scale dx dy]
 
 generateLinearGrid :: Int -> Int -> Point -> V2 Float -> V.Vector px
                    -> MeshPatch px
@@ -381,19 +334,22 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
                   delta = p1 ^-^ p0
             ]
 
-type ColorPreparator px pxt = ParametricValues px -> ParametricValues pxt
+type ColorPreparator px pxt = ParametricValues px -> pxt
 
-coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch px
+coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch (ParametricValues px)
 coonPatchAt = coonPatchAt' id
 
-coonPatchAtWithDerivative :: (InterpolablePixel px, Show (Holder px Float))
+coonImagePatchAt :: MeshPatch (ImageMesh px) -> Int -> Int -> CoonPatch (ImageMesh px)
+coonImagePatchAt = coonPatchAt' _northValue
+
+coonPatchAtWithDerivative :: (InterpolablePixel px)
                           => MeshPatch (Derivative px) -> Int -> Int
-                          -> CoonPatch (V4 (Holder px Float))
+                          -> CoonPatch (CubicCoefficient px)
 coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
 
 
-rawMatrix :: [[Float]]
-rawMatrix =
+rawMatrix :: V.Vector (V.Vector Float)
+rawMatrix = V.fromListN 16 $ V.fromListN 16 <$>
   [ [ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
   , [ 0, 0, 0, 0,  1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
   , [-3, 3, 0, 0, -2,-1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 ]
@@ -412,67 +368,31 @@ rawMatrix =
   , [ 4,-4,-4, 4,  2, 2,-2,-2,  2,-2, 2,-2,  1, 1, 1, 1 ]
   ]
 
-{-mulVec :: [[Float]] -> [Float] -> [Float]-}
-mulVec mtrx vec = [foldl' (^+^) zero $ zipWith (^*) vec l | l <- mtrx]
-
-cubicPreparator :: (InterpolablePixel px, Show (Holder px Float))
+cubicPreparator :: (InterpolablePixel px)
                 => ParametricValues (Derivative px)
-                -> ParametricValues (V4 (Holder px Float))
-cubicPreparator ParametricValues { .. } = ParametricValues a' b' c' d' where
+                -> CubicCoefficient px
+cubicPreparator ParametricValues { .. } =
+    CubicCoefficient $ ParametricValues (sliceAt 0) (sliceAt 4) (sliceAt 8) (sliceAt 12) where
   Derivative c00 fx00 fy00 fxy00 = _northValue
   Derivative c10 fx10 fy10 fxy10 = _eastValue
   Derivative c01 fx01 fy01 fxy01 = _westValue
   Derivative c11 fx11 fy11 fxy11 = _southValue
 
-  vec = [  c00,   c10,   c01,   c11
-        , fx00,  fx10,  fx01,  fx11 
-        , fy00,  fy10,  fy01,  fy11 
-        ,fxy00, fxy10, fxy01, fxy11
-        ]
+  resultVector = mulVec $ V.fromListN 16
+    [  c00,   c10,   c01,   c11
+    , fx00,  fx10,  fx01,  fx11 
+    , fy00,  fy10,  fy01,  fy11 
+    ,fxy00, fxy10, fxy01, fxy11
+    ]
 
-  a' = V4 a b c d
-  b' = V4 e f g h
-  c' = V4 i j k l
-  d' = V4 m n o p
-  [a, b, c, d
-    ,e, f, g, h
-    ,i, j, k, l
-    ,m, n, o, p] = mulVec rawMatrix vec
+  mulVec vec = VG.foldl' (^+^) zero . VG.zipWith (^*) vec <$> rawMatrix
 
-{-  
-  a = V4
-    c00
-    fx00
-    ((c10 ^-^ c00) ^* 3 ^-^ fx00 ^* 2 ^-^ fx10)
-    ((c00 ^-^ c10) ^* 2 ^+^ fx00 ^+^ fx10)
+  sliceAt i = V4 
+    (resultVector V.! i)
+    (resultVector V.! (i + 1))
+    (resultVector V.! (i + 2))
+    (resultVector V.! (i + 3))
 
-  b = V4
-    fy00
-    zero
-    ((fy00 ^-^ fy10) ^* (-3))
-    ((fy00 ^-^ fy10) ^* 2)
-
-  c = V4
-    ((c01 ^-^ c00) ^* 3 ^-^ fy00 ^* 2 ^-^ fy01)
-    ((fx01 ^-^ fx00) ^* 3)
-    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 3 ^+^
-      (fx00 ^-^ fx01 ^+^ fy00 ^-^ fy10) ^* 2 ^+^ 
-      fx10 ^-^ fx11 ^+^ fy01 ^-^ fy11) ^* 3)
-    ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
-     (fx01 ^-^ fx00 ^-^ fx10 ^+^ fx11) ^* 3 ^+^
-     (fy10 ^-^ fy00) ^* 4 ^+^
-     (fy11 ^-^ fy01) ^* 2 )
-
-  d = V4
-    ((c00 ^-^ c01) ^* 2 ^+^ fy00 ^+^ fy01)
-    ((fx00 ^-^ fx01) ^* 2)
-    ((c01 ^-^ c00 ^+^ c10 ^-^ c11) ^* 6 ^+^
-     (fx01 ^-^ fx00) ^* 4 ^+^
-     (fx11 ^-^ fx10) ^* 2 ^+^
-     (fy10 ^-^ fy00 ^-^ fy01 ^+^ fy11) ^* 3)
-    (((c00 ^-^ c01 ^-^ c10 ^+^ c11) ^* 2 ^+^
-       fx00 ^-^ fx01 ^+^ fx10 ^-^ fx11 ^+^ fy00 ^+^ fy01 ^-^ fy10 ^-^ fy11) ^* 2)
----}
 coonPatchAt' :: ColorPreparator px pxt
              -> MeshPatch px -> Int -> Int -> CoonPatch pxt
 coonPatchAt' preparator mesh x y = CoonPatch 
@@ -515,12 +435,17 @@ coonPatchAt' preparator mesh x y = CoonPatch
     InterBezier p10 p20 = vInter ! baseV
     InterBezier p13 p23 = vInter ! (baseV + 1)
 
-coonPatchesOf :: MeshPatch px -> [CoonPatch px]
+coonPatchesOf :: MeshPatch px -> [CoonPatch (ParametricValues px)]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
-cubicCoonPatchesOf :: (InterpolablePixel px, Show (Holder px Float))
-                   => MeshPatch (Derivative px) -> [CoonPatch (V4 (Holder px Float))]
+imagePatchesOf :: MeshPatch (ImageMesh px) -> [CoonPatch (ImageMesh px)]
+imagePatchesOf mesh@MeshPatch { .. } =
+  [coonImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
+
+cubicCoonPatchesOf :: (InterpolablePixel px)
+                   => MeshPatch (Derivative px)
+                   -> [CoonPatch (CubicCoefficient px)]
 cubicCoonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAtWithDerivative mesh x y
         | y <- [0 .. _meshPatchHeight - 1]

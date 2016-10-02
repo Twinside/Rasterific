@@ -62,6 +62,8 @@ library
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command
                , Graphics.Rasterific.CubicBezier
+               , Graphics.Rasterific.BiSampleable
+               , Graphics.Rasterific.CubicBezier.FastForwardDifference
                , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize

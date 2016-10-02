@@ -27,6 +27,7 @@ module Graphics.Rasterific.Patch
     , drawCoonPatchOutline
     , renderCoonPatch
     , renderTensorPatch
+    , renderImageMesh 
     , debugDrawCoonPatch
     , debugDrawTensorPatch
     , parametricBase
@@ -52,6 +53,7 @@ import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Rasterific.Line( lineFromPath )
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.BiSampleable
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Command
@@ -82,7 +84,7 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   ParametricValues { _westValue = west, _northValue = north
                    , _southValue = south, _eastValue = east } = values
 
-meanValue :: ParametricValues (V2 CoonColorWeight) -> V2 CoonColorWeight
+meanValue :: ParametricValues UV -> UV
 meanValue = (^* 0.25) . getSum . foldMap Sum
 
   --  N    midNorthEast   E
@@ -94,8 +96,7 @@ meanValue = (^* 0.25) . getSum . foldMap Sum
   --      |3      :     2|
   --      +-------+------+
   --  W    midSouthWest   S
-subdivideHorizontal :: ParametricValues (V2 CoonColorWeight)
-                    -> (ParametricValues (V2 CoonColorWeight), ParametricValues (V2 CoonColorWeight))
+subdivideHorizontal :: ParametricValues UV -> (ParametricValues UV, ParametricValues UV)
 subdivideHorizontal ParametricValues { .. } = (l, r) where
   midNorthEast = _northValue `midPoint` _eastValue
   midSouthWest = _westValue `midPoint` _southValue
@@ -114,8 +115,7 @@ subdivideHorizontal ParametricValues { .. } = (l, r) where
     , _westValue = midSouthWest
     }
 
-subdivideWeights :: ParametricValues (V2 CoonColorWeight)
-                 -> Subdivided (ParametricValues (V2 CoonColorWeight))
+subdivideWeights :: UVPatch -> Subdivided UVPatch
 subdivideWeights values = Subdivided { .. } where
   ParametricValues
     { _northValue = north
@@ -184,7 +184,7 @@ eastCurveOfPatch TensorPatch
   , _curve3 = CubicBezier _ _ _ c3
   } = CubicBezier c0 c1 c2 c3
 
-transposePatch :: TensorPatch px -> TensorPatch px
+transposePatch :: TensorPatch (ParametricValues a) -> TensorPatch (ParametricValues a)
 transposePatch TensorPatch
   { _curve0 = CubicBezier c00 c01 c02 c03
   , _curve1 = CubicBezier c10 c11 c12 c13
@@ -244,8 +244,7 @@ transposePatch TensorPatch
 --       Left            Right
 -- @
 --
-horizontalTensorSubdivide :: TensorPatch (V2 CoonColorWeight)
-                          -> (TensorPatch (V2 CoonColorWeight), TensorPatch (V2 CoonColorWeight))
+horizontalTensorSubdivide :: TensorPatch UVPatch -> (TensorPatch UVPatch, TensorPatch UVPatch)
 horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 r3 vr) where
   (l0, r0) = divideCubicBezier $ _curve0 p
   (l1, r1) = divideCubicBezier $ _curve1 p
@@ -253,8 +252,7 @@ horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 
   (l3, r3) = divideCubicBezier $ _curve3 p
   (vl, vr) = subdivideHorizontal $ _tensorValues p
 
-subdivideTensorPatch :: TensorPatch (V2 CoonColorWeight)
-                     -> Subdivided (TensorPatch (V2 CoonColorWeight))
+subdivideTensorPatch :: TensorPatch UVPatch -> Subdivided (TensorPatch UVPatch)
 subdivideTensorPatch p = subdivided where
   (west, east) = horizontalTensorSubdivide p
   (northWest, southWest) = horizontalTensorSubdivide $ transposePatch west
@@ -266,7 +264,7 @@ subdivideTensorPatch p = subdivided where
     , _southEast = southEast
     }
 
-basePointOfCoonPatch :: CoonPatch px -> [(Point, px)]
+basePointOfCoonPatch :: CoonPatch (ParametricValues px) -> [(Point, px)]
 basePointOfCoonPatch CoonPatch
     { _north = CubicBezier a _ _ b
     , _south = CubicBezier c _ _ d
@@ -306,8 +304,7 @@ data Subdivided a = Subdivided
 --                       <---------
 -- @
 --
-subdividePatch :: CoonPatch (V2 CoonColorWeight)
-               -> Subdivided (CoonPatch (V2 CoonColorWeight))
+subdividePatch :: CoonPatch UVPatch -> Subdivided (CoonPatch UVPatch)
 subdividePatch patch = Subdivided
     { _northWest = northWest
     , _northEast = northEast
@@ -410,47 +407,6 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
-class Interpolator a px where
-  interpolate :: ParametricValues a -> V2 CoonColorWeight  -> px
-
--- | Basic bilinear interpolator
-instance {-# INCOHERENT #-} InterpolablePixel px => Interpolator px px where
-  interpolate = bilinearInterpolation
-
--- | Bicubic interpolator
-instance {-# INCOHERENT #-}
-         ( InterpolablePixel px
-         , Num (Holder px Float)
-         , v ~ Holder px Float
-         ) => Interpolator (V4 v) px where
-  interpolate = bicubicInterpolation
-
-bilinearInterpolation :: InterpolablePixel px
-                      => ParametricValues px -> V2 CoonColorWeight -> px
-bilinearInterpolation ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uBottom uTop where
-  -- The arguments are flipped, because the lerp function from Linear is...
-  -- inversed in u v
-  uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
-  uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
-
-bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
-                     => ParametricValues (V4 (Holder px Float))
-                     -> V2 CoonColorWeight
-                     -> px
-bicubicInterpolation (ParametricValues a b c d) (V2 x y) =
-  fromFloatPixel . fmap clamp $ af ^+^ bf ^+^ cf ^+^ df
-  where
-    clamp = max 0 . min 255
-    xv, vy, vyy, vyyy :: V4 Float
-    xv = V4 1 x (x*x) (x*x*x)
-    vy = xv ^* y
-    vyy = vy ^* y
-    vyyy = vyy ^* y
-
-    v1 ^^*^ v2 = (^*) <$> v1 <*> v2
-
-    V4 af bf cf df = (a ^^*^ xv) ^+^ (b ^^*^ vy) ^+^ (c ^^*^ vyy) ^+^ (d ^^*^ vyyy)
-
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =
   liftF $ Stroke 2 JoinRound (CapRound, CapRound) prims ()
@@ -485,7 +441,8 @@ defaultDebug = DebugOption
   , _controlColor       = PixelRGBA8 20 20 40 255
   }
 
-debugDrawCoonPatch :: DebugOption -> CoonPatch PixelRGBA8 -> Drawing PixelRGBA8 ()
+debugDrawCoonPatch :: DebugOption -> CoonPatch (ParametricValues PixelRGBA8)
+                   -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
       fill sub = liftF $ Fill FillWinding sub ()
@@ -510,7 +467,8 @@ debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
     setColor' _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
-debugDrawTensorPatch :: DebugOption -> TensorPatch px -> Drawing PixelRGBA8 ()
+debugDrawTensorPatch :: DebugOption -> TensorPatch (ParametricValues px)
+                     -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
       setColor' c inner =
@@ -534,7 +492,7 @@ debugDrawTensorPatch DebugOption { .. } p = do
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
-parametricBase :: ParametricValues (V2 CoonColorWeight)
+parametricBase :: UVPatch
 parametricBase = ParametricValues
   { _northValue = V2 0 0
   , _eastValue  = V2 1 0
@@ -542,13 +500,17 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
-renderCoonMesh :: forall m interp px.
-                  (PrimMonad m, RenderablePixel px, Interpolator interp px)
-               => MeshPatch interp -> DrawContext m px ()
+renderCoonMesh :: forall m px.
+                  (PrimMonad m, RenderablePixel px, BiSampleable (ParametricValues px) px)
+               => MeshPatch px -> DrawContext m px ()
 renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
 
+renderImageMesh :: PrimMonad m
+                => MeshPatch (ImageMesh PixelRGBA8) -> DrawContext m PixelRGBA8 ()
+renderImageMesh = mapM_ renderCoonPatch . imagePatchesOf
+
 renderCoonPatch :: forall m interp px.
-                   (PrimMonad m, RenderablePixel px, Interpolator interp px)
+                   (PrimMonad m, RenderablePixel px, BiSampleable interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
   maxDeepness = 7 -- maxColorDeepness baseColors
@@ -565,9 +527,9 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
-renderTensorPatch :: forall m interp px. 
-                     (PrimMonad m, RenderablePixel px, Interpolator interp px)
-                  => TensorPatch interp -> DrawContext m px ()
+renderTensorPatch :: forall m sampled px. 
+                     (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
+                  => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
   maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch

@@ -1,17 +1,26 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Graphics.Rasterific.CubicBezier.FastForwardDifference
     ( ForwardDifferenceCoefficient( .. )
     , bezierToForwardDifferenceCoeff
-    , decomposeCubicBezierForwardDifference
     , estimateFDStepCount
+    , rasterizerCubicBezier
     ) where
 
-import Control.Applicative( pure )
+import Control.Monad.Primitive( PrimMonad )
+import Control.Monad.State( lift, get )
+import Control.Applicative( liftA2, pure )
 import Data.Monoid( mempty, (<>) )
 import Data.Bits( unsafeShiftL )
+
+import Graphics.Rasterific.Compositor
+import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Operators
-import Graphics.Rasterific.Linear ( V2( .. ), (^-^), (^+^), (^*), qd )
+import Graphics.Rasterific.Linear
+import Graphics.Rasterific.BiSampleable
+import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.Shading
 
 data ForwardDifferenceCoefficient = ForwardDifferenceCoefficient
     { _fdA :: {-# UNPACK #-} !Float
@@ -71,73 +80,41 @@ fixIter count f = go count
     go 0 a = a
     go n a = go (n-1) $ f a
 
+stepSquare :: CubicBezier -> Float
+stepSquare (CubicBezier a b c d) = maxi * 18 where
+  maxi = max d1 . max d2 $ max d3 d4
+  d1 = a `qd` b
+  d2 = c `qd` d
+  d3 = (a `qd` c) * 0.25
+  d4 = (b `qd` d) * 0.25
 {-
 fractionalRest :: Float -> Float
 fractionalRest v = v - fromIntegral (truncate v :: Int)
 -- -}
 
-decomposeCubicBezierForwardDifference :: CubicBezier -> Container EdgeSample
-decomposeCubicBezierForwardDifference bez = pure initialSample <> lst where
-  lst = go 0 xStartCoeff yStartCoeff integerStart initialVec initialIx
-  initialSample = EdgeSample
-    { _sampleX     = fromIntegral initialIx
-    , _sampleY     = fromIntegral initialIy
-    , _sampleAlpha = 1.0 -- For testing purposes only.
-    , _sampleH     = 1.0
-    }
+rasterizerCubicBezier :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
+                      => src -> CubicBezier -> UV -> UV -> DrawContext m px ()
+rasterizerCubicBezier source bez uvStart uvEnd = do
+  canvas <- get
+  let (xFull, yFull) = bezierToForwardDifferenceCoeff bez
+      V2 xStart yStart = _cBezierX0 bez
+      stepCount = estimateFDStepCount bez
 
-  (xFull, yFull) = bezierToForwardDifferenceCoeff bez
-  xStartCoeff = fixIter stepCount halveFDCoefficients xFull
-  yStartCoeff = fixIter stepCount halveFDCoefficients yFull
+      V2 du dv = (uvEnd ^-^ uvStart) ^/ fromIntegral stepCount
+      
+      maxStepCount :: Int
+      maxStepCount = 1 `unsafeShiftL` stepCount
+      
+      go !currentStep _ _ _ _ _ _ 
+        | currentStep >= maxStepCount = return ()
+      go !currentStep !xFdCoeff !yFdCoeff !x !y !u !v = do
+        let !(xNext, xCoeff) = updateForwardDifferencing x xFdCoeff
+            !(yNext, yCoeff) = updateForwardDifferencing y yFdCoeff
+            !color = interpolate source (V2 u v)
+        plotPixel canvas color (floor x) (floor y)
+        go (currentStep + 1) xCoeff yCoeff xNext yNext (u + du) (v + dv)
 
-  initialVec = _cBezierX0 bez
-  integerStart@(V2 initialIx initialIy) = vfloor initialVec
-
-  stepCount = estimateFDStepCount bez
-
-  maxStepCount :: Int
-  maxStepCount = 1 `unsafeShiftL` stepCount
-
-  go currentStep _ _ (V2 px py) _ firstWrittenX
-    | currentStep >= maxStepCount =
-      if firstWrittenX == px then mempty
-      else pure EdgeSample { _sampleX = fromIntegral px
-                           , _sampleY = fromIntegral py
-                           , _sampleAlpha = 1.0
-                           , _sampleH = 1.0 }
-  go !currentStep !xFdCoeff !yFdCoeff
-     (V2 prevXpx prevYpx)
-     (V2 xPrev yPrev)
-     !lastWrittenX
-    | prevYpx == integerNextY = rest lastWrittenX
-
-    | prevXpx == lastWrittenX =
-        pure nextSample <> rest integerNextX
-    | otherwise =
-        pure prevSample <> pure nextSample <> rest integerNextX
-    where
-      rest = go (currentStep + 1) xCoeff yCoeff nexti next
-
-      next = V2 xNext yNext
-      (xNext, xCoeff) = updateForwardDifferencing xPrev xFdCoeff
-      (yNext, yCoeff) = updateForwardDifferencing yPrev yFdCoeff
-      nexti@(V2 integerNextX integerNextY) = vfloor next :: V2 Int
-
-      prevSample = EdgeSample
-          { _sampleX     = fromIntegral prevXpx
-          , _sampleY     = fromIntegral prevYpx
-          , _sampleAlpha = 1.0 -- For testing purposes only.
-          , _sampleH     = 1.0
-          }
-
-      nextSample = EdgeSample
-          { _sampleX     = fromIntegral integerNextX
-          , _sampleY     = fromIntegral integerNextY
-          , _sampleAlpha = 1.0 -- For testing purposes only.
-          , _sampleH     = 1.0
-          }
-      {-deltas@(V2 xDelta yDelta) = next ^-^ prev-}
-      {-V2 xFrac yFrac = fractionalRest <$> deltas-}
+  lift $ go 0 xFull yFull xStart yStart du dv
 
 frexp :: Float -> (Float, Int)
 frexp x

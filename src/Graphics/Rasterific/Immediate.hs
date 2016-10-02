@@ -174,7 +174,7 @@ fillWithTexture fillMethod texture els = do
     lift . mapExec filler $ filter (isCoverageDrawable img) spans
 
 -- | Function identical to 'fillWithTexture' but with anti-aliasing
--- disabled.
+-- (and transparency) disabled.
 fillWithTextureNoAA :: (PrimMonad m, RenderablePixel px,
                     MonadState (MutableImage (PrimState m) px)
                                (DrawContext m px)

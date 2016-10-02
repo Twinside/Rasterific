@@ -3,12 +3,22 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 module Graphics.Rasterific.PatchTypes where
 
 import Data.Monoid( (<>) )
+import qualified Data.Vector as V
+
+import Codec.Picture( Image )
+
 import Graphics.Rasterific.MiniLens
+import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
+import Graphics.Rasterific.Transformations
 
 type CoonColorWeight = Float
 
@@ -65,12 +75,12 @@ instance Foldable ParametricValues where
 transposeParametricValues :: ParametricValues a -> ParametricValues a
 transposeParametricValues (ParametricValues n e s w) = ParametricValues n w s e
 
-data TensorPatch px = TensorPatch
+data TensorPatch weight = TensorPatch
   { _curve0 :: !CubicBezier
   , _curve1 :: !CubicBezier
   , _curve2 :: !CubicBezier
   , _curve3 :: !CubicBezier
-  , _tensorValues :: !(ParametricValues px)
+  , _tensorValues :: !weight
   }
 
 instance Transformable (TensorPatch px) where
@@ -111,12 +121,12 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
 --                       <-----
 -- @
 --
-data CoonPatch px = CoonPatch
+data CoonPatch weight = CoonPatch
     { _north :: !CubicBezier
     , _east :: !CubicBezier
     , _south :: !CubicBezier
     , _west :: !CubicBezier
-    , _coonValues :: {-# UNPACK #-} !(ParametricValues px)
+    , _coonValues :: !weight
     }
     deriving Show
 
@@ -141,4 +151,88 @@ transformCoon f (CoonPatch n e s w v) =
         (transform f s)
         (transform f w)
         v
+
+-- | Define a mesh patch grid, the grid is conceptually
+-- a regular grid of _meshPatchWidth * _meshPatchHeight
+-- patches but with shared edges
+data MeshPatch px = MeshPatch
+  { -- | Count of horizontal of *patch*
+    _meshPatchWidth  :: !Int
+    -- | Count of vertical of *patch*
+  , _meshPatchHeight :: !Int
+    -- | Main points defining the patch, of size
+    -- (_meshPatchWidth + 1) * (_meshPatchHeight + 1)
+  , _meshPrimaryVertices :: !(V.Vector Point)
+
+    -- | For each line, store the points in between each
+    -- vertex. There is two points between each vertex, so
+    -- _meshPatchWidth * (_meshPatchHeight + 1) points
+  , _meshHorizontalSecondary :: !(V.Vector InterBezier)
+    -- | For each colun, store the points in between each
+    -- vertex. Two points between each vertex, so
+    -- _meshPatchHeight * (_meshPatchWidth + 1)
+  , _meshVerticalSecondary :: !(V.Vector InterBezier)
+
+   -- | Colors for each vertex points
+  , _meshColors :: !(V.Vector px)
+  }
+  deriving (Eq, Show, Functor)
+
+data InterBezier = InterBezier 
+  { _inter0 :: !Point
+  , _inter1 :: !Point
+  }
+  deriving (Eq, Show)
+
+instance Transformable InterBezier where
+  transform f (InterBezier a b) = InterBezier (f a) (f b)
+  transformM f (InterBezier a b) = InterBezier <$> f a <*> f b
+
+transformMeshM :: Monad m => (Point -> m Point) -> MeshPatch px -> m (MeshPatch px)
+transformMeshM f MeshPatch { .. } = do
+  vertices <- mapM f _meshPrimaryVertices
+  hSecondary <- mapM (transformM f) _meshHorizontalSecondary
+  vSecondary <- mapM (transformM f) _meshVerticalSecondary
+  return $ MeshPatch
+      { _meshPatchWidth = _meshPatchWidth 
+      , _meshPatchHeight = _meshPatchHeight
+      , _meshPrimaryVertices = vertices 
+      , _meshHorizontalSecondary = hSecondary 
+      , _meshVerticalSecondary = vSecondary
+      , _meshColors = _meshColors
+      }
+
+instance {-# OVERLAPPING  #-} Transformable (MeshPatch px) where
+  transformM = transformMeshM
+
+data Derivatives = Derivatives
+  { _interNorthWest :: !Point
+  , _interNorthEast :: !Point
+  , _interSouthWest :: !Point
+  , _interSouthEast :: !Point
+  }
+  deriving (Eq, Show)
+
+instance Transformable Derivatives where
+  transform f (Derivatives a b c d) =
+     Derivatives (f a) (f b) (f c) (f d)
+  transformM f (Derivatives a b c d) =
+     Derivatives <$> f a <*> f b <*> f c <*> f d
+
+
+-- | Represent a point in the paramaetric U,V space
+-- from [0, 1]²
+type UV = V2 CoonColorWeight
+
+-- | Define a rectangle in the U,V parametric space.
+type UVPatch = ParametricValues UV
+
+newtype CubicCoefficient px = CubicCoefficient
+    { getCubicCoefficients :: ParametricValues (V4 (Holder px Float))
+    }
+
+data ImageMesh px = ImageMesh
+    { _meshImage :: !(Image px)
+    , _meshTransform :: !Transformation
+    }
 

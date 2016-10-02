@@ -8,35 +8,24 @@ import Control.Applicative( (<$>) )
 #endif
 
 import Control.Monad.Trans.State.Strict
-import Control.Monad( when, forM_ )
+import Control.Monad( forM_ )
 import Control.Monad.ST( ST, runST )
-import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
                                   , dashedStroke
                                   , fillWithMethod, stroke)
 import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
-import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.Linear( (^+^), (^*) )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific
 
-import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 
 import qualified Data.Vector as V
 
-type Stroker g =
-  (Geometry g) =>
-      Float -> Join -> (Cap, Cap) -> g -> Drawing PixelRGBA8 ()
 
-sansSerifFont :: FilePath
-sansSerifFont = "test_fonts/DejaVuSans.ttf"
-
-monospaceFont :: FilePath
-monospaceFont =  "test_fonts/DejaVuSansMono.ttf"
 
 background, blue, black, yellow, red, green, orange, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
@@ -65,14 +54,14 @@ drawImm path w h d = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white d
 
-drawPatchDebug :: FilePath -> Int -> Int -> CoonPatch PixelRGBA8 -> IO ()
+drawPatchDebug :: FilePath -> Int -> Int -> CoonPatch (ParametricValues PixelRGBA8) -> IO ()
 drawPatchDebug path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
     renderCoonPatch p
     mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch defaultDebug p
 
-drawTensorDebug :: DebugOption -> FilePath -> Int -> Int -> TensorPatch PixelRGBA8 -> IO ()
+drawTensorDebug :: DebugOption -> FilePath -> Int -> Int -> TensorPatch (ParametricValues PixelRGBA8) -> IO ()
 drawTensorDebug opt path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
@@ -219,7 +208,7 @@ coonTestColorStop = do
                           red
                           red)
 
-toCoon :: V2 Float -> ParametricValues px -> [[V2 Float]] -> CoonPatch px
+toCoon :: V2 Float -> ParametricValues px -> [[V2 Float]] -> CoonPatch (ParametricValues px)
 toCoon st values = build . go st where
   build [n, e, s, w] = CoonPatch n e s w values
   build _ = error "toCoon"
@@ -254,6 +243,13 @@ renderCoonMeshBicubic :: MeshPatch PixelRGBA8 -> DrawContext (ST s) PixelRGBA8 (
 renderCoonMeshBicubic =
   mapM_ renderCoonPatch . cubicCoonPatchesOf . calculateMeshColorDerivative
 
+simpleGrid :: DebugOption
+simpleGrid = defaultDebug
+    { _drawControlMesh = False
+    , _drawBaseVertices = False
+    , _drawControVertices = False
+    }
+
 grid :: IO ()
 grid = do
     drawPure "coon_img/grid.png" 460 300 $ drawing simpleGrid limesh
@@ -272,12 +268,6 @@ grid = do
 
     varPatchIndices = [(x, y) | y <- [0 .. height - 1], x <- [0 .. width - 1]]
 
-    simpleGrid = defaultDebug
-        { _drawControlMesh = False
-        , _drawBaseVertices = False
-        , _drawControVertices = False
-        }
-
     simpleColor = simpleGrid
         { _colorVertices    = True
         , _drawBaseVertices = True
@@ -287,6 +277,26 @@ grid = do
     drawing opt mesh =
       forM_ varPatchIndices $ \(x, y) -> do
           debugDrawCoonPatch opt $ coonPatchAt mesh x y
+
+imgGrid :: IO ()
+imgGrid = do
+  Right img <- fmap convertRGBA8 <$> readImage "exec-src/maki_fab.JPG"
+  let limesh = generateImageMesh 3 3 (V2 10 10) img
+      moved = jitPoints 21 limesh
+      w = 502
+      h = 333
+  drawImm "coon_img/maki_base.png" w h $ renderImageMesh limesh
+  drawImm "coon_img/maki_base_grid.png" w h $ do
+    renderImageMesh limesh
+    mapM_ fillOrder $
+      drawOrdersOfDrawing  w h 90 (PixelRGBA8 0 0 0 0) $ do
+        mapM_ (debugDrawCoonPatch simpleGrid) . coonPatchesOf $ const frontColor <$> limesh
+  drawImm "coon_img/maki_moved.png" w h $ renderImageMesh moved
+  drawImm "coon_img/maki_moved_with_grid.png" w h $ do
+    renderImageMesh moved
+    mapM_ fillOrder $
+      drawOrdersOfDrawing  w h 90 (PixelRGBA8 0 0 0 0) $ do
+        mapM_ (debugDrawCoonPatch simpleGrid) . coonPatchesOf $ const frontColor <$> moved
 
 debugCubic :: IO ()
 debugCubic = do
@@ -380,6 +390,7 @@ coonTestWild = do
 main :: IO ()
 main = do
   grid
+  imgGrid 
   debugCubic
   coonTest
   coonTestColorStop 

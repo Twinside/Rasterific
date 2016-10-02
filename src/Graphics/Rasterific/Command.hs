@@ -31,7 +31,6 @@ import Codec.Picture.Types( MutableImage )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PatchTypes
-import Graphics.Rasterific.MeshPatch
 
 import Graphics.Text.TrueType( Font, PointSize )
 

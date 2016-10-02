@@ -517,13 +517,11 @@ preComputeTexture w h = go where
     PatternTexture _ _ _ _ _ -> t
     MeshPatchTexture PatchBilinear m ->
         RawTexture $ runST $ runDrawContext w h emptyPx $ renderCoonMesh m
-    MeshPatchTexture PatchBicubic m -> undefined
-        {-  
+    MeshPatchTexture PatchBicubic m ->
         RawTexture $ runST $ runDrawContext w h emptyPx 
                            $ mapM_ renderCoonPatch
                            $ cubicCoonPatchesOf
                            $ calculateMeshColorDerivative m
---}
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing

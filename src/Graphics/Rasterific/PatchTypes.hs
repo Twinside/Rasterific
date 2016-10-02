@@ -14,6 +14,7 @@ import qualified Data.Vector as V
 
 import Codec.Picture( Image )
 
+import Graphics.Rasterific.CubicBezier
 import Graphics.Rasterific.MiniLens
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
@@ -235,4 +236,39 @@ data ImageMesh px = ImageMesh
     { _meshImage :: !(Image px)
     , _meshTransform :: !Transformation
     }
+
+coonPointAt :: CoonPatch a -> UV -> Point
+coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
+  where
+    CubicBezier c10 _ _ c11 = _north
+    CubicBezier c21 _ _ c20 = _south
+
+    sc = lerp v c2 c1
+    sd = lerp v d2 d1
+    sb = lerp v (lerp u c21 c20) (lerp u c11 c10)
+
+    CubicBezier _ _ _ c1 = fst $ cubicBezierBreakAt _north u
+    CubicBezier _ _ _ c2 = fst $ cubicBezierBreakAt _south (1 - u)
+    CubicBezier _ _ _ d2 = fst $ cubicBezierBreakAt _east v
+    CubicBezier _ _ _ d1 = fst $ cubicBezierBreakAt _west (1 - v)
+
+toTensorPatch :: CoonPatch a -> TensorPatch a
+toTensorPatch patch@CoonPatch { .. } = TensorPatch
+    { _curve0 = _north
+    , _curve1 = CubicBezier wt p11 p21 et
+    , _curve2 = CubicBezier wb p12 p22 eb
+    , _curve3 = CubicBezier sd  sc  sb sa
+    , _tensorValues = _coonValues
+    }
+  where
+    coonAt x y = coonPointAt patch (V2 x y)
+
+    p11 = coonAt (1/3) (1/3)
+    p12 = coonAt (1/3) (2/3)
+    p21 = coonAt (2/3) (1/3)
+    p22 = coonAt (2/3) (2/3)
+
+    CubicBezier sa sb sc sd = _south
+    CubicBezier _ et eb _ = _east
+    CubicBezier _ wb wt _ = _west
 

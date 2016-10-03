@@ -9,6 +9,7 @@ module Graphics.Rasterific.Shading
     , plotPixel
     ) where
 
+import Control.Monad.ST( ST )
 import Control.Monad.Primitive( PrimState
                               -- one day (GHC >= 7.10 ?)
                               , PrimMonad
@@ -105,7 +106,8 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
 plotPixel :: forall m px. (ModulablePixel px, PrimMonad m)
           => MutableImage (PrimState m) px -> px -> Int -> Int
           -> m ()
-{-# INLINEABLE plotPixel #-}
+{-# SPECIALIZE INLINE
+    plotPixel :: MutableImage s PixelRGBA8 -> PixelRGBA8 -> Int -> Int -> ST s () #-}
 plotPixel img _color x y
    | x < 0 || y < 0 || 
      x >= mutableImageWidth img || y >= mutableImageHeight img = return ()

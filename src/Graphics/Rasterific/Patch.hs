@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -520,7 +521,8 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
 
   drawPatchUniform CoonPatch { .. } = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_north, _east, _south, _west]
-    texture = SolidTexture . interpolate baseColors $ meanValue _coonValues
+    !(V2 u v) =meanValue _coonValues
+    !texture = SolidTexture $ interpolate baseColors u v
 
   go 0 patch = drawPatchUniform patch
   go depth (subdividePatch -> Subdivided { .. }) =
@@ -531,14 +533,15 @@ renderTensorPatch :: forall m sampled px.
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 6 -- maxColorDeepness baseColors
+  maxDeepness = 8 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }
 
   drawPatchUniform p = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_curve0 p, westCurveOfPatch p, _curve3 p, eastCurveOfPatch p]
-    texture = SolidTexture . interpolate baseColors . meanValue $ _tensorValues p
+    !(V2 u v) = meanValue $ _tensorValues p
+    texture = SolidTexture $ interpolate baseColors u v
 
   go 0 patch = drawPatchUniform patch
   go depth (subdivideTensorPatch -> Subdivided { .. }) =

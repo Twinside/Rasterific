@@ -22,6 +22,8 @@ import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific
 
+import Criterion
+import Criterion.Main
 import Codec.Picture
 
 import qualified Data.Vector as V
@@ -389,14 +391,84 @@ coonTestWild = do
         , [V2 (-20) (-80), V2 20 (-40)]
         ]
 
+profile :: IO ()
+profile = do
+  writePng "M.png" $ (runST $ runDrawContext 400 400 white $ rasterizeTensorPatch tensorPatch)
+  where
+    [ c00, c01, c02, c03
+      , c10, c11, c12, c13
+      , c20, c21, c22, c23
+      , c30, c31, c32, c33
+      ] = fmap (\p -> (p ^+^ (V2 0 (-852.36))) * 2)
+        {-
+          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+          ,(V2 13.98 923.5), (V2 90 950),     (V2 117 950),      (V2 193.9 944.6)
+          ,(V2 2.253 974.9), (V2 90 1000),    (V2 117 1000),     (V2 109.2 950.4)
+          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+          ] -- -} 
+       -- {- 
+          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+          ,(V2 13.98 923.5), (V2 140 990),     (V2 147 1000),      (V2 193.9 944.6)
+          ,(V2 2.253 974.9), (V2 140 1000),    (V2 147 1005),     (V2 109.2 950.4)
+          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+          ] -- -}
+
+    tensorPatch = TensorPatch
+      { _curve0 = CubicBezier c00 c01 c02 c03
+      , _curve1 = CubicBezier c10 c11 c12 c13
+      , _curve2 = CubicBezier c20 c21 c22 c23
+      , _curve3 = CubicBezier c30 c31 c32 c33
+      , _tensorValues = colors
+      }
+
+    colors = ParametricValues blue red red red
+
+doBench :: IO ()
+doBench = defaultMain
+  [ bench "Subdiv" $ whnf 
+      (\v -> runST $ runDrawContext 400 400 white $ renderTensorPatch v) tensorPatch
+  , bench "FFD" $ whnf 
+      (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
+  ]
+  where
+    [ c00, c01, c02, c03
+      , c10, c11, c12, c13
+      , c20, c21, c22, c23
+      , c30, c31, c32, c33
+      ] = fmap (\p -> (p ^+^ (V2 0 (-852.36))) * 2)
+        {-
+          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+          ,(V2 13.98 923.5), (V2 90 950),     (V2 117 950),      (V2 193.9 944.6)
+          ,(V2 2.253 974.9), (V2 90 1000),    (V2 117 1000),     (V2 109.2 950.4)
+          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+          ] -- -} 
+       -- {- 
+          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
+          ,(V2 13.98 923.5), (V2 140 990),     (V2 147 1000),      (V2 193.9 944.6)
+          ,(V2 2.253 974.9), (V2 140 1000),    (V2 147 1005),     (V2 109.2 950.4)
+          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
+          ] -- -}
+
+    tensorPatch = TensorPatch
+      { _curve0 = CubicBezier c00 c01 c02 c03
+      , _curve1 = CubicBezier c10 c11 c12 c13
+      , _curve2 = CubicBezier c20 c21 c22 c23
+      , _curve3 = CubicBezier c30 c31 c32 c33
+      , _tensorValues = colors
+      }
+
+    colors = ParametricValues blue red red red
+
 main :: IO ()
 main = do
-  grid
-  imgGrid 
-  debugCubic
-  coonTest
-  coonTestColorStop 
-  coonTestWild 
-  coonTensorTest
-  tensorSplit
+  {-grid-}
+  {-imgGrid -}
+  {-debugCubic-}
+  {-coonTest-}
+  {-coonTestColorStop -}
+  {-coonTestWild -}
+  {-coonTensorTest-}
+  {-tensorSplit-}
+  {-doBench -}
+  profile
 

@@ -58,12 +58,12 @@ library
                  , Graphics.Rasterific.PathWalker
                  , Graphics.Rasterific.Patch
                  , Graphics.Rasterific.MeshPatch
+                 , Graphics.Rasterific.CubicBezier.FastForwardDifference
 
   other-modules: Graphics.Rasterific.Line
                , Graphics.Rasterific.Command
                , Graphics.Rasterific.CubicBezier
                , Graphics.Rasterific.BiSampleable
-               , Graphics.Rasterific.CubicBezier.FastForwardDifference
                , Graphics.Rasterific.QuadraticBezier
                , Graphics.Rasterific.Operators
                , Graphics.Rasterific.Rasterize
@@ -116,6 +116,7 @@ Executable coon_render
                  , FontyFruity
                  , bytestring
                  , transformers
+                 , criterion
 
   
   

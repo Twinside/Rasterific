@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -19,7 +20,7 @@ import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Transformations
 
 class BiSampleable sampled px where
-  interpolate :: sampled -> UV -> px
+  interpolate :: sampled -> Float -> Float -> px
 
 -- | Basic bilinear interpolator
 instance {-# INCOHERENT #-} InterpolablePixel px => BiSampleable (ParametricValues px) px where
@@ -34,20 +35,21 @@ instance {-# INCOHERENT #-}
   interpolate = bicubicInterpolation
 
 instance BiSampleable (ImageMesh PixelRGBA8) PixelRGBA8 where
-  interpolate imesh p = sampledImageShader (_meshImage imesh) SamplerPad x y
-    where (V2 x y) = applyTransformation (_meshTransform imesh) p
+  interpolate imesh xb yb = sampledImageShader (_meshImage imesh) SamplerPad x y
+    where (V2 x y) = applyTransformation (_meshTransform imesh) (V2 xb yb)
 
 bilinearInterpolation :: InterpolablePixel px
-                      => ParametricValues px -> UV -> px
-bilinearInterpolation ParametricValues { .. } (V2 u v) = fromFloatPixel $ lerp v uBottom uTop where
+                      => ParametricValues px -> Float -> Float -> px
+{-# INLINE bilinearInterpolation #-}
+bilinearInterpolation ParametricValues { .. } u v = fromFloatPixel $ lerp v uBottom uTop where
   -- The arguments are flipped, because the lerp function from Linear is...
   -- inversed in u v
-  uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
-  uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
+  !uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
+  !uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
 
 bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
-                     => CubicCoefficient px -> UV -> px
-bicubicInterpolation params  (V2 x y) =
+                     => CubicCoefficient px -> Float -> Float -> px
+bicubicInterpolation params x y =
   fromFloatPixel . fmap clamp $ af ^+^ bf ^+^ cf ^+^ df
   where
     ParametricValues a b c d = getCubicCoefficients params

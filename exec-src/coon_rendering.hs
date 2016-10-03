@@ -19,6 +19,7 @@ import Graphics.Rasterific.Linear( (^+^), (^*) )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
+import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific
 
 import Codec.Picture
@@ -114,6 +115,7 @@ coonTensorTest = do
   drawImm "coon_img/compare_tensor.png" 400 400 $ renderTensorPatch $ tensorPatch
   drawTensorDebug opt "coon_img/compare_tensor_debug.png" 400 400 tensorPatch
   drawImm "coon_img/compare_coon.png" 400 400 $ renderCoonPatch $ coonPatch
+  drawImm "coon_img/tensor_ffd.png" 400 400 $ rasterizeTensorPatch tensorPatch
   where
     opt = defaultDebug { _drawOutline = False }
     [ c00, c01, c02, c03

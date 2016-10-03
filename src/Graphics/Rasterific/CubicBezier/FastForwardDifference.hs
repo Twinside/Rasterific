@@ -6,18 +6,16 @@ module Graphics.Rasterific.CubicBezier.FastForwardDifference
     , bezierToForwardDifferenceCoeff
     , estimateFDStepCount
     , rasterizerCubicBezier
+    , rasterizeTensorPatch
     ) where
 
 import Control.Monad.Primitive( PrimMonad )
 import Control.Monad.State( lift, get )
-import Control.Applicative( liftA2, pure )
-import Data.Monoid( mempty, (<>)  )
 import Data.Bits( shiftR, unsafeShiftL )
 
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Types
-import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.BiSampleable
 import Graphics.Rasterific.PatchTypes
@@ -62,10 +60,19 @@ halveFDCoefficients (ForwardDifferenceCoefficient a b c) =
     b' = b * 0.25 - c'
     a' = (a - b') * 0.5
 
-updateForwardDifferencing :: Float -> ForwardDifferenceCoefficient
-                          -> (Float, ForwardDifferenceCoefficient)
-updateForwardDifferencing v (ForwardDifferenceCoefficient a b c) =
-    (v + a, ForwardDifferenceCoefficient (a + b) (b + c) c)
+updateForwardDifferencing :: ForwardDifferenceCoefficient -> ForwardDifferenceCoefficient
+updateForwardDifferencing (ForwardDifferenceCoefficient a b c) =
+  ForwardDifferenceCoefficient (a + b) (b + c) c
+
+updatePointsAndCoeff :: (Applicative f', Applicative f, Additive f)
+                     => f' (f Float) -> f' (f ForwardDifferenceCoefficient)
+                     -> (f' (f Float), f' (f ForwardDifferenceCoefficient))
+updatePointsAndCoeff pts coeffs =
+    (advancePoint <$> pts <*> coeffs, fmap updateForwardDifferencing <$> coeffs)
+  where
+    fstOf (ForwardDifferenceCoefficient a _ _) = a
+    advancePoint v c = v ^+^ (fstOf <$> c)
+
 
 estimateFDStepCount :: CubicBezier -> Int
 estimateFDStepCount (CubicBezier p0 p1 p2 p3) =
@@ -93,53 +100,46 @@ rasterizerCubicBezier :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                       => src -> CubicBezier -> UV -> UV -> DrawContext m px ()
 rasterizerCubicBezier source bez uvStart uvEnd = do
   canvas <- get
-  let V2 xFull yFull = bezierToForwardDifferenceCoeff bez
-      V2 xStart yStart = _cBezierX0 bez
+  let baseFfd = bezierToForwardDifferenceCoeff bez
       shiftCount = estimateFDStepCount bez
-
       maxStepCount :: Int
       maxStepCount = 1 `unsafeShiftL` shiftCount
-
-      xFStart = fixIter shiftCount halveFDCoefficients xFull
-      yFStart = fixIter shiftCount halveFDCoefficients yFull
-
+      coeffStart = fixIter shiftCount halveFDCoefficients <$> baseFfd
       V2 du dv = (uvEnd ^-^ uvStart) ^/ fromIntegral maxStepCount
       
-      
-      go !currentStep _ _ _ _ _ _ 
+      go !currentStep _ _ _ _
         | currentStep >= maxStepCount = return ()
-      go !currentStep !xFdCoeff !yFdCoeff !x !y !u !v = do
-        let !(xNext, xCoeff) = updateForwardDifferencing x xFdCoeff
-            !(yNext, yCoeff) = updateForwardDifferencing y yFdCoeff
+      go !currentStep !coeffs !p@(V1 (V2 x y)) !u !v = do
+        let !(pNext, coeffNext) = updatePointsAndCoeff p coeffs
             !color = interpolate source (V2 u v)
         plotPixel canvas color (floor x) (floor y)
-        go (currentStep + 1) xCoeff yCoeff xNext yNext (u + du) (v + dv)
+        go (currentStep + 1) coeffNext pNext (u + du) (v + dv)
 
-  lift $ go 0 xFStart yFStart xStart yStart du dv
+  lift $ go 0 (V1 coeffStart) (V1 $ _cBezierX0 bez) du dv
 
 rasterizeTensorPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                      => TensorPatch src -> DrawContext m px ()
-rasterizeTensorPatch TensorPatch { .. } = go maxStepCount basePoints ffCoeff uvStart uvEnd
+rasterizeTensorPatch TensorPatch { .. } = go maxStepCount basePoints ffCoeff zero (V2 0 1)
   where
-    uvStart = zero
-    uvEnd = V2 0 1
     curves = V4 _curve0 _curve1 _curve2 _curve3
-    shiftStep = maximum $ estimateFDStepCount <$> [_curve0 _curve1 _curve2 _curve3]
+    shiftStep = maximum $ estimateFDStepCount <$> [_curve0, _curve1, _curve2, _curve3]
     
     dUV = pure $ 1 / fromIntegral maxStepCount
     
     basePoints = _cBezierX0 <$> curves
     ffCoeff =
-      fmap (fixIter shiftCount halveFDCoefficients) <$> bezierToForwardDifferenceCoeff curves
+      fmap (fixIter shiftStep halveFDCoefficients) . bezierToForwardDifferenceCoeff <$> curves
     
+    maxStepCount :: Int
     maxStepCount = 1 `unsafeShiftL` shiftStep
+
+    toBezier (V4 a b c d) = CubicBezier a b c d
     
     go 0 _pts _coeffs _uvStart _uvEnd = return ()
     go i pts coeffs uvStart uvEnd = do
-      let a :: _
-          a = fmap updateForwardDifferencing <$> pts <*> coeffs
-      rasterizerCubicBezier _tensorValues pts uvStart uvEnd
-      go (i - 1) pts coeffs (uvStart ^+^ dUV) (uvEnd ^+^ dUV)
+      let (newPoints, newCoeff) = updatePointsAndCoeff pts coeffs
+      rasterizerCubicBezier _tensorValues (toBezier pts) uvStart uvEnd
+      go (i - 1) newPoints newCoeff (uvStart ^+^ dUV) (uvEnd ^+^ dUV)
 
 squareStepsToPow :: Float -> Int
 squareStepsToPow = fix . snd . frexp . max 1 where

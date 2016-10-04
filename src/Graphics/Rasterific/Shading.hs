@@ -106,16 +106,15 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
 plotPixel :: forall m px. (ModulablePixel px, PrimMonad m)
           => MutableImage (PrimState m) px -> px -> Int -> Int
           -> m ()
-{-# SPECIALIZE INLINE
-    plotPixel :: MutableImage s PixelRGBA8 -> PixelRGBA8 -> Int -> Int -> ST s () #-}
+{-# INLINE plotPixel #-}
 plotPixel img _color x y
    | x < 0 || y < 0 || 
      x >= mutableImageWidth img || y >= mutableImageHeight img = return ()
 plotPixel img color x y = do
   let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
-  oldPixel <- readPackedPixelAt img idx
+  !oldPixel <- readPackedPixelAt img idx
   let !opacity = pixelOpacity color
-      !(cov, icov) = coverageModulate fullValue opacity
+      (!cov, !icov) = coverageModulate fullValue opacity
   writePackedPixelAt img idx
     $ compositionAlpha cov icov oldPixel color
 
@@ -344,11 +343,11 @@ sampledImageShader img sampling x y =
    pyn = clampedY $ y + 1
 
    dx, dy :: Float
-   dx = x - fromIntegral (floor x :: Int)
-   dy = y - fromIntegral (floor y :: Int)
+   !dx = x - fromIntegral (floor x :: Int)
+   !dy = y - fromIntegral (floor y :: Int)
 
    at :: Int -> Int -> px
-   at xx yy =
+   at !xx !yy =
         unsafePixelAt rawData $ (yy * w + xx) * compCount
 
    (covX, icovX) = clampCoverage dx

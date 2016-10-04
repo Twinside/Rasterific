@@ -19,12 +19,16 @@ import Graphics.Rasterific.Shading
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Transformations
 
+import Codec.Picture( Pixel( .. ) )
+
 class BiSampleable sampled px where
   interpolate :: sampled -> Float -> Float -> px
 
 -- | Basic bilinear interpolator
-instance {-# INCOHERENT #-} InterpolablePixel px => BiSampleable (ParametricValues px) px where
-  interpolate = bilinearInterpolation
+instance {-# INCOHERENT #-} (Pixel px, Modulable (PixelBaseComponent px))
+    => BiSampleable (ParametricValues px) px where
+  {-# INLINE interpolate #-}
+  interpolate = bilinearPixelInterpolation
 
 -- | Bicubic interpolator
 instance {-# INCOHERENT #-}
@@ -32,20 +36,26 @@ instance {-# INCOHERENT #-}
          , Num (Holder px Float)
          , v ~ Holder px Float
          ) => BiSampleable (CubicCoefficient px) px where
+  {-# INLINE interpolate #-}
   interpolate = bicubicInterpolation
 
 instance BiSampleable (ImageMesh PixelRGBA8) PixelRGBA8 where
+  {-# INLINE interpolate #-}
   interpolate imesh xb yb = sampledImageShader (_meshImage imesh) SamplerPad x y
     where (V2 x y) = applyTransformation (_meshTransform imesh) (V2 xb yb)
 
-bilinearInterpolation :: InterpolablePixel px
-                      => ParametricValues px -> Float -> Float -> px
-{-# INLINE bilinearInterpolation #-}
-bilinearInterpolation ParametricValues { .. } u v = fromFloatPixel $ lerp v uBottom uTop where
-  -- The arguments are flipped, because the lerp function from Linear is...
-  -- inversed in u v
-  !uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
-  !uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
+bilinearPixelInterpolation :: (Pixel px, Modulable (PixelBaseComponent px))
+                           => ParametricValues px -> Float -> Float -> px
+{-# SPECIALIZE INLINE
+    bilinearPixelInterpolation :: ParametricValues PixelRGBA8 -> Float -> Float -> PixelRGBA8
+  #-}
+bilinearPixelInterpolation (ParametricValues { .. }) dx dy = 
+  mixWith (const $ alphaOver covY icovY)
+        (mixWith (const $ alphaOver covX icovX) _northValue _eastValue)
+        (mixWith (const $ alphaOver covX icovX) _westValue _southValue)
+  where
+   (!covX, !icovX) = clampCoverage dx
+   (!covY, !icovY) = clampCoverage dy
 
 bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
                      => CubicCoefficient px -> Float -> Float -> px

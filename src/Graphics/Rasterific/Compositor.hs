@@ -134,6 +134,7 @@ class (Ord a, Num a) => Modulable a where
 
   -- | Like modulate but also return the inverse coverage.
   coverageModulate :: a -> a -> (a, a)
+  {-# INLINE coverageModulate #-}
   coverageModulate c a = (clamped, fullValue - clamped)
     where clamped = modulate a c
 

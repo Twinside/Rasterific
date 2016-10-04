@@ -244,11 +244,13 @@ coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
     CubicBezier c21 _ _ c20 = _south
 
     sc = lerp v c2 c1
-    sd = lerp v d2 d1
-    sb = lerp v (lerp u c21 c20) (lerp u c11 c10)
+    sd = lerp u d2 d1
+    sb = lerp v (lerp u c21 c20)
+                (lerp u c11 c10)
 
     CubicBezier _ _ _ c1 = fst $ cubicBezierBreakAt _north u
     CubicBezier _ _ _ c2 = fst $ cubicBezierBreakAt _south (1 - u)
+
     CubicBezier _ _ _ d2 = fst $ cubicBezierBreakAt _east v
     CubicBezier _ _ _ d1 = fst $ cubicBezierBreakAt _west (1 - v)
 
@@ -262,11 +264,12 @@ toTensorPatch patch@CoonPatch { .. } = TensorPatch
     }
   where
     coonAt x y = coonPointAt patch (V2 x y)
+    p = 1/3
 
-    p11 = coonAt (1/3) (1/3)
-    p12 = coonAt (1/3) (2/3)
-    p21 = coonAt (2/3) (1/3)
-    p22 = coonAt (2/3) (2/3)
+    p11 = coonAt      p       p 
+    p21 = coonAt (1 - p)      p
+    p12 = coonAt      p  (1 - p)
+    p22 = coonAt (1 - p) (1 - p)
 
     CubicBezier sa sb sc sd = _south
     CubicBezier _ et eb _ = _east

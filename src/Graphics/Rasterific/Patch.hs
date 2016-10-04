@@ -14,27 +14,34 @@
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
 module Graphics.Rasterific.Patch
-    ( CoonPatch( .. )
+    ( -- * Types
+      CoonPatch( .. )
     , TensorPatch( .. )
     , ParametricValues( .. )
     , CoonColorWeight
     , Subdivided( .. )
-    , DebugOption( .. )
     , InterpolablePixel
+
+      -- * Rendering functions
+    , renderCoonPatch
+    , renderTensorPatch
+    , renderImageMesh
+    , renderCoonMesh
+    , renderCoonMeshBicubic
+
+      -- * Debugging
+    , DebugOption( .. )
+    , defaultDebug
+    , drawCoonPatchOutline
+    , debugDrawCoonPatch
+    , debugDrawTensorPatch
+    , parametricBase
+
+      -- * Manipulation
     , subdividePatch
     , subdivideTensorPatch
     , horizontalTensorSubdivide
     , transposePatch
-    , drawCoonPatchOutline
-    , renderCoonPatch
-    , renderTensorPatch
-    , renderImageMesh 
-    , debugDrawCoonPatch
-    , debugDrawTensorPatch
-    , parametricBase
-    , defaultDebug
-    , transformCoon
-    , renderCoonMesh
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -48,6 +55,7 @@ import Control.Monad.Primitive( PrimMonad )
 import Data.Monoid( Sum( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
@@ -395,8 +403,8 @@ combine (CubicBezier a1 b1 c1 d1)
 
 straightLine :: Point -> Point -> CubicBezier
 straightLine a b = CubicBezier a p1 p2 b where
-  p1 = lerp (2/3) a b
-  p2 = lerp (1/3) a b
+  p1 = lerp (1/3) b a
+  p2 = lerp (2/3) b a
 
 
 -- | The curves in the coon patch are inversed!
@@ -504,11 +512,22 @@ parametricBase = ParametricValues
 renderCoonMesh :: forall m px.
                   (PrimMonad m, RenderablePixel px, BiSampleable (ParametricValues px) px)
                => MeshPatch px -> DrawContext m px ()
-renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
+renderCoonMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . coonPatchesOf
+
+renderCoonMeshBicubic :: forall m px.
+                         ( PrimMonad m
+                         , RenderablePixel px
+                         , BiSampleable (CubicCoefficient px) px)
+                      => MeshPatch px -> DrawContext m px ()
+renderCoonMeshBicubic =
+  mapM_ (rasterizeTensorPatch . toTensorPatch)
+    . cubicCoonPatchesOf
+    . calculateMeshColorDerivative
+
 
 renderImageMesh :: PrimMonad m
                 => MeshPatch (ImageMesh PixelRGBA8) -> DrawContext m PixelRGBA8 ()
-renderImageMesh = mapM_ renderCoonPatch . imagePatchesOf
+renderImageMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . imagePatchesOf
 
 renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, BiSampleable interp px)
@@ -533,7 +552,7 @@ renderTensorPatch :: forall m sampled px.
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 8 -- maxColorDeepness baseColors
+  maxDeepness = 7 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }

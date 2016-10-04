@@ -19,6 +19,7 @@ import Graphics.Rasterific.Linear( (^+^), (^*) )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
+import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific
 
@@ -68,7 +69,7 @@ drawTensorDebug :: DebugOption -> FilePath -> Int -> Int -> TensorPatch (Paramet
 drawTensorDebug opt path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
-    renderTensorPatch p
+    rasterizeTensorPatch p
     mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawTensorPatch opt p
 
 drawPure :: FilePath -> Int -> Int -> Drawing PixelRGBA8 () -> IO ()
@@ -87,6 +88,10 @@ coonTest = do
       writePng path . renderDrawing 800 800 (PixelRGBA8 255 255 255 255) $
           withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) p
 
+    drawing :: FilePath -> DebugOption -> Int -> Int
+            -> CoonPatch (ParametricValues PixelRGBA8)
+            -> [CoonPatch (ParametricValues a)]
+            -> IO ()
     drawing path opt w h rootPatch patches = do
       putStrLn $ "Rendering " ++ path
       writePng path $ runST $ runDrawContext w h white $ do
@@ -104,7 +109,7 @@ coonTest = do
       , _westValue = frontColor
       }
 
-    patch = transformCoon (\p -> p ^* 0.5 ^+^ V2 0 20) CoonPatch
+    patch = transform (\p -> p ^* 0.5 ^+^ V2 0 20) CoonPatch
       { _north = CubicBezier (V2 52 67) (V2 198 (-55)) (V2 580 104) (V2 713 113)
       , _east = CubicBezier (V2 713 113) (V2 775 369) (V2 437 392) (V2 670 674)
       , _south = CubicBezier (V2 670 674) (V2 471 690) (V2 294 762) (V2 72 722)
@@ -114,9 +119,9 @@ coonTest = do
 
 coonTensorTest :: IO ()
 coonTensorTest = do
-  drawImm "coon_img/compare_tensor.png" 400 400 $ renderTensorPatch $ tensorPatch
+  drawImm "coon_img/compare_tensor.png" 400 400 $ rasterizeTensorPatch tensorPatch
   drawTensorDebug opt "coon_img/compare_tensor_debug.png" 400 400 tensorPatch
-  drawImm "coon_img/compare_coon.png" 400 400 $ renderCoonPatch $ coonPatch
+  drawImm "coon_img/compare_coon.png" 400 400 $ renderCoonPatch coonPatch
   drawImm "coon_img/tensor_ffd.png" 400 400 $ rasterizeTensorPatch tensorPatch
   where
     opt = defaultDebug { _drawOutline = False }
@@ -242,10 +247,6 @@ jitPoints force e = evalState (transformM jit e) jitter where
     v:rest <- get
     put rest
     return $ p ^+^ v
-
-renderCoonMeshBicubic :: MeshPatch PixelRGBA8 -> DrawContext (ST s) PixelRGBA8 ()
-renderCoonMeshBicubic =
-  mapM_ renderCoonPatch . cubicCoonPatchesOf . calculateMeshColorDerivative
 
 simpleGrid :: DebugOption
 simpleGrid = defaultDebug
@@ -461,14 +462,14 @@ doBench = defaultMain
 
 main :: IO ()
 main = do
-  {-grid-}
-  {-imgGrid -}
-  {-debugCubic-}
-  {-coonTest-}
-  {-coonTestColorStop -}
-  {-coonTestWild -}
-  {-coonTensorTest-}
-  {-tensorSplit-}
-  {-doBench -}
+  grid
+  imgGrid
+  debugCubic
+  coonTest
+  coonTestColorStop 
+  coonTestWild 
+  coonTensorTest
+  tensorSplit
   profile
+  doBench 
 

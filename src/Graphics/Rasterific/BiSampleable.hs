@@ -6,9 +6,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Graphics.Rasterific.BiSampleable
-    ( BiSampleable( .. ) )
-    where
+{-# LANGUAGE FunctionalDependencies #-}
+module Graphics.Rasterific.BiSampleable( BiSampleable( .. ) ) where
 
 import Codec.Picture( PixelRGBA8( .. ) )
 
@@ -21,20 +20,19 @@ import Graphics.Rasterific.Transformations
 
 import Codec.Picture( Pixel( .. ) )
 
-class BiSampleable sampled px where
+class BiSampleable sampled px | sampled -> px where
   interpolate :: sampled -> Float -> Float -> px
 
 -- | Basic bilinear interpolator
-instance {-# INCOHERENT #-} (Pixel px, Modulable (PixelBaseComponent px))
+instance  (Pixel px, Modulable (PixelBaseComponent px))
     => BiSampleable (ParametricValues px) px where
   {-# INLINE interpolate #-}
   interpolate = bilinearPixelInterpolation
 
 -- | Bicubic interpolator
-instance {-# INCOHERENT #-}
+instance 
          ( InterpolablePixel px
          , Num (Holder px Float)
-         , v ~ Holder px Float
          ) => BiSampleable (CubicCoefficient px) px where
   {-# INLINE interpolate #-}
   interpolate = bicubicInterpolation
@@ -49,7 +47,7 @@ bilinearPixelInterpolation :: (Pixel px, Modulable (PixelBaseComponent px))
 {-# SPECIALIZE INLINE
     bilinearPixelInterpolation :: ParametricValues PixelRGBA8 -> Float -> Float -> PixelRGBA8
   #-}
-bilinearPixelInterpolation (ParametricValues { .. }) dx dy = 
+bilinearPixelInterpolation (ParametricValues { .. }) !dx !dy = 
   mixWith (const $ alphaOver covY icovY)
         (mixWith (const $ alphaOver covX icovX) _northValue _eastValue)
         (mixWith (const $ alphaOver covX icovX) _westValue _southValue)

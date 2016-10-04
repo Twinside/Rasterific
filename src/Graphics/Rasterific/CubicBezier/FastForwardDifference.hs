@@ -7,6 +7,7 @@ module Graphics.Rasterific.CubicBezier.FastForwardDifference
     , estimateFDStepCount
     , rasterizerCubicBezier
     , rasterizeTensorPatch
+    , rasterizeCoonPatch
     ) where
 
 import Control.Monad.Primitive( PrimMonad )
@@ -115,6 +116,12 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
             (u  + du) (v  + dv)
 
   lift $ go 0 ax' bx' ay' by' xStart yStart uStart vStart
+
+rasterizeCoonPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
+                    => CoonPatch src -> DrawContext m px ()
+{-# SPECIALIZE rasterizeCoonPatch :: CoonPatch (ParametricValues PixelRGBA8)
+                                  -> DrawContext (ST s) PixelRGBA8 () #-}
+rasterizeCoonPatch = rasterizeTensorPatch . toTensorPatch
 
 rasterizeTensorPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                      => TensorPatch src -> DrawContext m px ()

@@ -5,7 +5,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
-#define SVG_2
 -- | Module defining the type of mesh patch grid.
 module Graphics.Rasterific.MeshPatch
     ( -- * Types
@@ -101,6 +100,8 @@ slopeBasic prevColor nextColor prevPoint nextPoint
     d = prevPoint `distance` nextPoint
 #endif
 
+-- | Prepare a gradient mesh to use cubic color interpolation, see
+-- renderCubicMesh documentation to see the global use of this function.
 calculateMeshColorDerivative :: forall px. (InterpolablePixel px)
                              => MeshPatch px -> MeshPatch (Derivative px)
 calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } where
@@ -116,8 +117,10 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   rawColorAt x y =_meshColors mesh V.! (y * w + x)
   atColor x y = toFloatPixel $ rawColorAt (clampX x) (clampY y)
-  {-isOnVerticalBorder x = x == 0 || x == w - 1 -}
-  {-isOnHorizontalBorder y = y == 0 || y == h - 1-}
+#ifdef SVG_2
+  isOnVerticalBorder x = x == 0 || x == w - 1 
+  isOnHorizontalBorder y = y == 0 || y == h - 1
+#endif
 
   pointAt x y = verticeAt mesh (clampX x) (clampY y)
   derivAt x y = colorDerivatives  V.! (y * w + x)
@@ -147,9 +150,11 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
 
   -- General case
   interiorDerivative x y
-    {-| isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero-}
-    {-| isOnHorizontalBorder y = Derivative thisColor dx zero-}
-    {-| isOnVerticalBorder x = Derivative thisColor zero dy-}
+#ifdef SVG_2
+    | isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero
+    | isOnHorizontalBorder y = Derivative thisColor dx zero
+    | isOnVerticalBorder x = Derivative thisColor zero dy
+#endif
     | otherwise = Derivative thisColor dx dy dxy
     where
 #ifdef SVG_2
@@ -208,6 +213,7 @@ data MutableMesh s px = MutableMesh
   , _meshMutColors :: !(MV.MVector s px)
   }
 
+-- | Normal mesh to mutable mesh
 thawMesh :: PrimMonad m => MeshPatch px -> m (MutableMesh (PrimState m) px)
 thawMesh MeshPatch { .. } = do
   let _meshMutWidth = _meshPatchWidth
@@ -218,6 +224,7 @@ thawMesh MeshPatch { .. } = do
   _meshMutColors <- V.thaw _meshColors
   return MutableMesh { .. }
 
+-- | Mutable mesh to freezed mesh.
 freezeMesh :: PrimMonad m => MutableMesh (PrimState m) px -> m (MeshPatch px)
 freezeMesh MutableMesh { .. } = do
   let _meshPatchWidth = _meshMutWidth
@@ -259,7 +266,7 @@ setVertice x y p = do
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutPrimaryVertices idx p
 
-
+-- | Get the position of vertice
 getVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
            => Int -> Int -> m Point
 getVertice x y = do
@@ -267,6 +274,7 @@ getVertice x y = do
   let idx = y * (_meshMutWidth p + 1) + x
   MV.read (_meshMutPrimaryVertices p) idx
 
+-- | Set the two control bezier points horizontally
 setHorizPoints :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
                => Int -> Int -> InterBezier -> m ()
 setHorizPoints x y p = do
@@ -274,6 +282,7 @@ setHorizPoints x y p = do
   let idx = y * _meshMutWidth + x
   MV.write _meshMutHorizSecondary idx p
 
+-- | Set the two control bezier points vertically
 setVertPoints :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
               => Int -> Int -> InterBezier -> m ()
 setVertPoints x y p = do
@@ -282,6 +291,7 @@ setVertPoints x y p = do
   MV.write _meshMutVertSecondary idx p
 
 
+-- | Set the value associated to a vertex
 setColor :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
          => Int -> Int -> px -> m ()
 setColor x y p = do
@@ -289,7 +299,13 @@ setColor x y p = do
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutColors idx p
 
-generateImageMesh :: Int -> Int -> Point -> Image px -> MeshPatch (ImageMesh px)
+-- | Generate a meshpatch at the size given by the image and
+-- a number of cell in a mesh
+generateImageMesh :: Int      -- ^ Horizontal cell count
+                  -> Int      -- ^ Vertical cell count
+                  -> Point    -- ^ Position of the corner upper left
+                  -> Image px -- ^ Image to transform through a mesh
+                  -> MeshPatch (ImageMesh px)
 generateImageMesh w h base img = generateLinearGrid w h base (V2 dx dy) infos where
   dx = fromIntegral (imageWidth img) / fromIntegral w
   dy = fromIntegral (imageHeight img) / fromIntegral h
@@ -302,7 +318,15 @@ generateImageMesh w h base img = generateLinearGrid w h base (V2 dx dy) infos wh
               trans = translate (V2 (fx * dx) (fy * dy))
               scaling = scale dx dy]
 
-generateLinearGrid :: Int -> Int -> Point -> V2 Float -> V.Vector px
+
+-- | Generate a valid gradient with the shape of a simple grid
+-- using some simple information. You can use `thawMesh` and `freezeMesh`
+-- to mutate it.
+generateLinearGrid :: Int           -- ^ Width in patch
+                   -> Int           -- ^ Height in patch
+                   -> Point         -- ^ Position of the upper left corner
+                   -> V2 Float      -- ^ Size of each patch in x adn y
+                   -> V.Vector px   -- ^ Vector of values, size must be (width + 1) * (height + 1)
                    -> MeshPatch px
 generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
   { _meshPatchWidth = w
@@ -336,14 +360,26 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
 
 type ColorPreparator px pxt = ParametricValues px -> pxt
 
-coonPatchAt :: MeshPatch px -> Int -> Int -> CoonPatch (ParametricValues px)
+-- | Extract a coon patch at a given position.
+coonPatchAt :: MeshPatch px
+            -> Int -- ^ x
+            -> Int -- ^ y
+            -> CoonPatch (ParametricValues px)
 coonPatchAt = coonPatchAt' id
 
-coonImagePatchAt :: MeshPatch (ImageMesh px) -> Int -> Int -> CoonPatch (ImageMesh px)
+-- | Extract an image patch out of a mesh at a given position.
+coonImagePatchAt :: MeshPatch (ImageMesh px)
+                 -> Int -- ^ x
+                 -> Int -- ^ y
+                 -> CoonPatch (ImageMesh px)
 coonImagePatchAt = coonPatchAt' _northValue
 
+-- | Extract a coon patch for cubic interpolation at a given position
+-- see `calculateMeshColorDerivative`
 coonPatchAtWithDerivative :: (InterpolablePixel px)
-                          => MeshPatch (Derivative px) -> Int -> Int
+                          => MeshPatch (Derivative px)
+                          -> Int -- ^ x
+                          -> Int -- ^ y
                           -> CoonPatch (CubicCoefficient px)
 coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
 
@@ -435,14 +471,17 @@ coonPatchAt' preparator mesh x y = CoonPatch
     InterBezier p10 p20 = vInter ! baseV
     InterBezier p13 p23 = vInter ! (baseV + 1)
 
+-- | Extract a list of all the coon patches of the mesh.
 coonPatchesOf :: MeshPatch px -> [CoonPatch (ParametricValues px)]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
+-- | Extract all the coon patch of a mesh using an image interpolation.
 imagePatchesOf :: MeshPatch (ImageMesh px) -> [CoonPatch (ImageMesh px)]
 imagePatchesOf mesh@MeshPatch { .. } =
   [coonImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
+-- | Extract all the coon patch of a mesh using cubic interpolation.
 cubicCoonPatchesOf :: (InterpolablePixel px)
                    => MeshPatch (Derivative px)
                    -> [CoonPatch (CubicCoefficient px)]

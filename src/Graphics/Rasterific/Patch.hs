@@ -18,6 +18,7 @@ module Graphics.Rasterific.Patch
       CoonPatch( .. )
     , TensorPatch( .. )
     , ParametricValues( .. )
+    , PatchInterpolation( .. )
     , CoonColorWeight
     , Subdivided( .. )
     , InterpolablePixel
@@ -28,6 +29,8 @@ module Graphics.Rasterific.Patch
     , renderImageMesh
     , renderCoonMesh
     , renderCoonMeshBicubic
+    , rasterizeTensorPatch 
+    , rasterizeCoonPatch
 
       -- * Debugging
     , DebugOption( .. )
@@ -96,15 +99,19 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
 meanValue :: ParametricValues UV -> UV
 meanValue = (^* 0.25) . getSum . foldMap Sum
 
-  --  N    midNorthEast   E
-  --      +-------+------+
-  --      |0      :     1|
-  --      |       :      |
-  --      | Left  :Right |
-  --      |       :      |
-  --      |3      :     2|
-  --      +-------+------+
-  --  W    midSouthWest   S
+-- | Horizontally divides the parametric plane
+--
+-- @
+--  N    midNorthEast   E
+--      +-------+------+
+--      |0      :     1|
+--      |       :      |
+--      | Left  :Right |
+--      |       :      |
+--      |3      :     2|
+--      +-------+------+
+--  W    midSouthWest   S
+-- @
 subdivideHorizontal :: ParametricValues UV -> (ParametricValues UV, ParametricValues UV)
 subdivideHorizontal ParametricValues { .. } = (l, r) where
   midNorthEast = _northValue `midPoint` _eastValue
@@ -124,6 +131,7 @@ subdivideHorizontal ParametricValues { .. } = (l, r) where
     , _westValue = midSouthWest
     }
 
+-- | Create UVPatch information for each new quadrant
 subdivideWeights :: UVPatch -> Subdivided UVPatch
 subdivideWeights values = Subdivided { .. } where
   ParametricValues
@@ -193,6 +201,7 @@ eastCurveOfPatch TensorPatch
   , _curve3 = CubicBezier _ _ _ c3
   } = CubicBezier c0 c1 c2 c3
 
+-- | Swap vertical/horizontal orientation of a tensor patch
 transposePatch :: TensorPatch (ParametricValues a) -> TensorPatch (ParametricValues a)
 transposePatch TensorPatch
   { _curve0 = CubicBezier c00 c01 c02 c03
@@ -261,6 +270,8 @@ horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 
   (l3, r3) = divideCubicBezier $ _curve3 p
   (vl, vr) = subdivideHorizontal $ _tensorValues p
 
+-- | Subdivide a tensor patch into 4 new quadrant.
+-- Perform twice the horizontal subdivision with a transposition.
 subdivideTensorPatch :: TensorPatch UVPatch -> Subdivided (TensorPatch UVPatch)
 subdivideTensorPatch p = subdivided where
   (west, east) = horizontalTensorSubdivide p
@@ -288,12 +299,14 @@ controlPointOfCoonPatch CoonPatch
     , _west  = CubicBezier _ g h _
     } = [a, b, c, d, e, f, g, h]
 
+-- | Store the new generated information after subdivision
+-- in 4 quadrants.
 data Subdivided a = Subdivided
-    { _northWest :: !a
-    , _northEast :: !a
-    , _southWest :: !a
-    , _southEast :: !a
-    }
+  { _northWest :: !a -- ^ Upper left
+  , _northEast :: !a -- ^ Upper right
+  , _southWest :: !a -- ^ Lower left
+  , _southEast :: !a -- ^ Lower right
+  }
 
 -- | Split a coon patch in two vertically
 --
@@ -416,6 +429,7 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
+-- | Draw the 4 bezier spline representing the boundary of a coon patch.
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =
   liftF $ Stroke 2 JoinRound (CapRound, CapRound) prims ()
@@ -425,6 +439,7 @@ drawCoonPatchOutline CoonPatch { .. } =
 pointsOf :: PointFoldable v => v -> [Point]
 pointsOf = foldPoints (flip (:)) []
 
+-- | Used to describe how to debug print a coon/tensort patch.
 data DebugOption = DebugOption
   { _drawControlMesh    :: !Bool
   , _drawBaseVertices   :: !Bool
@@ -437,6 +452,7 @@ data DebugOption = DebugOption
   , _controlColor       :: !PixelRGBA8
   }
 
+-- | Default options drawing nearly everything.
 defaultDebug :: DebugOption
 defaultDebug = DebugOption
   { _drawControlMesh    = True
@@ -450,6 +466,7 @@ defaultDebug = DebugOption
   , _controlColor       = PixelRGBA8 20 20 40 255
   }
 
+-- | Helper function drawing many information about a coon patch.
 debugDrawCoonPatch :: DebugOption -> CoonPatch (ParametricValues PixelRGBA8)
                    -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
@@ -476,6 +493,7 @@ debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
     setColor' _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
+-- | Helper function drawing many information about a tensor patch.
 debugDrawTensorPatch :: DebugOption -> TensorPatch (ParametricValues px)
                      -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
@@ -501,6 +519,7 @@ debugDrawTensorPatch DebugOption { .. } p = do
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
+-- | Define the unit square in [0, 1]^2
 parametricBase :: UVPatch
 parametricBase = ParametricValues
   { _northValue = V2 0 0
@@ -509,11 +528,13 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
+-- | Render a simple coon mesh, with only color on the vertices.
 renderCoonMesh :: forall m px.
                   (PrimMonad m, RenderablePixel px, BiSampleable (ParametricValues px) px)
                => MeshPatch px -> DrawContext m px ()
 renderCoonMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . coonPatchesOf
 
+-- | Render a coon mesh but using cubic interpolation for the color.
 renderCoonMeshBicubic :: forall m px.
                          ( PrimMonad m
                          , RenderablePixel px
@@ -524,16 +545,18 @@ renderCoonMeshBicubic =
     . cubicCoonPatchesOf
     . calculateMeshColorDerivative
 
-
+-- | Render an mesh patch by interpolating accross an image.
 renderImageMesh :: PrimMonad m
                 => MeshPatch (ImageMesh PixelRGBA8) -> DrawContext m PixelRGBA8 ()
 renderImageMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . imagePatchesOf
 
+-- | Render a coon patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh.
 renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, BiSampleable interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 7 -- maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }
@@ -548,6 +571,8 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
+-- | Render a tensor patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh.
 renderTensorPatch :: forall m sampled px. 
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()

@@ -4,7 +4,6 @@
 module Graphics.Rasterific.CubicBezier.FastForwardDifference
     ( ForwardDifferenceCoefficient( .. )
     , bezierToForwardDifferenceCoeff
-    , estimateFDStepCount
     , rasterizerCubicBezier
     , rasterizeTensorPatch
     , rasterizeCoonPatch
@@ -82,6 +81,8 @@ fixIter count f = go count
     go 0 a = a
     go n a = go (n-1) $ f a
 
+-- | Rasterize a cubic bezier curve using the Fast Forward Diffrence
+-- algorithm.
 rasterizerCubicBezier :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                       => src -> CubicBezier
                       -> Float -> Float
@@ -117,12 +118,16 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
 
   lift $ go 0 ax' bx' ay' by' xStart yStart uStart vStart
 
+-- | Rasterize a coon patch using the Fast Forward Diffrence algorithm,
+-- likely to be faster than the subdivision one.
 rasterizeCoonPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                     => CoonPatch src -> DrawContext m px ()
 {-# SPECIALIZE rasterizeCoonPatch :: CoonPatch (ParametricValues PixelRGBA8)
                                   -> DrawContext (ST s) PixelRGBA8 () #-}
 rasterizeCoonPatch = rasterizeTensorPatch . toTensorPatch
 
+-- | Rasterize a tensor patch using the Fast Forward Diffrence algorithm,
+-- likely to be faster than the subdivision one.
 rasterizeTensorPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                      => TensorPatch src -> DrawContext m px ()
 {-# SPECIALIZE rasterizeTensorPatch :: TensorPatch (ParametricValues PixelRGBA8)

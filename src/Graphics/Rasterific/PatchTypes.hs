@@ -7,7 +7,33 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
-module Graphics.Rasterific.PatchTypes where
+module Graphics.Rasterific.PatchTypes
+  ( -- * New geometry
+    CoonPatch( .. )
+  , TensorPatch( .. )
+  , MeshPatch( .. )
+  , InterBezier( .. )
+
+    -- * Types
+  , CoonColorWeight
+  , PatchInterpolation( .. )
+  , ParametricValues( .. )
+  , Derivative( .. )
+  , Derivatives( .. )
+  , UV
+  , UVPatch
+  , CubicCoefficient( .. )
+  , ImageMesh( .. )
+
+    -- * Helper functions
+  , transposeParametricValues 
+  , coonPointAt
+  , toTensorPatch
+
+    -- * Lenses
+  , xDerivative
+  , yDerivative
+  ) where
 
 import Data.Monoid( (<>) )
 import qualified Data.Vector as V
@@ -21,14 +47,18 @@ import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Transformations
 
+-- | Type of coordinate interpolation
 type CoonColorWeight = Float
 
+-- | How do we want to perform color/image interpolation
+-- within the patch.
 data PatchInterpolation
-  = PatchBilinear
-  | PatchBicubic
+  = PatchBilinear   -- ^ Bilinear interpolation
+  | PatchBicubic    -- ^ Bicubic interpolation
   deriving (Eq, Show)
 
 -- | Values associated to the corner of a patch
+--
 -- @
 --  North               East
 --      +--------------+
@@ -40,6 +70,7 @@ data PatchInterpolation
 --      +--------------+
 --  West                South
 -- @
+--
 data ParametricValues a = ParametricValues
   { _northValue :: !a
   , _eastValue  :: !a
@@ -48,6 +79,8 @@ data ParametricValues a = ParametricValues
   }
   deriving (Functor, Show)
 
+-- | Store the derivative necessary for cubic interpolation in
+-- the gradient mesh.
 data Derivative px = Derivative
   { _derivValues :: !(Holder px Float)
   , _xDerivative :: !(Holder px Float)
@@ -57,10 +90,12 @@ data Derivative px = Derivative
 
 deriving instance Show (Holder px Float) => Show (Derivative px)
 
+-- | Helping lens
 xDerivative :: Lens' (Derivative px) (Holder px Float)
 xDerivative = lens _xDerivative setter where
   setter o v = o { _xDerivative = v }
 
+-- | Help lens
 yDerivative :: Lens' (Derivative px) (Holder px Float)
 yDerivative = lens _yDerivative setter where
   setter o v = o { _yDerivative = v }
@@ -73,9 +108,11 @@ instance Applicative ParametricValues where
 instance Foldable ParametricValues where
   foldMap f (ParametricValues n e s w) = f n <> f e <> f s <> f w
 
+-- | Transpose (switch vertical/horizontal orientation) of values.
 transposeParametricValues :: ParametricValues a -> ParametricValues a
 transposeParametricValues (ParametricValues n e s w) = ParametricValues n w s e
 
+-- | Describe a tensor patch
 data TensorPatch weight = TensorPatch
   { _curve0 :: !CubicBezier
   , _curve1 :: !CubicBezier
@@ -105,6 +142,7 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
   foldPoints f acc (TensorPatch c0 c1 c2 c3 _) = g c3 . g c2 . g c1 $ g c0 acc
     where g v a = foldPoints f a v
 
+-- | Define the boundary and interpolated values of a coon patch.
 --
 -- @
 --                        ----->
@@ -123,11 +161,11 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
 -- @
 --
 data CoonPatch weight = CoonPatch
-    { _north :: !CubicBezier
-    , _east :: !CubicBezier
-    , _south :: !CubicBezier
-    , _west :: !CubicBezier
-    , _coonValues :: !weight
+    { _north :: !CubicBezier -- ^ North border, from left to right at top
+    , _east :: !CubicBezier  -- ^ East obrder, from top to bottom
+    , _south :: !CubicBezier -- ^ South border from right to left
+    , _west :: !CubicBezier  -- ^ West border from bottom to top
+    , _coonValues :: !weight -- ^ The patch values
     }
     deriving Show
 
@@ -164,7 +202,6 @@ data MeshPatch px = MeshPatch
     -- | Main points defining the patch, of size
     -- (_meshPatchWidth + 1) * (_meshPatchHeight + 1)
   , _meshPrimaryVertices :: !(V.Vector Point)
-
     -- | For each line, store the points in between each
     -- vertex. There is two points between each vertex, so
     -- _meshPatchWidth * (_meshPatchHeight + 1) points
@@ -173,12 +210,12 @@ data MeshPatch px = MeshPatch
     -- vertex. Two points between each vertex, so
     -- _meshPatchHeight * (_meshPatchWidth + 1)
   , _meshVerticalSecondary :: !(V.Vector InterBezier)
-
-   -- | Colors for each vertex points
+    -- | Colors for each vertex points
   , _meshColors :: !(V.Vector px)
   }
   deriving (Eq, Show, Functor)
 
+-- | Store the two bezier control points of a bezier.
 data InterBezier = InterBezier 
   { _inter0 :: !Point
   , _inter1 :: !Point
@@ -206,6 +243,7 @@ transformMeshM f MeshPatch { .. } = do
 instance {-# OVERLAPPING  #-} Transformable (MeshPatch px) where
   transformM = transformMeshM
 
+-- | Store values associated at the corner of the patch.
 data Derivatives = Derivatives
   { _interNorthWest :: !Point
   , _interNorthEast :: !Point
@@ -228,15 +266,19 @@ type UV = V2 CoonColorWeight
 -- | Define a rectangle in the U,V parametric space.
 type UVPatch = ParametricValues UV
 
+-- | Store information for cubic interpolation in a patch.
 newtype CubicCoefficient px = CubicCoefficient
     { getCubicCoefficients :: ParametricValues (V4 (Holder px Float))
     }
 
+-- | Type storing the information to be able to interpolate
+-- part of an image in a patch.
 data ImageMesh px = ImageMesh
     { _meshImage :: !(Image px)
     , _meshTransform :: !Transformation
     }
 
+-- | Return a postion of a point in the coon patch.
 coonPointAt :: CoonPatch a -> UV -> Point
 coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
   where
@@ -254,6 +296,7 @@ coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
     CubicBezier _ _ _ d2 = fst $ cubicBezierBreakAt _east v
     CubicBezier _ _ _ d1 = fst $ cubicBezierBreakAt _west (1 - v)
 
+-- | Convert a coon patch in
 toTensorPatch :: CoonPatch a -> TensorPatch a
 toTensorPatch patch@CoonPatch { .. } = TensorPatch
     { _curve0 = _north

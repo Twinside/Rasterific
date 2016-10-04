@@ -19,8 +19,6 @@ import Graphics.Rasterific.Linear( (^+^), (^*) )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
-import Graphics.Rasterific.PatchTypes
-import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific
 
 import Criterion

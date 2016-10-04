@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+-- | Module to describe bi-sampleable types
 module Graphics.Rasterific.BiSampleable( BiSampleable( .. ) ) where
 
 import Codec.Picture( PixelRGBA8( .. ) )
@@ -20,7 +21,9 @@ import Graphics.Rasterific.Transformations
 
 import Codec.Picture( Pixel( .. ) )
 
+-- | Interpolate a 2D point in a given type
 class BiSampleable sampled px | sampled -> px where
+  -- | The interpolation function
   interpolate :: sampled -> Float -> Float -> px
 
 -- | Basic bilinear interpolator
@@ -37,6 +40,7 @@ instance
   {-# INLINE interpolate #-}
   interpolate = bicubicInterpolation
 
+-- | Bilinear interpolation of an image
 instance BiSampleable (ImageMesh PixelRGBA8) PixelRGBA8 where
   {-# INLINE interpolate #-}
   interpolate imesh xb yb = sampledImageShader (_meshImage imesh) SamplerPad x y

@@ -133,6 +133,7 @@ module Graphics.Rasterific
     , Cap( .. )
     , SamplerRepeat( .. )
     , FillMethod( .. )
+    , PatchInterpolation( .. )
     , DashPattern
     , drawOrdersOfDrawing
 
@@ -150,7 +151,7 @@ import Data.Monoid( (<>) )
 
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( fromF )
-import Control.Monad.ST( runST )
+import Control.Monad.ST( ST, runST )
 import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
@@ -175,6 +176,7 @@ import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
+import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
 {-import Graphics.Rasterific.TensorPatch-}
@@ -378,8 +380,8 @@ printTextAt font pointSize point string =
 
 -- | Render a mesh patch as an object. Warning, there is
 -- no antialiasing on mesh patch objects!
-renderMeshPatch :: MeshPatch px -> Drawing px ()
-renderMeshPatch mesh = liftF $ MeshPatchRender mesh ()
+renderMeshPatch :: PatchInterpolation -> MeshPatch px -> Drawing px ()
+renderMeshPatch i mesh = liftF $ MeshPatchRender i mesh ()
 
 -- | Print complex text, using different texture font and
 -- point size for different parts of the text.
@@ -514,8 +516,13 @@ preComputeTexture w h = go where
     ShaderTexture _ -> t
     ModulateTexture t1 t2 -> ModulateTexture (go t1) (go t2)
     PatternTexture _ _ _ _ _ -> t
-    MeshPatchTexture m ->
+    MeshPatchTexture PatchBilinear m ->
         RawTexture $ runST $ runDrawContext w h emptyPx $ renderCoonMesh m
+    MeshPatchTexture PatchBicubic m ->
+        RawTexture $ runST $ runDrawContext w h emptyPx 
+                           $ mapM_ renderCoonPatch
+                           $ cubicCoonPatchesOf
+                           $ calculateMeshColorDerivative m
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
@@ -602,14 +609,20 @@ drawOrdersOfDrawing width height dpi background drawing =
             , _orderDirect     = cust
             }
 
-    go ctxt (Free (MeshPatchRender mesh next)) rest = order : after where
+    go ctxt (Free (MeshPatchRender i mesh next)) rest = order : after where
       after = go ctxt next rest
+      render :: DrawContext (ST s) px ()
+      render = case i of
+        PatchBilinear -> mapM_ renderCoonPatch $ coonPatchesOf mesh
+        PatchBicubic ->
+            mapM_ renderCoonPatch . cubicCoonPatchesOf
+                                  $ calculateMeshColorDerivative mesh
       order = DrawOrder 
             { _orderPrimitives = []
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = FillWinding
             , _orderMask       = currentClip ctxt
-            , _orderDirect     = mapM_ renderCoonPatch $ coonPatchesOf mesh
+            , _orderDirect     = render
             }
 
     go ctxt (Free (Fill method prims next)) rest = order : after where

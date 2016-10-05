@@ -267,13 +267,13 @@ cubicBezierBreakAt :: CubicBezier -> Float
 cubicBezierBreakAt (CubicBezier a b c d) val =
     (CubicBezier a ab abbc abbcbccd, CubicBezier abbcbccd bccd cd d)
   where
-    ab = lerp val a b
-    bc = lerp val b c
-    cd = lerp val c d
+    ab = lerp val b a
+    bc = lerp val c b
+    cd = lerp val d c
 
-    abbc = lerp val ab bc
-    bccd = lerp val bc cd
-    abbcbccd = lerp val abbc bccd
+    abbc = lerp val bc ab
+    bccd = lerp val cd bc
+    abbcbccd = lerp val bccd abbc
 
 decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
 decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =

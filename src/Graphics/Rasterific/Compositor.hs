@@ -8,6 +8,7 @@ module Graphics.Rasterific.Compositor
     ( Compositor
     , Modulable( .. )
     , InterpolablePixel( .. )
+    , maxDistance
     , RenderablePixel
     , ModulablePixel
     , compositionDestination
@@ -33,43 +34,35 @@ type Compositor px =
         PixelBaseComponent px -> px -> px -> px
 
 -- | Used for Coon patch rendering
-class (Applicative (Holder a), Additive (Holder a)) => InterpolablePixel a where
+class ( Applicative (Holder a)
+      , Functor  (Holder a)
+      , Foldable (Holder a)
+      , Additive (Holder a) ) => InterpolablePixel a where
   type Holder a :: * -> *
   toFloatPixel :: a -> Holder a Float
   fromFloatPixel :: Holder a Float -> a
-
-  maxDistance :: a -> a -> Float
   maxRepresentable :: Proxy a -> Float
-  lerpValue :: Float -> a -> a -> a
+
+maxDistance :: InterpolablePixel a => a -> a -> Float
+maxDistance p1 p2 = maximum $ abs <$> (toFloatPixel p1 ^-^ toFloatPixel p2)
 
 instance InterpolablePixel Float where
   type Holder Float = V1
   toFloatPixel = V1
   fromFloatPixel (V1 f) = f
-
-  maxDistance a b = abs (a - b)
-  maxRepresentable Proxy = 255
-  lerpValue zeroToOne a b = (1 - zeroToOne) * a + zeroToOne * b
+  maxRepresentable Proxy = 1
 
 instance InterpolablePixel Word8 where
   type Holder Word8 = V1
-
-  maxDistance a b = abs (fromIntegral b - fromIntegral a) / 255.0
+  toFloatPixel = V1 . fromIntegral
+  fromFloatPixel (V1 f) = floor f
   maxRepresentable Proxy = 255
-  lerpValue zeroToOne a b = 
-    floor $ (1 - zeroToOne) * fromIntegral a + fromIntegral b * zeroToOne
 
 instance InterpolablePixel PixelRGB8 where
   type Holder PixelRGB8 = V3
   toFloatPixel (PixelRGB8 r g b) = V3 (to r) (to g) (to b) where to n = fromIntegral n
   fromFloatPixel (V3 r g b) = PixelRGB8 (to r) (to g) (to b) where to = floor
-
-  maxDistance (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
-    max (maxDistance b b') . max (maxDistance g g') $ maxDistance r r'
   maxRepresentable Proxy = 255
-  lerpValue zeroToOne (PixelRGB8 r g b) (PixelRGB8 r' g' b') =
-      PixelRGB8 (l r r') (l g g') (l b b')
-     where l = lerpValue zeroToOne
 
 instance InterpolablePixel PixelRGBA8 where
   type Holder PixelRGBA8 = V4
@@ -77,17 +70,14 @@ instance InterpolablePixel PixelRGBA8 where
     where to n = fromIntegral n
   fromFloatPixel (V4 r g b a) = PixelRGBA8 (to r) (to g) (to b) (to a)
     where to = floor
-
   maxRepresentable Proxy = 255
-  maxDistance (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
-    max (maxDistance a a') 
-        . max (maxDistance b b')
-        . max (maxDistance g g')
-        $ maxDistance r r'
 
-  lerpValue zeroToOne (PixelRGBA8 r g b a) (PixelRGBA8 r' g' b' a') =
-      PixelRGBA8 (l r r') (l g g') (l b b') (l a a')
-     where l = lerpValue zeroToOne
+{-data ImageSampler px a = ImageSampler-}
+  {-{ _samplerImage     :: !(Image px)-}
+  {-, _samplerTransform :: !Transformation-}
+  {-, _samplerBase      :: !(V2 a)-}
+  {-}-}
+  {-deriving Functor-}
 
 -- | This constraint ensure that a type is a pixel
 -- and we're allowed to modulate it's color components
@@ -111,6 +101,8 @@ type RenderablePixel px =
     , PackeablePixel (PixelBaseComponent px)
     , Num (PackedRepresentation px)
     , Num (PackedRepresentation (PixelBaseComponent px))
+    , Num (Holder px Float)
+    , Num (Holder (PixelBaseComponent px) Float)
     , Storable (PackedRepresentation (PixelBaseComponent px))
     , PixelBaseComponent (PixelBaseComponent px)
             ~ (PixelBaseComponent px)
@@ -142,6 +134,7 @@ class (Ord a, Num a) => Modulable a where
 
   -- | Like modulate but also return the inverse coverage.
   coverageModulate :: a -> a -> (a, a)
+  {-# INLINE coverageModulate #-}
   coverageModulate c a = (clamped, fullValue - clamped)
     where clamped = modulate a c
 

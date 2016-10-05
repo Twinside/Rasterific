@@ -30,7 +30,7 @@ import Codec.Picture.Types( Image, Pixel( .. ), Pixel8 )
 import Codec.Picture.Types( MutableImage )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.MeshPatch
+import Graphics.Rasterific.PatchTypes
 
 import Graphics.Text.TrueType( Font, PointSize )
 
@@ -78,13 +78,13 @@ data Texture (px :: *)
   | ShaderTexture  !(ShaderFunction px)
   | ModulateTexture (Texture px) (Texture (PixelBaseComponent px))
   | PatternTexture !Int !Int !px (Drawing px ()) (Image px)
-  | MeshPatchTexture !(MeshPatch px)
+  | MeshPatchTexture !PatchInterpolation !(MeshPatch px)
 
 
 data DrawCommand px next
   = Fill FillMethod [Primitive] next
   | CustomRender (forall s. DrawContext (ST s) px ()) next
-  | MeshPatchRender (MeshPatch px) next
+  | MeshPatchRender !PatchInterpolation (MeshPatch px) next
   | Stroke Float Join (Cap, Cap) [Primitive] next
   | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
   | TextFill Point [TextRange px] next
@@ -117,8 +117,8 @@ dumpDrawing = go . fromF where
 
         ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
-  go (Free (MeshPatchRender m next)) =
-    "renderMeshPatch (" ++ show m ++ ") >>= " ++ go next
+  go (Free (MeshPatchRender i m next)) =
+    "renderMeshPatch (" ++ show i ++ ") (" ++ show m ++ ") >>= " ++ go next
   go (Free (CustomRender _r next)) =
     "customRender _ >>= " ++ go next
   go (Free (WithImageEffect _effect sub next)) =
@@ -169,7 +169,7 @@ dumpTexture :: ( Show px
                     ~ (PixelBaseComponent px)
                ) => Texture px -> String
 dumpTexture (SolidTexture px) = "uniformTexture (" ++ show px ++ ")"
-dumpTexture (MeshPatchTexture mpx) = "meshTexture (" ++ show mpx ++ ")"
+dumpTexture (MeshPatchTexture i mpx) = "meshTexture (" ++ show i ++ ") (" ++ show mpx ++ ")"
 dumpTexture (LinearGradientTexture grad (Line a b)) =
     "linearGradientTexture " ++ show grad ++ " (" ++ show a ++ ") (" ++ show b ++ ")"
 dumpTexture (RadialGradientTexture grad p rad) =
@@ -213,8 +213,8 @@ instance Functor (DrawCommand px) where
         WithTransform trans draw $ f next
     fmap f (WithPathOrientation path point draw next) =
         WithPathOrientation path point draw $ f next
-    fmap f (MeshPatchRender mesh next) =
-        MeshPatchRender mesh $ f next
+    fmap f (MeshPatchRender i mesh next) =
+        MeshPatchRender i mesh $ f next
 
 instance Monoid (Drawing px ()) where
     mempty = return ()

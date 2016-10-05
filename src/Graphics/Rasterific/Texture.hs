@@ -81,8 +81,9 @@ uniformTexture :: px -- ^ The color used for all the texture.
                -> Texture px
 uniformTexture = SolidTexture
 
+
 -- | Texture using a mesh patch as definition
-meshPatchTexture :: MeshPatch px -> Texture px
+meshPatchTexture :: PatchInterpolation -> MeshPatch px -> Texture px
 meshPatchTexture = MeshPatchTexture
 
 -- | Linear gradient texture.

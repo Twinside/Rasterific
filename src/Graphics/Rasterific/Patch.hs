@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -7,31 +8,43 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | Implementation using
 -- "An efficient algorithm for subdivising linear Coons surfaces"
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
 module Graphics.Rasterific.Patch
-    ( CoonPatch( .. )
+    ( -- * Types
+      CoonPatch( .. )
     , TensorPatch( .. )
     , ParametricValues( .. )
+    , PatchInterpolation( .. )
     , CoonColorWeight
     , Subdivided( .. )
-    , DebugOption( .. )
     , InterpolablePixel
+
+      -- * Rendering functions
+    , renderCoonPatch
+    , renderTensorPatch
+    , renderImageMesh
+    , renderCoonMesh
+    , renderCoonMeshBicubic
+    , rasterizeTensorPatch 
+    , rasterizeCoonPatch
+
+      -- * Debugging
+    , DebugOption( .. )
+    , defaultDebug
+    , drawCoonPatchOutline
+    , debugDrawCoonPatch
+    , debugDrawTensorPatch
+    , parametricBase
+
+      -- * Manipulation
     , subdividePatch
     , subdivideTensorPatch
     , horizontalTensorSubdivide
     , transposePatch
-    , drawCoonPatchOutline
-    , renderCoonPatch
-    , renderTensorPatch
-    , debugDrawCoonPatch
-    , debugDrawTensorPatch
-    , parametricBase
-    , defaultDebug
-    , transformCoon
-    , renderCoonMesh
     )  where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -45,17 +58,20 @@ import Control.Monad.Primitive( PrimMonad )
 import Data.Monoid( Sum( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.CubicBezier.FastForwardDifference
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Rasterific.Line( lineFromPath )
 import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.BiSampleable
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Command
 
 import Codec.Picture.Types( PixelRGBA8( .. ) )
+
 
 -- @
 --  North    ----->     East
@@ -68,6 +84,8 @@ import Codec.Picture.Types( PixelRGBA8( .. ) )
 --      +--------------+
 --  West    <-----      South
 -- @
+
+-- TODO: find a new way to calculate that...
 maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
 maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   range = maxRepresentable (Proxy :: Proxy px)
@@ -79,20 +97,23 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   ParametricValues { _westValue = west, _northValue = north
                    , _southValue = south, _eastValue = east } = values
 
-meanValue :: ParametricValues (V2 CoonColorWeight) -> V2 CoonColorWeight
+meanValue :: ParametricValues UV -> UV
 meanValue = (^* 0.25) . getSum . foldMap Sum
 
-  --  N    midNorthEast   E
-  --      +-------+------+
-  --      |0      :     1|
-  --      |       :      |
-  --      | Left  :Right |
-  --      |       :      |
-  --      |3      :     2|
-  --      +-------+------+
-  --  W    midSouthWest   S
-subdivideHorizontal :: ParametricValues (V2 CoonColorWeight)
-                    -> (ParametricValues (V2 CoonColorWeight), ParametricValues (V2 CoonColorWeight))
+-- | Horizontally divides the parametric plane
+--
+-- @
+--  N    midNorthEast   E
+--      +-------+------+
+--      |0      :     1|
+--      |       :      |
+--      | Left  :Right |
+--      |       :      |
+--      |3      :     2|
+--      +-------+------+
+--  W    midSouthWest   S
+-- @
+subdivideHorizontal :: ParametricValues UV -> (ParametricValues UV, ParametricValues UV)
 subdivideHorizontal ParametricValues { .. } = (l, r) where
   midNorthEast = _northValue `midPoint` _eastValue
   midSouthWest = _westValue `midPoint` _southValue
@@ -111,14 +132,14 @@ subdivideHorizontal ParametricValues { .. } = (l, r) where
     , _westValue = midSouthWest
     }
 
-subdivideWeights :: ParametricValues (V2 CoonColorWeight)
-                 -> Subdivided (ParametricValues (V2 CoonColorWeight))
+-- | Create UVPatch information for each new quadrant
+subdivideWeights :: UVPatch -> Subdivided UVPatch
 subdivideWeights values = Subdivided { .. } where
   ParametricValues
-    { _westValue = west
-    , _northValue = north
-    , _southValue = south
+    { _northValue = north
     , _eastValue = east
+    , _southValue = south
+    , _westValue = west
     } = values
 
   --  N       midNorth    E
@@ -181,7 +202,8 @@ eastCurveOfPatch TensorPatch
   , _curve3 = CubicBezier _ _ _ c3
   } = CubicBezier c0 c1 c2 c3
 
-transposePatch :: TensorPatch px -> TensorPatch px
+-- | Swap vertical/horizontal orientation of a tensor patch
+transposePatch :: TensorPatch (ParametricValues a) -> TensorPatch (ParametricValues a)
 transposePatch TensorPatch
   { _curve0 = CubicBezier c00 c01 c02 c03
   , _curve1 = CubicBezier c10 c11 c12 c13
@@ -241,8 +263,7 @@ transposePatch TensorPatch
 --       Left            Right
 -- @
 --
-horizontalTensorSubdivide :: TensorPatch (V2 CoonColorWeight)
-                          -> (TensorPatch (V2 CoonColorWeight), TensorPatch (V2 CoonColorWeight))
+horizontalTensorSubdivide :: TensorPatch UVPatch -> (TensorPatch UVPatch, TensorPatch UVPatch)
 horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 r3 vr) where
   (l0, r0) = divideCubicBezier $ _curve0 p
   (l1, r1) = divideCubicBezier $ _curve1 p
@@ -250,8 +271,9 @@ horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 
   (l3, r3) = divideCubicBezier $ _curve3 p
   (vl, vr) = subdivideHorizontal $ _tensorValues p
 
-subdivideTensorPatch :: TensorPatch (V2 CoonColorWeight)
-                     -> Subdivided (TensorPatch (V2 CoonColorWeight))
+-- | Subdivide a tensor patch into 4 new quadrant.
+-- Perform twice the horizontal subdivision with a transposition.
+subdivideTensorPatch :: TensorPatch UVPatch -> Subdivided (TensorPatch UVPatch)
 subdivideTensorPatch p = subdivided where
   (west, east) = horizontalTensorSubdivide p
   (northWest, southWest) = horizontalTensorSubdivide $ transposePatch west
@@ -263,7 +285,7 @@ subdivideTensorPatch p = subdivided where
     , _southEast = southEast
     }
 
-basePointOfCoonPatch :: CoonPatch px -> [(Point, px)]
+basePointOfCoonPatch :: CoonPatch (ParametricValues px) -> [(Point, px)]
 basePointOfCoonPatch CoonPatch
     { _north = CubicBezier a _ _ b
     , _south = CubicBezier c _ _ d
@@ -278,33 +300,17 @@ controlPointOfCoonPatch CoonPatch
     , _west  = CubicBezier _ g h _
     } = [a, b, c, d, e, f, g, h]
 
+-- | Store the new generated information after subdivision
+-- in 4 quadrants.
 data Subdivided a = Subdivided
-    { _northWest :: !a
-    , _northEast :: !a
-    , _southWest :: !a
-    , _southEast :: !a
-    }
+  { _northWest :: !a -- ^ Upper left
+  , _northEast :: !a -- ^ Upper right
+  , _southWest :: !a -- ^ Lower left
+  , _southEast :: !a -- ^ Lower right
+  }
 
--- | Split a coon patch in two vertically
---
--- @
---                        --------->
---                  North     +____----------------+
---   ^          +------------/:                    /
---   |         /              :                   /       |
---   |        /               :                  /        |
---   |       /               :                  /  east   |
---   | west |               :                  /          |
---          |               :                 |           v
---           \               :                 \    .   
---            \               :  __-------------+
---             +--------------+-/
---                    South
---                       <---------
--- @
---
-subdividePatch :: CoonPatch (V2 CoonColorWeight)
-               -> Subdivided (CoonPatch (V2 CoonColorWeight))
+-- | Split a coon patch into four new quadrants
+subdividePatch :: CoonPatch UVPatch -> Subdivided (CoonPatch UVPatch)
 subdividePatch patch = Subdivided
     { _northWest = northWest
     , _northEast = northEast
@@ -394,8 +400,8 @@ combine (CubicBezier a1 b1 c1 d1)
 
 straightLine :: Point -> Point -> CubicBezier
 straightLine a b = CubicBezier a p1 p2 b where
-  p1 = lerp (1/3) a b
-  p2 = lerp (2/3) a b
+  p1 = lerp (1/3) b a
+  p2 = lerp (2/3) b a
 
 
 -- | The curves in the coon patch are inversed!
@@ -407,12 +413,7 @@ midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
     (c `midPoint` c')
     (d `midPoint` d')
 
-weightToColor :: InterpolablePixel px
-              => ParametricValues px -> V2 CoonColorWeight -> px
-weightToColor ParametricValues { .. } (V2 u v) = lerpValue v uTop uBottom where
-  uTop = lerpValue u _northValue _eastValue
-  uBottom = lerpValue u _westValue _southValue
-
+-- | Draw the 4 bezier spline representing the boundary of a coon patch.
 drawCoonPatchOutline :: CoonPatch px -> Drawing pxb ()
 drawCoonPatchOutline CoonPatch { .. } =
   liftF $ Stroke 2 JoinRound (CapRound, CapRound) prims ()
@@ -422,6 +423,7 @@ drawCoonPatchOutline CoonPatch { .. } =
 pointsOf :: PointFoldable v => v -> [Point]
 pointsOf = foldPoints (flip (:)) []
 
+-- | Used to describe how to debug print a coon/tensort patch.
 data DebugOption = DebugOption
   { _drawControlMesh    :: !Bool
   , _drawBaseVertices   :: !Bool
@@ -434,6 +436,7 @@ data DebugOption = DebugOption
   , _controlColor       :: !PixelRGBA8
   }
 
+-- | Default options drawing nearly everything.
 defaultDebug :: DebugOption
 defaultDebug = DebugOption
   { _drawControlMesh    = True
@@ -447,56 +450,61 @@ defaultDebug = DebugOption
   , _controlColor       = PixelRGBA8 20 20 40 255
   }
 
-debugDrawCoonPatch :: DebugOption -> CoonPatch PixelRGBA8 -> Drawing PixelRGBA8 ()
+-- | Helper function drawing many information about a coon patch.
+debugDrawCoonPatch :: DebugOption -> CoonPatch (ParametricValues PixelRGBA8)
+                   -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
       fill sub = liftF $ Fill FillWinding sub ()
-      setColor c inner = liftF $ SetTexture (SolidTexture c) inner ()
+      setColor' c inner = liftF $ SetTexture (SolidTexture c) inner ()
   when _drawOutline $
-    setColor _outlineColor (drawCoonPatchOutline patch)
+    setColor' _outlineColor (drawCoonPatchOutline patch)
 
   when _drawBaseVertices $
     forM_ (basePointOfCoonPatch patch) $ \(p, c) ->
        if not _colorVertices then
-         setColor _vertexColor (stroker $ circle p 4)
+         setColor' _vertexColor (stroker $ circle p 4)
        else do
-         setColor c . fill $ circle p 4
-         setColor _vertexColor . stroker $ circle p 5
+         setColor' c . fill $ circle p 4
+         setColor' _vertexColor . stroker $ circle p 5
 
   when _drawControVertices $
     forM_ (controlPointOfCoonPatch patch) $ \p ->
-       setColor _controlColor . stroker $ circle p 4
+       setColor' _controlColor . stroker $ circle p 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    setColor _controlMeshColor $ do
+    setColor' _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
-debugDrawTensorPatch :: DebugOption -> TensorPatch px -> Drawing PixelRGBA8 ()
+-- | Helper function drawing many information about a tensor patch.
+debugDrawTensorPatch :: DebugOption -> TensorPatch (ParametricValues px)
+                     -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
   let stroker v = liftF $ Stroke 2 JoinRound (CapRound, CapRound) v ()
-      setColor c inner =
+      setColor' c inner =
           liftF $ SetTexture (SolidTexture c) inner ()
       p' = transposePatch p
 
   when _drawOutline $
-    setColor _outlineColor $
+    setColor' _outlineColor $
         mapM_ (stroker . toPrimitives)
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
   when _drawBaseVertices   $
-    setColor _vertexColor $
+    setColor' _vertexColor $
         forM_ (pointsOf p) $ \pp -> stroker $ circle pp 4
 
   let controlDraw = stroker . toPrimitives . lineFromPath . pointsOf
   when _drawControlMesh $
-    setColor _controlMeshColor $ do
+    setColor' _controlMeshColor $ do
         mapM_ controlDraw
             [ _curve0 p, _curve1 p, _curve2 p, _curve3 p
             , _curve0 p', _curve1 p', _curve2 p', _curve3 p']
 
-parametricBase :: ParametricValues (V2 CoonColorWeight)
+-- | Define the unit square in [0, 1]^2
+parametricBase :: UVPatch
 parametricBase = ParametricValues
   { _northValue = V2 0 0
   , _eastValue  = V2 1 0
@@ -504,38 +512,64 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
-renderCoonMesh :: forall m px.  (PrimMonad m, RenderablePixel px)
+-- | Render a simple coon mesh, with only color on the vertices.
+renderCoonMesh :: forall m px.
+                  (PrimMonad m, RenderablePixel px, BiSampleable (ParametricValues px) px)
                => MeshPatch px -> DrawContext m px ()
-renderCoonMesh = mapM_ renderCoonPatch . coonPatchesOf
+renderCoonMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . coonPatchesOf
 
-renderCoonPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
-                => CoonPatch px -> DrawContext m px ()
+-- | Render a coon mesh but using cubic interpolation for the color.
+renderCoonMeshBicubic :: forall m px.
+                         ( PrimMonad m
+                         , RenderablePixel px
+                         , BiSampleable (CubicCoefficient px) px)
+                      => MeshPatch px -> DrawContext m px ()
+renderCoonMeshBicubic =
+  mapM_ (rasterizeTensorPatch . toTensorPatch)
+    . cubicCoonPatchesOf
+    . calculateMeshColorDerivative
+
+-- | Render an mesh patch by interpolating accross an image.
+renderImageMesh :: PrimMonad m
+                => MeshPatch (ImageMesh PixelRGBA8) -> DrawContext m PixelRGBA8 ()
+renderImageMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . imagePatchesOf
+
+-- | Render a coon patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh.
+renderCoonPatch :: forall m interp px.
+                   (PrimMonad m, RenderablePixel px, BiSampleable interp px)
+                => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }
 
   drawPatchUniform CoonPatch { .. } = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_north, _east, _south, _west]
-    texture = SolidTexture . weightToColor baseColors $ meanValue _coonValues
+    !(V2 u v) =meanValue _coonValues
+    !texture = SolidTexture $ interpolate baseColors u v
 
   go 0 patch = drawPatchUniform patch
   go depth (subdividePatch -> Subdivided { .. }) =
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
-renderTensorPatch :: forall m px.  (PrimMonad m, RenderablePixel px)
-                  => TensorPatch px -> DrawContext m px ()
+-- | Render a tensor patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh.
+renderTensorPatch :: forall m sampled px. 
+                     (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
+                  => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 7 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }
 
   drawPatchUniform p = fillWithTextureNoAA FillWinding texture geometry where
     geometry = toPrim <$> [_curve0 p, westCurveOfPatch p, _curve3 p, eastCurveOfPatch p]
-    texture = SolidTexture . weightToColor baseColors . meanValue $ _tensorValues p
+    !(V2 u v) = meanValue $ _tensorValues p
+    texture = SolidTexture $ interpolate baseColors u v
 
   go 0 patch = drawPatchUniform patch
   go depth (subdivideTensorPatch -> Subdivided { .. }) =

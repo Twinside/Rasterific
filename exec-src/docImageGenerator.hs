@@ -15,10 +15,12 @@ import Graphics.Rasterific
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Immediate
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 import qualified Data.ByteString.Lazy as LB
+import qualified Data.Vector as V
 
 import Graphics.Rasterific.Linear( (^+^) )
 
@@ -58,7 +60,7 @@ produceDocImageAtSize :: Int -> Int -> FilePath -> Drawing PixelRGBA8 () -> IO (
 produceDocImageAtSize width height filename drawing = do
     putStrLn $ "Producing " <> filename
     writePng filename img
-    writePdf $ filename <> ".draw.pdf"
+    {-writePdf $ filename <> ".draw.pdf"-}
     writeOrderPdf $ filename <> ".order.pdf"
   where
     img = renderDrawing width height backgroundColor
@@ -503,6 +505,26 @@ main = do
             fill $ circle (V2 70 100) 60
         withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 128) .
             fill $ circle (V2 120 100) 60
+
+    produceDocImage (outFolder </> "mesh_patch_interp_bilinear.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+      renderMeshPatch PatchBilinear $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+
+    produceDocImage (outFolder </> "mesh_patch_interp_bicubic.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+      renderMeshPatch PatchBicubic $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
 
     textExample
     textMultipleExample

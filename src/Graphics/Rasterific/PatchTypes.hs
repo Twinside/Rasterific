@@ -53,8 +53,40 @@ type CoonColorWeight = Float
 -- | How do we want to perform color/image interpolation
 -- within the patch.
 data PatchInterpolation
-  = PatchBilinear   -- ^ Bilinear interpolation
-  | PatchBicubic    -- ^ Bicubic interpolation
+  = -- | Bilinear interpolation
+    --
+    -- @
+    -- import qualified Data.Vector as V
+    -- let colorCycle = cycle
+    --       [ PixelRGBA8 0 0x86 0xc1 255
+    --       , PixelRGBA8 0xff 0xf4 0xc1 255
+    --       , PixelRGBA8 0xFF 0x53 0x73 255
+    --       , PixelRGBA8 0xff 0xf4 0xc1 255
+    --       , PixelRGBA8 0 0x86 0xc1 255]
+    --     colors = V.fromListN (4 * 4) colorCycle
+    -- renderMeshPatch PatchBilinear $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+    -- @
+    --
+    -- <<docimages/mesh_patch_interp_bilinear.png>>
+    --
+    PatchBilinear
+    -- | Bicubic interpolation
+    --
+    -- @
+    -- import qualified Data.Vector as V
+    -- let colorCycle = cycle
+    --       [ PixelRGBA8 0 0x86 0xc1 255
+    --       , PixelRGBA8 0xff 0xf4 0xc1 255
+    --       , PixelRGBA8 0xFF 0x53 0x73 255
+    --       , PixelRGBA8 0xff 0xf4 0xc1 255
+    --       , PixelRGBA8 0 0x86 0xc1 255]
+    --     colors = V.fromListN (4 * 4) colorCycle
+    -- renderMeshPatch PatchBicubic $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+    -- @
+    --
+    -- <<docimages/mesh_patch_interp_bicubic.png>>
+    --
+  | PatchBicubic
   deriving (Eq, Show)
 
 -- | Values associated to the corner of a patch
@@ -147,14 +179,14 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
 -- @
 --                        ----->
 --                  North     _____----------------+
---   ^          +------------/                     /
---   |         /                                  /       |
---   |        /                                  /        |
---   |       /                                  /  east   |
+--   ^          +------------//                     // .
+--   |         //                                  //       |
+--   |        //                                  //        |
+--   |       //                                  //  east   |
 --   | west |                                  /          |
 --          |                                 |           v
---           \                                 \   .
---            \                  __-------------+
+--           \\                                 \\   .
+--            \\                  __-------------+
 --             +----------------/
 --                    South
 --                       <-----
@@ -260,7 +292,7 @@ instance Transformable Derivatives where
 
 
 -- | Represent a point in the paramaetric U,V space
--- from [0, 1]²
+-- from [0, 1]^2
 type UV = V2 CoonColorWeight
 
 -- | Define a rectangle in the U,V parametric space.
@@ -309,7 +341,7 @@ toTensorPatch patch@CoonPatch { .. } = TensorPatch
     coonAt x y = coonPointAt patch (V2 x y)
     p = 1/3
 
-    p11 = coonAt      p       p 
+    p11 = coonAt      p       p
     p21 = coonAt (1 - p)      p
     p12 = coonAt      p  (1 - p)
     p22 = coonAt (1 - p) (1 - p)

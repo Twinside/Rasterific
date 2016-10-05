@@ -133,6 +133,7 @@ module Graphics.Rasterific
     , Cap( .. )
     , SamplerRepeat( .. )
     , FillMethod( .. )
+    , PatchInterpolation( .. )
     , DashPattern
     , drawOrdersOfDrawing
 
@@ -613,11 +614,9 @@ drawOrdersOfDrawing width height dpi background drawing =
       render :: DrawContext (ST s) px ()
       render = case i of
         PatchBilinear -> mapM_ renderCoonPatch $ coonPatchesOf mesh
-        PatchBicubic -> undefined
-        {-  
+        PatchBicubic ->
             mapM_ renderCoonPatch . cubicCoonPatchesOf
-                                              $ calculateMeshColorDerivative mesh
--}
+                                  $ calculateMeshColorDerivative mesh
       order = DrawOrder 
             { _orderPrimitives = []
             , _orderTexture    = textureOf ctxt

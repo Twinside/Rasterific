@@ -308,24 +308,7 @@ data Subdivided a = Subdivided
   , _southEast :: !a -- ^ Lower right
   }
 
--- | Split a coon patch in two vertically
---
--- @
---                        --------->
---                  North     +____----------------+
---   ^          +------------/:                    /
---   |         /              :                   /       |
---   |        /               :                  /        |
---   |       /               :                  /  east   |
---   | west |               :                  /          |
---          |               :                 |           v
---           \               :                 \    .   
---            \               :  __-------------+
---             +--------------+-/
---                    South
---                       <---------
--- @
---
+-- | Split a coon patch into four new quadrants
 subdividePatch :: CoonPatch UVPatch -> Subdivided (CoonPatch UVPatch)
 subdividePatch patch = Subdivided
     { _northWest = northWest

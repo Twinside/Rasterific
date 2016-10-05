@@ -72,6 +72,7 @@ import Graphics.Rasterific.Command
 
 import Codec.Picture.Types( PixelRGBA8( .. ) )
 
+
 -- @
 --  North    ----->     East
 --      +--------------+

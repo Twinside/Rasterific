@@ -103,6 +103,7 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
 
+
 -- | Plot a single pixel on the resulting image.
 plotPixel :: forall m px. (ModulablePixel px, PrimMonad m)
           => MutableImage (PrimState m) px -> px -> Int -> Int

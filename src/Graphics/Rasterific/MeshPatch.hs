@@ -5,6 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+#define SVG_2
 -- | Module defining the type of mesh patch grid.
 module Graphics.Rasterific.MeshPatch
     ( -- * Types
@@ -151,9 +152,9 @@ calculateMeshColorDerivative mesh = mesh { _meshColors = withEdgesDerivatives } 
   -- General case
   interiorDerivative x y
 #ifdef SVG_2
-    | isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero
-    | isOnHorizontalBorder y = Derivative thisColor dx zero
-    | isOnVerticalBorder x = Derivative thisColor zero dy
+    | isOnHorizontalBorder y && isOnVerticalBorder x = Derivative thisColor zero zero zero
+    | isOnHorizontalBorder y = Derivative thisColor dx zero zero
+    | isOnVerticalBorder x = Derivative thisColor zero dy zero
 #endif
     | otherwise = Derivative thisColor dx dy dxy
     where

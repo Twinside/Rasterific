@@ -118,8 +118,8 @@ fillOrder o@DrawOrder { _orderMask = Nothing } = do
 fillOrder o@DrawOrder { _orderMask = Just mask } = do
   F.forM_ (_orderPrimitives o) $
     fillWithTextureAndMask (_orderFillMethod o) (_orderTexture o) mask
-  {-img <- get-}
-  {-lift $ primToPrim $ flip evalStateT img $ _orderDirect o-}
+  img <- get
+  lift $ primToPrim $ flip evalStateT img $ _orderDirect o
 
 -- | Start an image rendering. See `fillWithTexture` for
 -- an usage example. This function can work with either

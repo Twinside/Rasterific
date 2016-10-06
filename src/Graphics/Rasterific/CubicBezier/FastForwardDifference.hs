@@ -109,7 +109,7 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
       go !currentStep _ _ _ _ _ _ _ _ | currentStep >= maxStepCount = return ()
       go !currentStep !ax !bx !ay !by !x !y !u !v = do
         let !color = interpolate source u v
-        plotPixel canvas color (floor x) (floor y)
+        plotOpaquePixel canvas color (floor x) (floor y)
         go (currentStep + 1)
             (ax + bx) (bx + cx)
             (ay + by) (by + cy)

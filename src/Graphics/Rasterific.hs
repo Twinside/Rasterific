@@ -160,6 +160,8 @@ import Codec.Picture.Types( Image( .. )
                           , pixelMapXY )
 
 import qualified Data.ByteString.Lazy as LB
+import qualified Data.Vector as V
+
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^) )
 import Graphics.Rasterific.Rasterize
@@ -516,13 +518,8 @@ preComputeTexture w h = go where
     ShaderTexture _ -> t
     ModulateTexture t1 t2 -> ModulateTexture (go t1) (go t2)
     PatternTexture _ _ _ _ _ -> t
-    MeshPatchTexture PatchBilinear m ->
-        RawTexture $ runST $ runDrawContext w h emptyPx $ renderCoonMesh m
-    MeshPatchTexture PatchBicubic m ->
-        RawTexture $ runST $ runDrawContext w h emptyPx 
-                           $ mapM_ renderCoonPatch
-                           $ cubicCoonPatchesOf
-                           $ calculateMeshColorDerivative m
+    MeshPatchTexture i m ->
+        RawTexture $ renderDrawing w h emptyPx $ renderMeshPatch i m
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
@@ -543,6 +540,10 @@ drawOrdersOfDrawing width height dpi background drawing =
     clipRender =
       renderDrawing width height clipBackground
             . withTexture (SolidTexture clipForeground)
+
+    subRender :: (forall s. DrawContext (ST s) px ()) -> Image px
+    subRender act =
+      runST $ runDrawContext width height background act
 
     textureOf ctxt@RenderContext { currentTransformation = Just (_, t) } =
         WithTextureTransform t $ currentTexture ctxt
@@ -611,18 +612,46 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (MeshPatchRender i mesh next)) rest = order : after where
       after = go ctxt next rest
-      render :: DrawContext (ST s) px ()
-      render = case i of
-        PatchBilinear -> mapM_ renderCoonPatch $ coonPatchesOf mesh
+      rendering :: DrawContext (ST s) px ()
+      rendering = case i of
+        PatchBilinear -> mapM_ renderCoonPatch $ coonPatchesOf opaqueMesh 
         PatchBicubic ->
-            mapM_ renderCoonPatch . cubicCoonPatchesOf
-                                  $ calculateMeshColorDerivative mesh
-      order = DrawOrder 
+            mapM_ renderCoonPatch
+                . cubicCoonPatchesOf 
+                $ calculateMeshColorDerivative opaqueMesh 
+
+      hasTransparency =
+          V.any ((/= fullValue) . pixelOpacity) $ _meshColors mesh
+
+      opacifier px = mixWithAlpha (\_ _ a -> a) (\_ _ -> fullValue) px px
+
+      opaqueMesh = opacifier <$> mesh
+      transparencyMesh = pixelOpacity <$> mesh
+
+      clipPath
+        | not hasTransparency = currentClip ctxt
+        | otherwise =
+            let newMask :: Image (PixelBaseComponent (PixelBaseComponent px))
+                newMask = clipRender $ renderMeshPatch i transparencyMesh in
+            case currentClip ctxt of
+              Nothing -> Just $ RawTexture newMask
+              Just v -> Just $ ModulateTexture v (RawTexture newMask)
+
+      order = case clipPath of
+        -- Good, we can directly render on the final canvas
+        Nothing -> DrawOrder 
             { _orderPrimitives = []
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = FillWinding
-            , _orderMask       = currentClip ctxt
-            , _orderDirect     = render
+            , _orderMask       = clipPath
+            , _orderDirect     = rendering
+            }
+        Just c -> DrawOrder
+            { _orderPrimitives = [rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
+            , _orderTexture    = ModulateTexture (RawTexture $ subRender rendering) c
+            , _orderFillMethod = FillWinding
+            , _orderMask       = Nothing
+            , _orderDirect     = return ()
             }
 
     go ctxt (Free (Fill method prims next)) rest = order : after where

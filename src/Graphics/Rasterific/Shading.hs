@@ -6,7 +6,7 @@
 module Graphics.Rasterific.Shading
     ( transformTextureToFiller
     , sampledImageShader
-    , plotPixel
+    , plotOpaquePixel
     ) where
 
 import Control.Monad.ST( ST )
@@ -25,8 +25,6 @@ import Graphics.Rasterific.Linear
              , norm
              )
 
-
-import Control.Monad.ST( ST )
 import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. )
@@ -105,20 +103,16 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
 
 
 -- | Plot a single pixel on the resulting image.
-plotPixel :: forall m px. (ModulablePixel px, PrimMonad m)
-          => MutableImage (PrimState m) px -> px -> Int -> Int
-          -> m ()
-{-# INLINE plotPixel #-}
-plotPixel img _color x y
+plotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
+                => MutableImage (PrimState m) px -> px -> Int -> Int
+                -> m ()
+{-# INLINE plotOpaquePixel #-}
+plotOpaquePixel img _color x y
    | x < 0 || y < 0 || 
      x >= mutableImageWidth img || y >= mutableImageHeight img = return ()
-plotPixel img color x y = do
+plotOpaquePixel img color x y = do
   let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
-  !oldPixel <- readPackedPixelAt img idx
-  let !opacity = pixelOpacity color
-      (!cov, !icov) = coverageModulate fullValue opacity
-  writePackedPixelAt img idx
-    $ compositionAlpha cov icov oldPixel color
+  writePackedPixelAt img idx color
 
 shaderFiller :: forall s px . (ModulablePixel px)
              => ShaderFunction px -> MutableImage s px

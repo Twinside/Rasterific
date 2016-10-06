@@ -526,6 +526,19 @@ main = do
           colors = V.fromListN (4 * 4) colorCycle
       renderMeshPatch PatchBicubic $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
 
+    produceDocImage (outFolder </> "mesh_patch_transp.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 127
+            , PixelRGBA8 0xff 0xf4 0xc1 127
+            ]
+          colors = V.fromListN (1 * 4) colorCycle
+      withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+        fill $ rectangle (V2 0 70) 200 60
+      renderMeshPatch PatchBicubic $
+        generateLinearGrid 1 1 (V2 10 10) (V2 180 180) colors
+
     textExample
     textMultipleExample
     coordinateSystem

@@ -19,12 +19,22 @@ module Graphics.Rasterific.MeshPatch
     , verticeAt
     , generateLinearGrid
     , generateImageMesh
+
+      -- * Extraction functions
+      -- ** Simple
     , coonPatchAt
+    , tensorPatchAt
     , coonImagePatchAt
+    , tensorImagePatchAt
     , coonPatchAtWithDerivative
+    , tensorPatchAtWithDerivative
+      -- ** Multiple
     , coonPatchesOf
+    , tensorPatchesOf
     , imagePatchesOf
+    , tensorImagePatchesOf
     , cubicCoonPatchesOf
+    , cubicTensorPatchesOf
 
       -- * Mutable mesh
     , MutableMesh
@@ -212,6 +222,7 @@ data MutableMesh s px = MutableMesh
   , _meshMutHorizSecondary :: !(MV.MVector s InterBezier)
   , _meshMutVertSecondary :: !(MV.MVector s InterBezier)
   , _meshMutColors :: !(MV.MVector s px)
+  , _meshMutTensorDerivatives :: !(Maybe (MV.MVector s Derivatives))
   }
 
 -- | Normal mesh to mutable mesh
@@ -223,6 +234,9 @@ thawMesh MeshPatch { .. } = do
   _meshMutHorizSecondary <- V.thaw _meshHorizontalSecondary
   _meshMutVertSecondary <- V.thaw _meshVerticalSecondary
   _meshMutColors <- V.thaw _meshColors
+  _meshMutTensorDerivatives <- case _meshTensorDerivatives of
+      Nothing -> return Nothing
+      Just v -> Just <$> V.thaw v
   return MutableMesh { .. }
 
 -- | Mutable mesh to freezed mesh.
@@ -233,6 +247,9 @@ freezeMesh MutableMesh { .. } = do
   _meshPrimaryVertices <- V.freeze _meshMutPrimaryVertices 
   _meshHorizontalSecondary <- V.freeze _meshMutHorizSecondary
   _meshVerticalSecondary <- V.freeze _meshMutVertSecondary
+  _meshTensorDerivatives <- case _meshMutTensorDerivatives of
+        Nothing -> return Nothing
+        Just v -> Just <$> V.freeze v
   _meshColors <- V.freeze _meshMutColors
   return MeshPatch { .. }
 
@@ -335,6 +352,7 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
   , _meshPrimaryVertices = vertices 
   , _meshHorizontalSecondary = hSecondary 
   , _meshVerticalSecondary = vSecondary
+  , _meshTensorDerivatives = Nothing
   , _meshColors = colors
   }
   where
@@ -368,12 +386,28 @@ coonPatchAt :: MeshPatch px
             -> CoonPatch (ParametricValues px)
 coonPatchAt = coonPatchAt' id
 
+-- | Extract a tensor patch at a given position
+tensorPatchAt :: MeshPatch px
+              -> Int -- ^ x
+              -> Int -- ^ y
+              -> TensorPatch (ParametricValues px)
+tensorPatchAt = tensorPatchAt' id
+
 -- | Extract an image patch out of a mesh at a given position.
 coonImagePatchAt :: MeshPatch (ImageMesh px)
                  -> Int -- ^ x
                  -> Int -- ^ y
                  -> CoonPatch (ImageMesh px)
 coonImagePatchAt = coonPatchAt' _northValue
+
+
+-- | Extract a tensor image patch out of a mesh at
+-- a given position.
+tensorImagePatchAt :: MeshPatch (ImageMesh px)
+                   -> Int -- ^ x
+                   -> Int -- ^ y
+                   -> TensorPatch (ImageMesh px)
+tensorImagePatchAt = tensorPatchAt' _northValue
 
 -- | Extract a coon patch for cubic interpolation at a given position
 -- see `calculateMeshColorDerivative`
@@ -384,6 +418,14 @@ coonPatchAtWithDerivative :: (InterpolablePixel px)
                           -> CoonPatch (CubicCoefficient px)
 coonPatchAtWithDerivative = coonPatchAt' cubicPreparator
 
+-- | Extract a tensor patch for cubic interpolation at a given position
+-- see `calculateMeshColorDerivative`
+tensorPatchAtWithDerivative :: (InterpolablePixel px)
+                            => MeshPatch (Derivative px)
+                            -> Int -- ^ x
+                            -> Int -- ^ y
+                            -> TensorPatch (CubicCoefficient px)
+tensorPatchAtWithDerivative = tensorPatchAt' cubicPreparator
 
 rawMatrix :: V.Vector (V.Vector Float)
 rawMatrix = V.fromListN 16 $ V.fromListN 16 <$>
@@ -429,6 +471,55 @@ cubicPreparator ParametricValues { .. } =
     (resultVector V.! (i + 1))
     (resultVector V.! (i + 2))
     (resultVector V.! (i + 3))
+
+tensorPatchAt' :: ColorPreparator px pxt -> MeshPatch px -> Int -> Int
+               -> TensorPatch pxt
+tensorPatchAt' preparator mesh@MeshPatch { _meshTensorDerivatives = Nothing } x y =
+    toTensorPatch $ coonPatchAt' preparator mesh x y
+tensorPatchAt' preparator mesh x y = TensorPatch
+  { _curve0 = CubicBezier p00 p01 p02 p03
+  , _curve1 = CubicBezier p10 p11 p12 p13
+  , _curve2 = CubicBezier p20 p21 p22 p23
+  , _curve3 = CubicBezier p30 p31 p32 p33
+  , _tensorValues = preparator $ ParametricValues
+        { _northValue = c00
+        , _eastValue  = c03
+        , _southValue = c33
+        , _westValue  = c30
+        }
+  }
+  where
+    w = _meshPatchWidth mesh
+    vertices = _meshPrimaryVertices mesh
+    colors = _meshColors mesh
+    
+    hInter = _meshHorizontalSecondary mesh
+    vInter = _meshVerticalSecondary mesh
+    
+    baseIx = (w + 1) * y + x
+    p00 = vertices ! baseIx
+    c00 = colors   ! baseIx
+    
+    p03 = vertices ! (baseIx + 1)
+    c03 = colors   ! (baseIx + 1)
+    
+    p30 = vertices ! (baseIx + w + 1)
+    c30 = colors   ! (baseIx + w + 1)
+    p33 = vertices ! (baseIx + w + 2)
+    c33 = colors   ! (baseIx + w + 2)
+    
+    baseH = w * y + x
+    InterBezier p01 p02 = hInter ! baseH
+    InterBezier p31 p32 = hInter ! (baseH + w)
+
+    baseV = (w + 1) * y + x
+    InterBezier p10 p20 = vInter ! baseV
+    InterBezier p13 p23 = vInter ! (baseV + 1)
+
+    Derivatives p11 p12 p21 p22 = case _meshTensorDerivatives mesh of
+      Nothing -> error "Not a tensor patch"
+      Just v -> v ! (w * y + x)
+
 
 coonPatchAt' :: ColorPreparator px pxt
              -> MeshPatch px -> Int -> Int -> CoonPatch pxt
@@ -477,10 +568,20 @@ coonPatchesOf :: MeshPatch px -> [CoonPatch (ParametricValues px)]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
+-- | Extract a list of all the tensor patches of the mesh.
+tensorPatchesOf :: MeshPatch px -> [TensorPatch (ParametricValues px)]
+tensorPatchesOf mesh@MeshPatch { .. } =
+  [tensorPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
+
 -- | Extract all the coon patch of a mesh using an image interpolation.
 imagePatchesOf :: MeshPatch (ImageMesh px) -> [CoonPatch (ImageMesh px)]
 imagePatchesOf mesh@MeshPatch { .. } =
   [coonImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
+
+-- | Extract all the tensor patch of a mesh using an image interpolation.
+tensorImagePatchesOf :: MeshPatch (ImageMesh px) -> [TensorPatch (ImageMesh px)]
+tensorImagePatchesOf mesh@MeshPatch { .. } =
+  [tensorImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
 -- | Extract all the coon patch of a mesh using cubic interpolation.
 cubicCoonPatchesOf :: (InterpolablePixel px)
@@ -488,6 +589,15 @@ cubicCoonPatchesOf :: (InterpolablePixel px)
                    -> [CoonPatch (CubicCoefficient px)]
 cubicCoonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAtWithDerivative mesh x y
+        | y <- [0 .. _meshPatchHeight - 1]
+        , x <- [0 .. _meshPatchWidth - 1] ]
+
+-- | Extract all the tensor patch of a mesh using cubic interpolation.
+cubicTensorPatchesOf :: (InterpolablePixel px)
+                     => MeshPatch (Derivative px)
+                     -> [TensorPatch (CubicCoefficient px)]
+cubicTensorPatchesOf mesh@MeshPatch { .. } =
+  [tensorPatchAtWithDerivative mesh x y
         | y <- [0 .. _meshPatchHeight - 1]
         , x <- [0 .. _meshPatchWidth - 1] ]
 

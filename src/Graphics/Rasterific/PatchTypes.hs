@@ -244,6 +244,10 @@ data MeshPatch px = MeshPatch
   , _meshVerticalSecondary :: !(V.Vector InterBezier)
     -- | Colors for each vertex points
   , _meshColors :: !(V.Vector px)
+    -- | Points used to define tensor patch, if  not define,
+    -- the rest of the data structure describes a Coon patch.
+    -- size must be equal to `_meshPatchWidth*_meshPatchHeight`
+  , _meshTensorDerivatives :: !(Maybe (V.Vector Derivatives))
   }
   deriving (Eq, Show, Functor)
 
@@ -270,12 +274,13 @@ transformMeshM f MeshPatch { .. } = do
       , _meshHorizontalSecondary = hSecondary 
       , _meshVerticalSecondary = vSecondary
       , _meshColors = _meshColors
+      , _meshTensorDerivatives = Nothing
       }
 
 instance {-# OVERLAPPING  #-} Transformable (MeshPatch px) where
   transformM = transformMeshM
 
--- | Store values associated at the corner of the patch.
+-- | Store the inner points of a tensor patch.
 data Derivatives = Derivatives
   { _interNorthWest :: !Point
   , _interNorthEast :: !Point

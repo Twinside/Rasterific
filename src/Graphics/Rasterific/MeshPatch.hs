@@ -28,6 +28,7 @@ module Graphics.Rasterific.MeshPatch
     , tensorImagePatchAt
     , coonPatchAtWithDerivative
     , tensorPatchAtWithDerivative
+
       -- ** Multiple
     , coonPatchesOf
     , tensorPatchesOf

@@ -220,6 +220,10 @@ shaderOfTexture trans _sampling (PatternTexture _ _ _ _ img) =
 shaderOfTexture trans sampling (ModulateTexture texture modulation) =
   modulateTexture (shaderOfTexture trans sampling texture)
                   (shaderOfTexture trans sampling modulation)
+shaderOfTexture trans sampling (AlphaModulateTexture texture modulation) =
+  alphaModulateTexture
+    (shaderOfTexture trans sampling texture)
+    (shaderOfTexture trans sampling modulation)
 
 
 -- | This function will interpret the texture description, helping
@@ -453,4 +457,15 @@ modulateTexture :: ModulablePixel px
 {-# INLINE modulateTexture #-}
 modulateTexture fullTexture modulator x y =
     colorMap (modulate $ modulator x y) $ fullTexture x y
+
+-- | Perform a multiplication operation between a full color texture
+-- and a greyscale one, used for clip-path implementation.
+alphaModulateTexture :: ModulablePixel px
+                => ShaderFunction px
+                -> ShaderFunction (PixelBaseComponent px)
+                -> ShaderFunction px
+{-# INLINE alphaModulateTexture #-}
+alphaModulateTexture fullTexture modulator x y =
+  let px = fullTexture x y in
+  mixWithAlpha (\_ _ a -> a) (\_ _ -> modulator x y) px px
 

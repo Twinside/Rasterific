@@ -77,6 +77,7 @@ data Texture (px :: *)
   | RawTexture     !(Image px)
   | ShaderTexture  !(ShaderFunction px)
   | ModulateTexture (Texture px) (Texture (PixelBaseComponent px))
+  | AlphaModulateTexture (Texture px) (Texture (PixelBaseComponent px))
   | PatternTexture !Int !Int !px (Drawing px ()) (Image px)
   | MeshPatchTexture !PatchInterpolation !(MeshPatch px)
 
@@ -187,6 +188,9 @@ dumpTexture (ShaderTexture _) = "shaderFunction <FUNCTION>"
 dumpTexture (ModulateTexture sub mask) =
     "modulateTexture (" ++ dumpTexture sub ++ ") ("
                         ++ dumpTexture mask ++ ")"
+dumpTexture (AlphaModulateTexture sub mask) =
+    "alphaModulate (" ++ dumpTexture sub ++ ") ("
+                      ++ dumpTexture mask ++ ")"
 dumpTexture (PatternTexture w h px sub _) =
     "patternTexture " ++ show w ++ " " ++ show h ++ " " ++ show px
                       ++ " (" ++ dumpDrawing sub ++ ")"

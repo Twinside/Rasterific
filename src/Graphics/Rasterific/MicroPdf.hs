@@ -797,6 +797,7 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
+    AlphaModulateTexture _tx _modulation -> return $ Left "Unsupported alpha modulation in PDF output."
     MeshPatchTexture _ _ -> return $ Left "Unsupported Mesh patch in PDF output."
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx

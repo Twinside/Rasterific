@@ -33,8 +33,7 @@ instance  (Pixel px, Modulable (PixelBaseComponent px))
   interpolate = bilinearPixelInterpolation
 
 -- | Bicubic interpolator
-instance 
-         ( InterpolablePixel px
+instance ( InterpolablePixel px
          , Num (Holder px Float)
          ) => BiSampleable (CubicCoefficient px) px where
   {-# INLINE interpolate #-}

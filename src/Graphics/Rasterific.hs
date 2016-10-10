@@ -518,6 +518,7 @@ preComputeTexture w h = go where
     ShaderTexture _ -> t
     ModulateTexture t1 t2 -> ModulateTexture (go t1) (go t2)
     PatternTexture _ _ _ _ _ -> t
+    AlphaModulateTexture i m -> AlphaModulateTexture (go i) (go m)
     MeshPatchTexture i m ->
         RawTexture $ renderDrawing w h emptyPx $ renderMeshPatch i m
 
@@ -648,7 +649,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             }
         Just c -> DrawOrder
             { _orderPrimitives = [rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
-            , _orderTexture    = ModulateTexture (RawTexture $ subRender rendering) c
+            , _orderTexture    = AlphaModulateTexture (RawTexture $ subRender rendering) c
             , _orderFillMethod = FillWinding
             , _orderMask       = Nothing
             , _orderDirect     = return ()

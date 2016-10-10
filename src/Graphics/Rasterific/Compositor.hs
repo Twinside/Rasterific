@@ -72,13 +72,6 @@ instance InterpolablePixel PixelRGBA8 where
     where to = floor
   maxRepresentable Proxy = 255
 
-{-data ImageSampler px a = ImageSampler-}
-  {-{ _samplerImage     :: !(Image px)-}
-  {-, _samplerTransform :: !Transformation-}
-  {-, _samplerBase      :: !(V2 a)-}
-  {-}-}
-  {-deriving Functor-}
-
 -- | This constraint ensure that a type is a pixel
 -- and we're allowed to modulate it's color components
 -- generically.

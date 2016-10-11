@@ -60,7 +60,7 @@ drawPatchDebug :: FilePath -> Int -> Int -> CoonPatch (ParametricValues PixelRGB
 drawPatchDebug path w h p = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white $ do
-    renderCoonPatch p
+    rasterizeCoonPatch p
     mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch defaultDebug p
 
 drawTensorDebug :: DebugOption -> FilePath -> Int -> Int -> TensorPatch (ParametricValues PixelRGBA8) -> IO ()
@@ -93,7 +93,7 @@ coonTest = do
     drawing path opt w h rootPatch patches = do
       putStrLn $ "Rendering " ++ path
       writePng path $ runST $ runDrawContext w h white $ do
-        renderCoonPatch rootPatch
+        rasterizeCoonPatch rootPatch
         forM_ patches $ \p ->
           mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $
             debugDrawCoonPatch defaultDebug p { _coonValues = colors }
@@ -119,7 +119,7 @@ coonTensorTest :: IO ()
 coonTensorTest = do
   drawImm "coon_img/compare_tensor.png" 400 400 $ rasterizeTensorPatch tensorPatch
   drawTensorDebug opt "coon_img/compare_tensor_debug.png" 400 400 tensorPatch
-  drawImm "coon_img/compare_coon.png" 400 400 $ renderCoonPatch coonPatch
+  drawImm "coon_img/compare_coon.png" 400 400 $ rasterizeCoonPatch coonPatch
   drawImm "coon_img/tensor_ffd.png" 400 400 $ rasterizeTensorPatch tensorPatch
   where
     opt = defaultDebug { _drawOutline = False }
@@ -161,7 +161,7 @@ coonTensorTest = do
 
 tensorSplit :: IO ()
 tensorSplit = do
-  drawImm "coon_img/split_tensor_orig.png" 400 400 $ renderTensorPatch $ tensorPatch
+  drawImm "coon_img/split_tensor_orig.png" 400 400 $ rasterizeTensorPatch $ tensorPatch
   drawTensorDebug defaultDebug "coon_img/split_tensor_orig_debug.png" 400 400 tensorPatch
   drawTensorSubdivDebug "coon_img/split_tensor_orig_subH.png" 400 400 tensorPatch [patchWest, patchEast]
   drawTensorSubdivDebug "coon_img/split_tensor_orig_subHVR.png" 400 400 tensorPatch [patchWest, patchNorthEast, patchSouthEast]
@@ -169,7 +169,7 @@ tensorSplit = do
     drawTensorSubdivDebug path w h p ps = do
         putStrLn $ "Rendering " ++ path
         writePng path $ runST $ runDrawContext w h white $ do
-            renderTensorPatch p
+            rasterizeTensorPatch p
             mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ mapM_ (debugDrawTensorPatch opt) ps
 
     opt = defaultDebug
@@ -198,7 +198,7 @@ tensorSplit = do
 
 coonTestColorStop :: IO ()
 coonTestColorStop = do
-  drawImm "coon_render_color.png" 800 800 $ renderCoonPatch patch
+  drawImm "coon_render_color.png" 800 800 $ rasterizeCoonPatch patch
   drawPatchDebug "coon_render_color_debug.png" 800 800 patch
   where
     cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
@@ -378,7 +378,7 @@ debugCubic = do
 
 coonTestWild :: IO ()
 coonTestWild = do
-  drawImm "coon_render_wild.png" 800 800 $ renderCoonPatch patch
+  drawImm "coon_render_wild.png" 800 800 $ rasterizeCoonPatch patch
   drawPatchDebug "coon_render_wild_debug.png" 800 800 patch
   where
     patch = toCoon (V2 50 130 ^* 2)
@@ -425,7 +425,7 @@ profile = do
 doBench :: IO ()
 doBench = defaultMain
   [ bench "Subdiv" $ whnf 
-      (\v -> runST $ runDrawContext 400 400 white $ renderTensorPatch v) tensorPatch
+      (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
   , bench "FFD" $ whnf 
       (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
   ]

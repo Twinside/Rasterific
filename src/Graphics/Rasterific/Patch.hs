@@ -540,7 +540,7 @@ renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, BiSampleable interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }
@@ -561,7 +561,7 @@ renderTensorPatch :: forall m sampled px.
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = maxColorDeepness baseColors
+  maxDeepness = 6 -- maxColorDeepness baseColors
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }

@@ -8,7 +8,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 -- | Module to describe bi-sampleable types
-module Graphics.Rasterific.BiSampleable( BiSampleable( .. ) ) where
+module Graphics.Rasterific.BiSampleable
+    ( BiSampleable( .. )
+    , bilinearInterpolation
+    ) where
 
 import Codec.Picture( PixelRGBA8( .. ) )
 
@@ -57,6 +60,16 @@ bilinearPixelInterpolation (ParametricValues { .. }) !dx !dy =
   where
    (!covX, !icovX) = clampCoverage dx
    (!covY, !icovY) = clampCoverage dy
+
+bilinearInterpolation :: InterpolablePixel px
+                      => ParametricValues px -> Float -> Float -> px
+{-# INLINE bilinearInterpolation #-}
+bilinearInterpolation ParametricValues { .. } u v = fromFloatPixel $ lerp v uBottom uTop where
+  -- The arguments are flipped, because the lerp function from Linear is...
+  -- inversed in u v
+  !uTop = lerp u (toFloatPixel _eastValue) (toFloatPixel _northValue)
+  !uBottom = lerp u (toFloatPixel _southValue) (toFloatPixel _westValue)
+
 
 bicubicInterpolation :: forall px . (InterpolablePixel px, Num (Holder px Float))
                      => CubicCoefficient px -> Float -> Float -> px

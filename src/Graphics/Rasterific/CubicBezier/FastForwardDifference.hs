@@ -7,6 +7,7 @@ module Graphics.Rasterific.CubicBezier.FastForwardDifference
     , rasterizerCubicBezier
     , rasterizeTensorPatch
     , rasterizeCoonPatch
+    , estimateFDStepCount
     ) where
 
 import Control.Monad.Primitive( PrimMonad )
@@ -133,7 +134,7 @@ rasterizeTensorPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
 {-# SPECIALIZE rasterizeTensorPatch :: TensorPatch (ParametricValues PixelRGBA8)
                                     -> DrawContext (ST s) PixelRGBA8 () #-}
 rasterizeTensorPatch TensorPatch { .. } =
-    go maxStepCount basePoints ffCoeff 0 0 0 1
+    go maxStepCount basePoints ffCoeff 0
   where
     !curves = V4 _curve0 _curve1 _curve2 _curve3
     !shiftStep = maximum $ estimateFDStepCount <$> [_curve0, _curve1, _curve2, _curve3]
@@ -145,15 +146,15 @@ rasterizeTensorPatch TensorPatch { .. } =
     maxStepCount :: Int
     !maxStepCount = 1 `unsafeShiftL` shiftStep
 
-    !(V2 du dv) = (V2 1 0) ^/ fromIntegral maxStepCount
+    !du = 1 / fromIntegral maxStepCount
     
     toBezier (V4 a b c d) = CubicBezier a b c d
     
-    go 0 _pts _coeffs _uvStart _ _uvEnd _ = return ()
-    go i !pts !coeffs !ut !vt !ub !vb = do
+    go 0 _pts _coeffs _uvStart = return ()
+    go i !pts !coeffs !ut = do
       let (newPoints, newCoeff) = updatePointsAndCoeff pts coeffs
-      rasterizerCubicBezier _tensorValues (toBezier pts) ut vt ub vb
-      go (i - 1) newPoints newCoeff (ut + du) (vt + dv) (ub + du) (vb + dv)
+      rasterizerCubicBezier _tensorValues (toBezier pts) ut 0 ut 1
+      go (i - 1) newPoints newCoeff (ut + du)
 
 frexp :: Float -> (Float, Int)
 frexp x

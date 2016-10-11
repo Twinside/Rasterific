@@ -24,13 +24,19 @@ module Graphics.Rasterific.Patch
     , InterpolablePixel
 
       -- * Rendering functions
-    , renderCoonPatch
-    , renderTensorPatch
+
+      -- ** Using Fast Forward Differences
+    , rasterizeTensorPatch 
+    , rasterizeCoonPatch
     , renderImageMesh
     , renderCoonMesh
     , renderCoonMeshBicubic
-    , rasterizeTensorPatch 
-    , rasterizeCoonPatch
+
+      -- ** Subdivision patch rendering
+    , renderCoonPatch
+    , renderCoonPatchAtDeepness
+    , renderTensorPatch
+    , renderTensorPatchAtDeepness
 
       -- * Debugging
     , DebugOption( .. )
@@ -96,6 +102,17 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
             , maxDistance west north]
   ParametricValues { _westValue = west, _northValue = north
                    , _southValue = south, _eastValue = east } = values
+
+estimateCoonSubdivision :: CoonPatch px -> Int
+estimateCoonSubdivision CoonPatch { .. } =
+    maximum $ estimateFDStepCount <$> [_north, _west, _south, _east]
+
+estimateTensorSubdivision :: TensorPatch px -> Int
+estimateTensorSubdivision p =
+  maximum $ estimateFDStepCount <$> (fmap ($ p) axx ++ fmap ($ t) axx)
+    where
+     axx = [_curve0, _curve1, _curve2, _curve3]
+     t = transposePatch p { _tensorValues = parametricBase }
 
 meanValue :: ParametricValues UV -> UV
 meanValue = (^* 0.25) . getSum . foldMap Sum
@@ -539,8 +556,17 @@ renderImageMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . imagePatchesOf
 renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, BiSampleable interp px)
                 => CoonPatch interp -> DrawContext m px ()
-renderCoonPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 6 -- maxColorDeepness baseColors
+renderCoonPatch p = renderCoonPatchAtDeepness (estimateCoonSubdivision p) p
+
+-- | Render a coon patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh). You can provide a max deepness
+renderCoonPatchAtDeepness
+    :: forall m interp px.
+       (PrimMonad m, RenderablePixel px, BiSampleable interp px)
+    => Int              -- ^ Maximum subdivision deepness
+    -> CoonPatch interp
+    -> DrawContext m px ()
+renderCoonPatchAtDeepness maxDeepness originalPatch = go maxDeepness basePatch where
   baseColors = _coonValues originalPatch
 
   basePatch = originalPatch { _coonValues = parametricBase }
@@ -555,13 +581,18 @@ renderCoonPatch originalPatch = go maxDeepness basePatch where
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
--- | Render a tensor patch using the subdivision algorithm (potentially slower
--- and less precise in case of image mesh.
 renderTensorPatch :: forall m sampled px. 
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()
-renderTensorPatch originalPatch = go maxDeepness basePatch where
-  maxDeepness = 6 -- maxColorDeepness baseColors
+renderTensorPatch p = renderTensorPatchAtDeepness (estimateTensorSubdivision p) p
+
+-- | Render a tensor patch using the subdivision algorithm (potentially slower
+-- and less precise in case of image mesh.
+renderTensorPatchAtDeepness
+  :: forall m sampled px. 
+     (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
+  => Int -> TensorPatch sampled -> DrawContext m px ()
+renderTensorPatchAtDeepness maxDeepness originalPatch = go maxDeepness basePatch where
   baseColors = _tensorValues originalPatch
 
   basePatch = originalPatch { _tensorValues = parametricBase }

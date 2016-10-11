@@ -615,9 +615,9 @@ drawOrdersOfDrawing width height dpi background drawing =
       after = go ctxt next rest
       rendering :: DrawContext (ST s) px ()
       rendering = case i of
-        PatchBilinear -> mapM_ renderCoonPatch $ coonPatchesOf opaqueMesh 
+        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf opaqueMesh 
         PatchBicubic ->
-            mapM_ renderCoonPatch
+            mapM_ rasterizeCoonPatch
                 . cubicCoonPatchesOf 
                 $ calculateMeshColorDerivative opaqueMesh 
 

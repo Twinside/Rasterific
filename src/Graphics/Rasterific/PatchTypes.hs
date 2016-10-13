@@ -315,6 +315,11 @@ data ImageMesh px = ImageMesh
     , _meshTransform :: !Transformation
     }
 
+-- C1: top      _north
+-- C2: bottom   _south
+-- D1: left     _west
+-- D2: right    _east
+
 -- | Return a postion of a point in the coon patch.
 coonPointAt :: CoonPatch a -> UV -> Point
 coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
@@ -346,12 +351,25 @@ toTensorPatch patch@CoonPatch { .. } = TensorPatch
     coonAt x y = coonPointAt patch (V2 x y)
     p = 1/3
 
-    p11 = coonAt      p       p
-    p21 = coonAt (1 - p)      p
-    p12 = coonAt      p  (1 - p)
-    p22 = coonAt (1 - p) (1 - p)
+    formula a b c d e f g h =
+      (a ^* (-4) ^+^
+       (b ^+^ c) ^* 6 ^-^
+       (d ^+^ e) ^* 2 ^+^
+       (f ^+^ g) ^* 3 ^-^
+       h) ^* (1/9)
+
+    p11 = formula p00 p10 p01 p30 p03 p13 p31 p33
+    p21 = formula p30 p20 p31 p00 p33 p23 p01 p03
+    p12 = formula p03 p13 p02 p33 p00 p10 p32 p30
+    p22 = formula p33 p23 p32 p03 p30 p20 p02 p00
+
+    CubicBezier p00 p10 p20 p30 = _north
+    CubicBezier _ p02 p01 _ = _west
+    CubicBezier _ p31 p32 _ = _east
+    CubicBezier p33 p23 p13 p03 = _south
 
     CubicBezier sa sb sc sd = _south
     CubicBezier _ et eb _ = _east
     CubicBezier _ wb wt _ = _west
+
 

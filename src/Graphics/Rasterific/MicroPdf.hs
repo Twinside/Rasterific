@@ -349,7 +349,7 @@ instance ToPdf Primitive where
     CubicBezierPrim c -> toPdf c
 
 instance PdfColorable px => ToPdf (V2 Double, V2 Float, V2 Float, TensorPatch (ParametricValues px)) where
-  toPdf (V2 sx sy, V2 dx dy, V2 tx ty, patch) = word8 0 <> coords <> foldMap colorToBinaryPdf [c00, c03, c33, c30] where
+  toPdf (V2 sx sy, V2 dx dy, V2 _tx ty, patch) = word8 0 <> coords <> foldMap colorToBinaryPdf [c00, c03, c33, c30] where
     fx x = floor . max 0 . min maxi $ realToFrac (x + dx) * sx
     fy y = floor . max 0 . min maxi $ realToFrac (ty - (y + dy)) * sy
 
@@ -474,8 +474,8 @@ radialGradientObject (beg, end) center focus radius colorSpace funId = dicObj
     coords = arrayOf $ toPdf center <> tp " " <> toPdf radius
                     <> " " <> toPdf focus <> tp " 0"
 
-meshGradientObject :: PdfColorable px => MeshPatch px -> PdfId -> PdfObject
-meshGradientObject mesh pid = PdfObject
+meshGradientObject :: PdfColorable px => MeshPatch px -> Int -> PdfId -> PdfObject
+meshGradientObject mesh height pid = PdfObject
   { _pdfId       = pid
   , _pdfRevision = 0
   , _pdfAnnot    =
@@ -484,7 +484,9 @@ meshGradientObject mesh pid = PdfObject
       , ("BitsPerComponent", "8")
       , ("BitsPerCoordinate", "32")
       , ("BitsPerFlag", "8")
-      , ("Decode", B.pack $ printf "[%g %g %g %g 0 1 0 1 0 1]" x0 x1 y0 y1)
+      , ("Decode", B.pack $ printf "[%g %g %g %g 0 1 0 1 0 1]" 
+                                     x0 x1 (fromIntegral height - y1)
+                                     (fromIntegral height - y0))
       ]
   , _pdfStream = buildToStrict
                . foldMap (\patch -> toPdf (scal, transl, fullSize, patch))
@@ -505,7 +507,8 @@ meshGradientObject mesh pid = PdfObject
 createMeshGradient :: forall px. PdfBaseColorable px
                    => Builder -> MeshPatch px -> PdfEnv (Either String Builder)
 createMeshGradient inner mesh = do
-  meshId <- generateObject $ meshGradientObject mesh
+  height <- asks _pdfHeight      
+  meshId <- generateObject $ meshGradientObject mesh height 
   patId <- generateObject (gradientPatternObject mempty meshId)
   pat <- namePatternObject $ refOf patId
   pure . pure $

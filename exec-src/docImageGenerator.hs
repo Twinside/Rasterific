@@ -60,7 +60,7 @@ produceDocImageAtSize :: Int -> Int -> FilePath -> Drawing PixelRGBA8 () -> IO (
 produceDocImageAtSize width height filename drawing = do
     putStrLn $ "Producing " <> filename
     writePng filename img
-    {-writePdf $ filename <> ".draw.pdf"-}
+    writePdf $ filename <> ".draw.pdf"
     writeOrderPdf $ filename <> ".order.pdf"
   where
     img = renderDrawing width height backgroundColor

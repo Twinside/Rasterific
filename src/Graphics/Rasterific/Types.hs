@@ -445,7 +445,7 @@ instance {-# OVERLAPPABLE #-} (Traversable f, Transformable a)
     transform f = fmap (transform f)
     transformM f = mapM (transformM f)
 
-instance (Foldable f, PointFoldable a)
+instance {-# OVERLAPPABLE #-} (Foldable f, PointFoldable a)
       => PointFoldable (f a) where
     foldPoints f = foldl' (foldPoints f)
 

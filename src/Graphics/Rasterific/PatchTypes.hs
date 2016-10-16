@@ -29,6 +29,7 @@ module Graphics.Rasterific.PatchTypes
   , transposeParametricValues 
   , coonPointAt
   , toTensorPatch
+  , foldMeshPoints
 
     -- * Lenses
   , xDerivative
@@ -262,6 +263,9 @@ instance Transformable InterBezier where
   transform f (InterBezier a b) = InterBezier (f a) (f b)
   transformM f (InterBezier a b) = InterBezier <$> f a <*> f b
 
+instance PointFoldable InterBezier where
+  foldPoints f acc (InterBezier a b) = f (f acc a) b
+
 transformMeshM :: Monad m => (Point -> m Point) -> MeshPatch px -> m (MeshPatch px)
 transformMeshM f MeshPatch { .. } = do
   vertices <- mapM f _meshPrimaryVertices
@@ -280,6 +284,18 @@ transformMeshM f MeshPatch { .. } = do
 instance {-# OVERLAPPING  #-} Transformable (MeshPatch px) where
   transformM = transformMeshM
 
+instance {-# OVERLAPPING  #-} PointFoldable (MeshPatch px) where
+  foldPoints = foldMeshPoints
+
+foldMeshPoints :: (a -> Point -> a) -> a -> MeshPatch px -> a
+foldMeshPoints f acc m = acc4 where
+  acc1 = V.foldl' f acc (_meshPrimaryVertices m)
+  acc2 = foldPoints f acc1 (_meshHorizontalSecondary m)
+  acc3 = foldPoints f acc2 (_meshVerticalSecondary m)
+  acc4 = case _meshTensorDerivatives m of
+    Nothing -> acc3
+    Just v -> foldPoints f acc3 v
+
 -- | Store the inner points of a tensor patch.
 data Derivatives = Derivatives
   { _interNorthWest :: !Point
@@ -295,6 +311,8 @@ instance Transformable Derivatives where
   transformM f (Derivatives a b c d) =
      Derivatives <$> f a <*> f b <*> f c <*> f d
 
+instance PointFoldable Derivatives where
+  foldPoints f acc (Derivatives a b c d) = f (f (f (f acc a) b) c) d
 
 -- | Represent a point in the paramaetric U,V space
 -- from [0, 1]^2
@@ -340,7 +358,7 @@ coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
 
 -- | Convert a coon patch in
 toTensorPatch :: CoonPatch a -> TensorPatch a
-toTensorPatch patch@CoonPatch { .. } = TensorPatch
+toTensorPatch CoonPatch { .. } = TensorPatch
     { _curve0 = _north
     , _curve1 = CubicBezier wt p11 p21 et
     , _curve2 = CubicBezier wb p12 p22 eb
@@ -348,9 +366,6 @@ toTensorPatch patch@CoonPatch { .. } = TensorPatch
     , _tensorValues = _coonValues
     }
   where
-    coonAt x y = coonPointAt patch (V2 x y)
-    p = 1/3
-
     formula a b c d e f g h =
       (a ^* (-4) ^+^
        (b ^+^ c) ^* 6 ^-^

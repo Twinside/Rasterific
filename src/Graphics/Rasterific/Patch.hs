@@ -78,7 +78,6 @@ import Graphics.Rasterific.Command
 
 import Codec.Picture.Types( PixelRGBA8( .. ) )
 
-
 -- @
 --  North    ----->     East
 --      +--------------+
@@ -90,6 +89,7 @@ import Codec.Picture.Types( PixelRGBA8( .. ) )
 --      +--------------+
 --  West    <-----      South
 -- @
+
 
 -- TODO: find a new way to calculate that...
 maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
@@ -104,11 +104,11 @@ maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
                    , _southValue = south, _eastValue = east } = values
 
 estimateCoonSubdivision :: CoonPatch px -> Int
-estimateCoonSubdivision CoonPatch { .. } =
+estimateCoonSubdivision CoonPatch { .. } = min 8 $
     maximum $ estimateFDStepCount <$> [_north, _west, _south, _east]
 
 estimateTensorSubdivision :: TensorPatch px -> Int
-estimateTensorSubdivision p =
+estimateTensorSubdivision p = min 8 $
   maximum $ estimateFDStepCount <$> (fmap ($ p) axx ++ fmap ($ t) axx)
     where
      axx = [_curve0, _curve1, _curve2, _curve3]

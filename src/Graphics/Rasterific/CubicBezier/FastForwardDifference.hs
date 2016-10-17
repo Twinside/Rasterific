@@ -16,6 +16,7 @@ import Control.Monad.ST( ST )
 import Data.Bits( unsafeShiftL )
 
 import Codec.Picture( PixelRGBA8 )
+import Codec.Picture.Types( MutableImage( .. ) )
 
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Immediate
@@ -82,6 +83,20 @@ fixIter count f = go count
     go 0 a = a
     go n a = go (n-1) $ f a
 
+isPointInImage :: MutableImage s a -> Point -> Bool
+isPointInImage MutableImage { mutableImageWidth = w, mutableImageHeight = h } (V2 x y) =
+   0 <= x && x < fromIntegral w && 0 <= y && y < fromIntegral h
+
+isCubicBezierOutsideImage :: MutableImage s a -> CubicBezier -> Bool
+isCubicBezierOutsideImage img (CubicBezier a b c d) =
+  not $ isIn a || isIn b || isIn c || isIn d
+  where isIn = isPointInImage img
+
+isCubicBezierInImage :: MutableImage s a -> CubicBezier -> Bool
+isCubicBezierInImage img (CubicBezier a b c d) =
+    isIn a && isIn b && isIn c && isIn d
+  where isIn = isPointInImage img
+
 -- | Rasterize a cubic bezier curve using the Fast Forward Diffrence
 -- algorithm.
 rasterizerCubicBezier :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
@@ -107,17 +122,32 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
       !(V2 du dv) = (V2 uEnd vEnd ^-^ V2 uStart vStart) ^/ fromIntegral maxStepCount
       !(V2 xStart yStart) = _cBezierX0 bez
       
-      go !currentStep _ _ _ _ _ _ _ _ | currentStep >= maxStepCount = return ()
-      go !currentStep !ax !bx !ay !by !x !y !u !v = do
-        let !color = interpolate source u v
+      go !currentStep _ _ _ _ _ _ _ | currentStep >= maxStepCount = return ()
+      go !currentStep !ax !bx !ay !by !x !y !v = do
+        let !color = interpolate source uStart v
         plotOpaquePixel canvas color (floor x) (floor y)
         go (currentStep + 1)
             (ax + bx) (bx + cx)
             (ay + by) (by + cy)
             (x  + ax) (y  + ay)
-            (u  + du) (v  + dv)
+            (v  + dv)
 
-  lift $ go 0 ax' bx' ay' by' xStart yStart uStart vStart
+      goUnsafe !currentStep _ _ _ _ _ _ _ | currentStep >= maxStepCount = return ()
+      goUnsafe !currentStep !ax !bx !ay !by !x !y !v = do
+        let !color = interpolate source uStart v
+        unsafePlotOpaquePixel canvas color (floor x) (floor y)
+        goUnsafe (currentStep + 1)
+            (ax + bx) (bx + cx)
+            (ay + by) (by + cy)
+            (x  + ax) (y  + ay)
+            (v  + dv)
+
+  if isCubicBezierOutsideImage canvas bez then
+    return ()
+  else if isCubicBezierInImage canvas bez then
+    lift $ goUnsafe 0 ax' bx' ay' by' xStart yStart vStart
+  else
+    lift $ go 0 ax' bx' ay' by' xStart yStart vStart
 
 -- | Rasterize a coon patch using the Fast Forward Diffrence algorithm,
 -- likely to be faster than the subdivision one.

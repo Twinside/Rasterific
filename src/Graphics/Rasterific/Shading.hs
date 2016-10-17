@@ -7,6 +7,7 @@ module Graphics.Rasterific.Shading
     ( transformTextureToFiller
     , sampledImageShader
     , plotOpaquePixel
+    , unsafePlotOpaquePixel
     ) where
 
 import Control.Monad.ST( ST )
@@ -111,6 +112,16 @@ plotOpaquePixel img _color x y
    | x < 0 || y < 0 || 
      x >= mutableImageWidth img || y >= mutableImageHeight img = return ()
 plotOpaquePixel img color x y = do
+  let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
+  writePackedPixelAt img idx color
+
+-- | Plot a single pixel on the resulting image, no bounds check are
+-- performed, ensure index is correct!
+unsafePlotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
+                      => MutableImage (PrimState m) px -> px -> Int -> Int
+                      -> m ()
+{-# INLINE unsafePlotOpaquePixel #-}
+unsafePlotOpaquePixel img color x y = do
   let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
   writePackedPixelAt img idx color
 

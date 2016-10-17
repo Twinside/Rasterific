@@ -30,6 +30,7 @@ module Graphics.Rasterific.PatchTypes
   , coonPointAt
   , toTensorPatch
   , foldMeshPoints
+  , isVerticalOrientation
 
     -- * Lenses
   , xDerivative
@@ -153,6 +154,11 @@ data TensorPatch weight = TensorPatch
   , _curve3 :: !CubicBezier
   , _tensorValues :: !weight
   }
+
+isVerticalOrientation :: TensorPatch a -> Bool
+isVerticalOrientation p = dy > dx where
+  CubicBezier a _ _ d = _curve0 p
+  V2 dx dy = abs <$> (d ^-^ a)
 
 instance Transformable (TensorPatch px) where
   transform f (TensorPatch c0 c1 c2 c3 v) =

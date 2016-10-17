@@ -23,6 +23,8 @@ import Graphics.Rasterific
 
 import Criterion
 import Criterion.Main
+import Codec.Picture.ColorQuant
+import Codec.Picture.Types
 import Codec.Picture
 
 import qualified Data.Vector as V
@@ -80,6 +82,10 @@ coonTest :: IO ()
 coonTest = do
   drawing "coon_img/single_patch.png" defaultDebug 400 440 patch [patch]
   drawing "coon_img/single_patch_subdiv.png" defaultDebug 400 410 patch [n, e, w, s]
+  putStrLn "coon_img/subdiv.gif"
+  case imgAtSubdiv of
+    Left _ -> return ()
+    Right f -> f
   where
     draw path p = do
       putStrLn $ "Rendering " ++ path
@@ -100,6 +106,14 @@ coonTest = do
 
     Subdivided n e w s = subdividePatch patch { _coonValues = parametricBase }
 
+    imgAtSubdiv = writeGifImages "coon_img/subdiv.gif" LoopingForever images
+      where
+        images = toGifPart . renderLevel <$> [0 .. 8]
+        renderLevel i =
+          runST $ runDrawContext 400 400 white $ renderCoonPatchAtDeepness i patch 
+        toGifPart img = (pal, 200, i)
+          where (i, pal) = palettize defaultPaletteOptions $ pixelMap dropTransparency img
+
     colors = ParametricValues
       { _northValue = frontColor
       , _eastValue = accentColor
@@ -107,6 +121,7 @@ coonTest = do
       , _westValue = frontColor
       }
 
+    patch :: CoonPatch (ParametricValues PixelRGBA8)
     patch = transform (\p -> p ^* 0.5 ^+^ V2 0 20) CoonPatch
       { _north = CubicBezier (V2 52 67) (V2 198 (-55)) (V2 580 104) (V2 713 113)
       , _east = CubicBezier (V2 713 113) (V2 775 369) (V2 437 392) (V2 670 674)
@@ -423,12 +438,15 @@ profile = do
     colors = ParametricValues blue red red red
 
 doBench :: IO ()
-doBench = defaultMain
-  [ bench "Subdiv" $ whnf 
-      (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
-  , bench "FFD" $ whnf 
-      (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
-  ]
+doBench = do
+ writePng "subdiv_render.png" $ runST $ runDrawContext 400 400 white $ renderTensorPatch tensorPatch
+ writePng "ffd_render.png" $ runST $ runDrawContext 400 400 white $ rasterizeTensorPatch tensorPatch
+ defaultMain
+   [ bench "Subdiv" $ whnf 
+       (\v -> runST $ runDrawContext 400 400 white $ renderTensorPatch v) tensorPatch
+   , bench "FFD" $ whnf 
+       (\v -> runST $ runDrawContext 400 400 white $ rasterizeTensorPatch v) tensorPatch
+   ]
   where
     [ c00, c01, c02, c03
       , c10, c11, c12, c13

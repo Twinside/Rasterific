@@ -615,11 +615,11 @@ drawOrdersOfDrawing width height dpi background drawing =
       after = go ctxt next rest
       rendering :: DrawContext (ST s) px ()
       rendering = case i of
-        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf opaqueMesh 
+        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf $ geometryOf ctxt opaqueMesh 
         PatchBicubic ->
             mapM_ rasterizeCoonPatch
                 . cubicCoonPatchesOf 
-                $ calculateMeshColorDerivative opaqueMesh 
+                $ calculateMeshColorDerivative $ geometryOf ctxt opaqueMesh 
 
       hasTransparency =
           V.any ((/= fullValue) . pixelOpacity) $ _meshColors mesh
@@ -648,7 +648,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             , _orderDirect     = rendering
             }
         Just c -> DrawOrder
-            { _orderPrimitives = [rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
+            { _orderPrimitives = [geometryOf ctxt $ rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
             , _orderTexture    = AlphaModulateTexture (RawTexture $ subRender rendering) c
             , _orderFillMethod = FillWinding
             , _orderMask       = Nothing

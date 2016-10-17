@@ -514,7 +514,9 @@ main = do
             , PixelRGBA8 0xff 0xf4 0xc1 255
             , PixelRGBA8 0 0x86 0xc1 255]
           colors = V.fromListN (4 * 4) colorCycle
-      renderMeshPatch PatchBilinear $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+      withTransformation (rotate 0.2) $
+        renderMeshPatch PatchBilinear $
+            generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
 
     produceDocImage (outFolder </> "mesh_patch_interp_bicubic.png") $ do
       let colorCycle = cycle

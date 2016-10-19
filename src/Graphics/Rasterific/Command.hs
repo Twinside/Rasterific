@@ -6,6 +6,7 @@
 {-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Command ( Drawing
                                    , DrawCommand( .. )
+                                   , DrawContext
                                    , TextRange( .. )
                                    , dumpDrawing
                                    , Texture( .. )
@@ -19,17 +20,26 @@ module Graphics.Rasterific.Command ( Drawing
 import Data.Monoid( Monoid( .. ) )
 #endif
 
+import Control.Monad.ST( ST )
+import Control.Monad.State( StateT )
+import Control.Monad.Primitive( PrimState )
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( F, fromF )
 import Codec.Picture.Types( Image, Pixel( .. ), Pixel8 )
 
+import Codec.Picture.Types( MutableImage )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.PatchTypes
 
 import Graphics.Text.TrueType( Font, PointSize )
 
 -- | Monad used to record the drawing actions.
 type Drawing px = F (DrawCommand px)
+
+-- | Monad used to describe the drawing context.
+type DrawContext m px =
+    StateT (MutableImage (PrimState m) px) m
 
 -- | Structure defining how to render a text range
 data TextRange px = TextRange
@@ -56,7 +66,7 @@ type ImageTransformer px = Int -> Int -> px -> px
 type Gradient px = [(Float, px)]
 
 -- | Reification of texture type
-data Texture px
+data Texture (px :: *)
   = SolidTexture !px
   | LinearGradientTexture !(Gradient px) !Line 
   | RadialGradientTexture !(Gradient px) !Point !Float
@@ -67,11 +77,15 @@ data Texture px
   | RawTexture     !(Image px)
   | ShaderTexture  !(ShaderFunction px)
   | ModulateTexture (Texture px) (Texture (PixelBaseComponent px))
+  | AlphaModulateTexture (Texture px) (Texture (PixelBaseComponent px))
   | PatternTexture !Int !Int !px (Drawing px ()) (Image px)
+  | MeshPatchTexture !PatchInterpolation !(MeshPatch px)
 
 
 data DrawCommand px next
   = Fill FillMethod [Primitive] next
+  | CustomRender (forall s. DrawContext (ST s) px ()) next
+  | MeshPatchRender !PatchInterpolation (MeshPatch px) next
   | Stroke Float Join (Cap, Cap) [Primitive] next
   | DashedStroke Float DashPattern Float Join (Cap, Cap) [Primitive] next
   | TextFill Point [TextRange px] next
@@ -104,6 +118,10 @@ dumpDrawing = go . fromF where
 
         ) => Free (DrawCommand px) () -> String
   go (Pure ()) = "return ()"
+  go (Free (MeshPatchRender i m next)) =
+    "renderMeshPatch (" ++ show i ++ ") (" ++ show m ++ ") >>= " ++ go next
+  go (Free (CustomRender _r next)) =
+    "customRender _ >>= " ++ go next
   go (Free (WithImageEffect _effect sub next)) =
     "withImageEffect ({- fun -}) (" ++ go (fromF sub) ++ ") >>= " ++ go next
   go (Free (WithGlobalOpacity opa sub next)) =
@@ -151,7 +169,8 @@ dumpTexture :: ( Show px
                , PixelBaseComponent (PixelBaseComponent px)
                     ~ (PixelBaseComponent px)
                ) => Texture px -> String
-dumpTexture (SolidTexture px) = "uniformTexture (" ++ show px++ ")"
+dumpTexture (SolidTexture px) = "uniformTexture (" ++ show px ++ ")"
+dumpTexture (MeshPatchTexture i mpx) = "meshTexture (" ++ show i ++ ") (" ++ show mpx ++ ")"
 dumpTexture (LinearGradientTexture grad (Line a b)) =
     "linearGradientTexture " ++ show grad ++ " (" ++ show a ++ ") (" ++ show b ++ ")"
 dumpTexture (RadialGradientTexture grad p rad) =
@@ -169,6 +188,9 @@ dumpTexture (ShaderTexture _) = "shaderFunction <FUNCTION>"
 dumpTexture (ModulateTexture sub mask) =
     "modulateTexture (" ++ dumpTexture sub ++ ") ("
                         ++ dumpTexture mask ++ ")"
+dumpTexture (AlphaModulateTexture sub mask) =
+    "alphaModulate (" ++ dumpTexture sub ++ ") ("
+                      ++ dumpTexture mask ++ ")"
 dumpTexture (PatternTexture w h px sub _) =
     "patternTexture " ++ show w ++ " " ++ show h ++ " " ++ show px
                       ++ " (" ++ dumpDrawing sub ++ ")"
@@ -179,6 +201,8 @@ instance Functor (DrawCommand px) where
         WithImageEffect effect sub $ f next
     fmap f (TextFill pos texts next) =
         TextFill pos texts $ f next
+    fmap f (CustomRender m next) =
+        CustomRender m $ f next
     fmap f (WithGlobalOpacity opa sub next) =
         WithGlobalOpacity opa sub $ f next
     fmap f (Fill method  prims next) = Fill method prims $ f next
@@ -193,6 +217,8 @@ instance Functor (DrawCommand px) where
         WithTransform trans draw $ f next
     fmap f (WithPathOrientation path point draw next) =
         WithPathOrientation path point draw $ f next
+    fmap f (MeshPatchRender i mesh next) =
+        MeshPatchRender i mesh $ f next
 
 instance Monoid (Drawing px ()) where
     mempty = return ()

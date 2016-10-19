@@ -1,13 +1,16 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.MiniLens
     ( -- * Types
       Lens
     , Lens'
     , Traversal
     , Traversal'
+    , lens
 
       -- * Getter
     , (.^)
+    , view
     , use
 
       -- * Setter
@@ -15,15 +18,30 @@ module Graphics.Rasterific.MiniLens
     , (.=)
     , (%=)
     , (+=)
+    , set
+
+      -- * Helper
+    , (&)
     ) where
 
 import Control.Monad.Identity
 import Control.Applicative
 import Control.Monad.State        as State
 
+#if MIN_VERSION_base(4,8,0)
+import Data.Function( (&) )
+#endif
+
 infixl 8 .^
 infixr 4 .~
 infix  4 .=,%=,+=
+
+#if !MIN_VERSION_base(4,8,0)
+infixl 1 &
+
+(&) :: a -> (a -> b) -> b
+x & f = f x
+#endif
 
 -- | Does it look familiar? yes it's the official
 -- Lens type.
@@ -40,22 +58,37 @@ type Traversal s t a b =
 
 type Traversal' s a = Traversal s s a a
 
+-- | Create a full lens out of setter and getter
+lens :: (s -> a)
+     -> (s -> b -> t)
+     -> Lens s t a b
+{-# INLINE lens #-}
+lens accessor setter = \f src ->
+  fmap (setter src) $ f (accessor src)
+
+view :: s -> Lens s t a b -> a
+{-# INLINE view #-}
+view v l = getConst (l Const v)
 
 (.^) :: s -> Lens s t a b -> a
 {-# INLINE (.^) #-}
-(.^) v l = getConst (l Const v)
+(.^) = view
 
-(.~) :: s -> Lens' s a -> a -> s
+set :: Lens' s a -> a -> s -> s
+{-# INLINE set #-}
+set l new v = runIdentity $ l (\_ -> Identity new) v
+
+(.~) :: Lens' s a -> a -> s -> s
 {-# INLINE (.~) #-}
-(.~) v l new = runIdentity $ l (\_ -> Identity new) v
+(.~) = set
 
 (.=) :: MonadState s m => Lens' s a -> a -> m ()
 {-# INLINE (.=) #-}
-(.=) l v = State.modify $ \s -> (s .~ l) v
+(.=) l v = State.modify (l .~ v)
 
 (%=) :: MonadState s m => Lens' s a -> (a -> a) -> m ()
 {-# INLINE (%=) #-}
-(%=) l f = State.modify $ \s -> (s .~ l) $ f (s .^ l)
+(%=) l f = State.modify $ \s -> s & l .~ f (s .^ l)
 
 (+=) :: (Num a, MonadState s m) => Lens' s a -> a -> m ()
 {-# INLINE (+=) #-}

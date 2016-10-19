@@ -53,7 +53,10 @@ import Data.DList( DList, fromList )
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable( Foldable )
+import Data.Traversable( Traversable )
+import Control.Applicative( (<$>), (<*>), pure )
 #endif
+import Control.Monad.Identity( runIdentity )
 import Data.Foldable( foldl', toList )
 import qualified Data.Foldable as F
 import Graphics.Rasterific.Linear( V2( .. ), (^-^), nearZero )
@@ -212,6 +215,10 @@ class Transformable a where
     -- | Apply a transformation function for every
     --  point in the element.
     transform :: (Point -> Point) -> a -> a
+    transform f = runIdentity . transformM (return . f)
+
+    -- | Transform but monadic
+    transformM :: Monad m => (Point -> m Point) -> a -> m a
 
 -- | Typeclass helper gathering all the points of a given
 -- geometry.
@@ -224,6 +231,8 @@ class PointFoldable a where
 instance Transformable Point where
     {-# INLINE transform #-}
     transform f = f
+    {-# INLINE transformM #-}
+    transformM f = f
 
 -- | Just apply the function
 instance PointFoldable Point where
@@ -250,8 +259,8 @@ instance Show Line where
                ++ show b ++ ")"
 
 instance Transformable Line where
-    {-# INLINE transform #-}
-    transform f (Line a b) = Line (f a) $ f b
+    {-# INLINE transformM #-}
+    transformM f (Line a b) = Line <$> f a <*> f b
 
 instance PointFoldable Line where
     {-# INLINE foldPoints #-}
@@ -285,6 +294,8 @@ instance Show Bezier where
 instance Transformable Bezier where
     {-# INLINE transform #-}
     transform f (Bezier a b c) = Bezier (f a) (f b) $ f c
+    {-# INLINE transformM #-}
+    transformM f (Bezier a b c) = Bezier <$> f a <*> f b <*> f c
 
 instance PointFoldable Bezier where
     {-# INLINE foldPoints #-}
@@ -321,7 +332,9 @@ instance Show CubicBezier where
 instance Transformable CubicBezier where
     {-# INLINE transform #-}
     transform f (CubicBezier a b c d) =
-        CubicBezier (f a) (f b) (f c) $ f d
+       CubicBezier (f a) (f b) (f c) $ f d
+    transformM f (CubicBezier a b c d) =
+       CubicBezier <$> f a <*> f b <*> f c <*> f d
 
 instance PointFoldable CubicBezier where
     {-# INLINE foldPoints #-}
@@ -416,6 +429,10 @@ instance Transformable Primitive where
     transform f (BezierPrim b) = BezierPrim $ transform f b
     transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
 
+    transformM f (LinePrim l) = LinePrim <$> transformM f l
+    transformM f (BezierPrim b) = BezierPrim <$> transformM f b
+    transformM f (CubicBezierPrim c) = CubicBezierPrim <$> transformM f c
+
 instance PointFoldable Primitive where
     {-# INLINE foldPoints #-}
     foldPoints f acc = go
@@ -423,11 +440,12 @@ instance PointFoldable Primitive where
             go (BezierPrim b) = foldPoints f acc b
             go (CubicBezierPrim c) = foldPoints f acc c
 
-instance (Functor f, Transformable a)
+instance {-# OVERLAPPABLE #-} (Traversable f, Transformable a)
       => Transformable (f a) where
     transform f = fmap (transform f)
+    transformM f = mapM (transformM f)
 
-instance (Foldable f, PointFoldable a)
+instance {-# OVERLAPPABLE #-} (Foldable f, PointFoldable a)
       => PointFoldable (f a) where
     foldPoints f = foldl' (foldPoints f)
 
@@ -471,6 +489,10 @@ instance Transformable Path where
     transform f (Path orig close rest) =
         Path (f orig) close (transform f rest)
 
+    transformM f (Path orig close rest) =
+        Path <$> f orig <*> pure close <*> transformM f rest
+
+
 instance PointFoldable Path where
     {-# INLINE foldPoints #-}
     foldPoints f acc (Path o _ rest) =
@@ -494,6 +516,12 @@ instance Transformable PathCommand where
         PathQuadraticBezierCurveTo (f p1) $ f p2
     transform f (PathCubicBezierCurveTo p1 p2 p3) =
         PathCubicBezierCurveTo (f p1) (f p2) $ f p3
+
+    transformM f (PathLineTo p) = PathLineTo <$> f p
+    transformM f (PathQuadraticBezierCurveTo p1 p2) =
+        PathQuadraticBezierCurveTo <$> f p1 <*> f p2
+    transformM f (PathCubicBezierCurveTo p1 p2 p3) =
+        PathCubicBezierCurveTo <$> f p1 <*> f p2 <*> f p3
 
 instance PointFoldable PathCommand where
     foldPoints f acc (PathLineTo p) = f acc p

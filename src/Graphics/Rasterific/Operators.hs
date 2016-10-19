@@ -120,7 +120,7 @@ clampPoint mini maxi v = vmin maxi $ vmax mini v
 
 -- | Given two points, return a point in the middle
 -- of them.
-midPoint :: (Additive a) => a Float -> a Float -> a Float
+midPoint :: (Additive a, Fractional coord) => a coord -> a coord -> a coord
 {-# INLINE midPoint #-}
 midPoint a b = (a ^+^ b) ^* 0.5
 

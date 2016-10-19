@@ -54,7 +54,7 @@ sanitizeLine l@(Line p1 p2)
 
 lineBreakAt :: Line -> Float -> (Line, Line)
 lineBreakAt (Line a b) t = (Line a ab, Line ab b)
-  where ab = lerp t a b
+  where ab = lerp t b a
 
 flattenLine :: Line -> Container Primitive
 flattenLine = pure . LinePrim
@@ -175,5 +175,5 @@ extendLine :: Float  -- ^ Begin extension coefficient
            -> Line   -- ^ Line to transform
            -> Line
 extendLine beg end (Line p1 p2) =
-    Line (lerp beg p1 p2) (lerp end p1 p2)
+    Line (lerp beg p2 p1) (lerp end p2 p1)
 

@@ -25,9 +25,12 @@ import Control.Monad.Reader( Reader, local, asks, runReader )
 import Numeric( showFFloat )
 import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
+import Data.Word( Word32 )
 import Data.ByteString.Builder( byteString
                               , intDec
                               , toLazyByteString
+                              , word32BE
+                              , word8
                               , Builder )
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as LB
@@ -45,12 +48,16 @@ import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.CubicBezier
+import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Line
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.ComplexPrimitive
+import Graphics.Rasterific.Patch
+import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.MeshPatch
 import Graphics.Text.TrueType( Dpi )
 import Text.Printf
 {-import Debug.Trace-}
@@ -341,6 +348,29 @@ instance ToPdf Primitive where
     BezierPrim b -> toPdf b
     CubicBezierPrim c -> toPdf c
 
+instance PdfColorable px => ToPdf (V2 Double, V2 Float, V2 Float, TensorPatch (ParametricValues px)) where
+  toPdf (V2 sx sy, V2 dx dy, V2 _tx ty, patch) = word8 0 <> coords <> foldMap colorToBinaryPdf [c00, c03, c33, c30] where
+    fx x = floor . max 0 . min maxi $ realToFrac (x + dx) * sx
+    fy y = floor . max 0 . min maxi $ realToFrac (ty - (y + dy)) * sy
+
+    maxi = fromIntegral (maxBound :: Word32)
+
+    coords = foldMap word32BE
+       [ fx x00, fy y00, fx x01, fy y01, fx x02, fy y02, fx x03, fy y03
+       , fx x13, fy y13, fx x23, fy y23, fx x33, fy y33, fx x32, fy y32
+       , fx x31, fy y31, fx x30, fy y30, fx x20, fy y20, fx x10, fy y10
+       , fx x11, fy y11, fx x12, fy y12, fx x22, fy y22, fx x21, fy y21 ]
+
+    CubicBezier (V2 x00 y00) (V2 x10 y10) (V2 x20 y20) (V2 x30 y30) = _curve0 patch
+    CubicBezier (V2 x01 y01) (V2 x11 y11) (V2 x21 y21) (V2 x31 y31) = _curve1 patch
+    CubicBezier (V2 x02 y02) (V2 x12 y12) (V2 x22 y22) (V2 x32 y32) = _curve2 patch
+    CubicBezier (V2 x03 y03) (V2 x13 y13) (V2 x23 y23) (V2 x33 y33) = _curve3 patch
+    param = _tensorValues patch
+
+    c00 = _northValue param
+    c30 = _eastValue param
+    c33 = _southValue param
+    c03 = _westValue param
 
 --------------------------------------------------
 ----            Helper functions
@@ -444,6 +474,48 @@ radialGradientObject (beg, end) center focus radius colorSpace funId = dicObj
     coords = arrayOf $ toPdf center <> tp " " <> toPdf radius
                     <> " " <> toPdf focus <> tp " 0"
 
+meshGradientObject :: PdfColorable px => MeshPatch px -> Int -> PdfId -> PdfObject
+meshGradientObject mesh height pid = PdfObject
+  { _pdfId       = pid
+  , _pdfRevision = 0
+  , _pdfAnnot    =
+      [ ("ShadingType", "7")
+      , ("ColorSpace", "/DeviceRGB")
+      , ("BitsPerComponent", "8")
+      , ("BitsPerCoordinate", "32")
+      , ("BitsPerFlag", "8")
+      , ("Decode", B.pack $ printf "[%g %g %g %g 0 1 0 1 0 1]" 
+                                     x0 x1 (fromIntegral height - y1)
+                                     (fromIntegral height - y0))
+      ]
+  , _pdfStream = buildToStrict
+               . foldMap (\patch -> toPdf (scal, transl, fullSize, patch))
+               $ tensorPatchesOf mesh
+  }
+  where
+    maxi = fromIntegral (maxBound :: Word32)
+    scaleOf :: Float -> Float -> Double
+    scaleOf a b | nearZero $ a - b = 0
+                | otherwise = maxi / (realToFrac b - realToFrac a)
+
+    fullSize = V2 (x1 - x0) (y1 - y0)
+    transl = V2 (-x0) (-y0)
+    scal = V2 (scaleOf x0 x1) (scaleOf y0 y1)
+    PlaneBound (V2 x0 y0) (V2 x1 y1) =
+      foldMeshPoints (\v -> mappend v . planeBounds) mempty mesh
+
+createMeshGradient :: forall px. PdfBaseColorable px
+                   => Builder -> MeshPatch px -> PdfEnv (Either String Builder)
+createMeshGradient inner mesh = do
+  height <- asks _pdfHeight      
+  meshId <- generateObject $ meshGradientObject mesh height 
+  patId <- generateObject (gradientPatternObject mempty meshId)
+  pat <- namePatternObject $ refOf patId
+  pure . pure $
+    "/Pattern cs\n" <> pat <> " scn\n" <>
+    "/Pattern CS\n" <> pat <> " SCN\n" <> inner
+
+
 contentObject :: B.ByteString -> PdfId -> PdfObject
 contentObject content pid = PdfObject
   { _pdfId       = pid
@@ -461,15 +533,19 @@ pathToPdf ps = case ps of
 class RenderablePixel px => PdfColorable px where
   pdfColorSpace :: Proxy px -> B.ByteString
   colorToPdf :: px -> Builder
+  colorToBinaryPdf :: px -> Builder
 
 instance PdfColorable Pixel8 where
   pdfColorSpace _ = "/DeviceGray"
   colorToPdf c = toPdf (fromIntegral c / 255 :: Float)
+  colorToBinaryPdf = word8
 
 instance PdfColorable PixelRGBA8 where
   pdfColorSpace _ = "/DeviceRGB"
   colorToPdf (PixelRGBA8 r g b _a) = 
      colorToPdf r <> tp " " <> colorToPdf g <> tp " " <> colorToPdf b
+  colorToBinaryPdf (PixelRGBA8 r g b _a) = 
+     colorToBinaryPdf r <> colorToBinaryPdf g <> colorToBinaryPdf b
 
 
 maskObject :: PdfId -> PdfId -> PdfObject
@@ -789,6 +865,7 @@ opacityToPdf :: forall n. (Integral n, Modulable n) => n -> Float
 opacityToPdf comp = fromIntegral comp / fromIntegral fv where
   fv = fullValue :: n
 
+
 textureToPdf :: forall px. PdfBaseColorable px
              => Transformation -> Builder -> Texture px
              -> PdfEnv (Either String Builder)
@@ -797,6 +874,7 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
     SampledTexture _img -> return $ Left "Unsupported raw image in PDF output."
     ShaderTexture  _f -> return $ Left "Unsupported shader function in PDF output."
     ModulateTexture _tx _modulation -> return $ Left "Unsupported modulation in PDF output."
+    AlphaModulateTexture _tx _modulation -> return $ Left "Unsupported alpha modulation in PDF output."
     RawTexture img -> go currTrans sampler (SampledTexture img)
     WithSampler newSampler tx -> go currTrans newSampler tx
     SolidTexture px | isPixelTransparent px -> do
@@ -807,6 +885,7 @@ textureToPdf rootTrans inner = go rootTrans SamplerPad where
     SolidTexture px ->
       pure . pure $ "/ao gs " <> co <> " rg\n" <> co <> " RG\n" <> inner
         where co = colorToPdf px
+    MeshPatchTexture _ mesh -> createMeshGradient inner mesh
     LinearGradientTexture grad line -> createLinearGradient inner currTrans sampler grad line
     RadialGradientTexture grad center radius ->
        go currTrans sampler $ RadialGradientWithFocusTexture grad center radius center
@@ -954,6 +1033,14 @@ pdfProducer baseTexture draw = do
      => Bool -> Transformation -> (FillMethod -> Builder) -> Texture px
      -> DrawCommand px (Free (DrawCommand px) ()) -> PdfEnv Builder
   go forceInverse activeTrans filler prevTexture com = case com of
+     CustomRender _mesh next -> recurse next
+     MeshPatchRender i m next -> do
+       w <- asks $ fromIntegral . _pdfWidth
+       h <- asks $ fromIntegral . _pdfHeight
+       let rect = rectangle (V2 0 0) w h
+       go forceInverse activeTrans filler prevTexture $
+         SetTexture (MeshPatchTexture i m) (liftF $ Fill FillWinding rect ()) next
+           
      Fill method prims next -> do
        after <- recurse next
        pure $ foldMap pathToPdf (resplit prims)

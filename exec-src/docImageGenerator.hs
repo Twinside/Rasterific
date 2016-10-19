@@ -15,10 +15,12 @@ import Graphics.Rasterific
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Immediate
 import System.Directory( createDirectoryIfMissing )
 import System.FilePath( (</>) )
 import qualified Data.ByteString.Lazy as LB
+import qualified Data.Vector as V
 
 import Graphics.Rasterific.Linear( (^+^) )
 
@@ -366,7 +368,18 @@ main = do
         withTexture (linearGradientTexture gradDef (V2 80 100) (V2 120 110)) $
             fill $ rectangle (V2 10 10) 180 180)
 
-    produceDocImage (outFolder </> "logo.png") $
+    produceDocImage (outFolder </> "logo.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xDf 0xD4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+          mesh = generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+      withTexture (transformTexture (scale 0.7 0.7 <> rotateCenter (-0.4) (V2 100 100)) $
+                    meshPatchTexture PatchBicubic mesh) $
         fill $ logo 80 False (V2 20 20) ++ 
                logo 40 True (V2 40 40)
 
@@ -503,6 +516,53 @@ main = do
             fill $ circle (V2 70 100) 60
         withTexture (uniformTexture $ PixelRGBA8 0xff 0xf4 0xc1 128) .
             fill $ circle (V2 120 100) 60
+
+    produceDocImage (outFolder </> "mesh_patch_interp_bilinear.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+      withTransformation (rotate 0.2) $
+        renderMeshPatch PatchBilinear $
+            generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+
+    produceDocImage (outFolder </> "mesh_patch_interp_clip.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+      withClipping (fill $ circle (V2 100 100) 75) $
+        renderMeshPatch PatchBilinear $
+            generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+
+    produceDocImage (outFolder </> "mesh_patch_interp_bicubic.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0 0x86 0xc1 255]
+          colors = V.fromListN (4 * 4) colorCycle
+      renderMeshPatch PatchBicubic $ generateLinearGrid 3 3 (V2 10 10) (V2 60 60) colors
+
+    produceDocImage (outFolder </> "mesh_patch_transp.png") $ do
+      let colorCycle = cycle
+            [ PixelRGBA8 0 0x86 0xc1 255
+            , PixelRGBA8 0xff 0xf4 0xc1 255
+            , PixelRGBA8 0xFF 0x53 0x73 127
+            , PixelRGBA8 0xff 0xf4 0xc1 127
+            ]
+          colors = V.fromListN (1 * 4) colorCycle
+      withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
+        fill $ rectangle (V2 0 70) 200 60
+      renderMeshPatch PatchBicubic $
+        generateLinearGrid 1 1 (V2 10 10) (V2 180 180) colors
 
     textExample
     textMultipleExample

@@ -217,9 +217,9 @@ bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)
     --     / abbc  \
     --    /         \
     -- A X           X C
-    ab = lerp t a b
-    bc = lerp t b c
-    abbc = lerp t ab bc
+    ab = lerp t b a
+    bc = lerp t c b
+    abbc = lerp t bc ab
 
 splitBezier :: Bezier -> (Point, Point, Point)
 {-# INLINE splitBezier #-}

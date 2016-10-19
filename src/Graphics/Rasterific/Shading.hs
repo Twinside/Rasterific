@@ -3,11 +3,17 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
-module Graphics.Rasterific.Shading( transformTextureToFiller ) where
+module Graphics.Rasterific.Shading
+    ( transformTextureToFiller
+    , sampledImageShader
+    , plotOpaquePixel
+    , unsafePlotOpaquePixel
+    ) where
 
+import Control.Monad.ST( ST )
 import Control.Monad.Primitive( PrimState
                               -- one day (GHC >= 7.10 ?)
-                              {-, PrimMonad-}
+                              , PrimMonad
                               )
 import Data.Fixed( mod' )
 import Data.Monoid( (<>) )
@@ -20,8 +26,6 @@ import Graphics.Rasterific.Linear
              , norm
              )
 
-
-import Control.Monad.ST( ST )
 import qualified Data.Vector as V
 
 import Codec.Picture.Types( Pixel( .. )
@@ -97,6 +101,29 @@ solidColor color img tsInfo = go 0 $ _tsBaseIndex tsInfo
       writePackedPixelAt img idx
         $ compositionAlpha cov icov oldPixel color
       go (count + 1) $ idx + compCount
+
+
+-- | Plot a single pixel on the resulting image.
+plotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
+                => MutableImage (PrimState m) px -> px -> Int -> Int
+                -> m ()
+{-# INLINE plotOpaquePixel #-}
+plotOpaquePixel img _color x y
+   | x < 0 || y < 0 || 
+     x >= mutableImageWidth img || y >= mutableImageHeight img = return ()
+plotOpaquePixel img color x y = do
+  let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
+  writePackedPixelAt img idx color
+
+-- | Plot a single pixel on the resulting image, no bounds check are
+-- performed, ensure index is correct!
+unsafePlotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
+                      => MutableImage (PrimState m) px -> px -> Int -> Int
+                      -> m ()
+{-# INLINE unsafePlotOpaquePixel #-}
+unsafePlotOpaquePixel img color x y = do
+  let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
+  writePackedPixelAt img idx color
 
 shaderFiller :: forall s px . (ModulablePixel px)
              => ShaderFunction px -> MutableImage s px
@@ -179,6 +206,7 @@ shaderOfTexture :: forall px . RenderablePixel px
     shaderOfTexture :: Maybe Transformation -> SamplerRepeat -> Texture Pixel8
                     -> ShaderFunction Pixel8 #-}
 shaderOfTexture _ _ (SolidTexture px) = \_ _ -> px
+shaderOfTexture _ _ (MeshPatchTexture _ _) = error "MeshPatch should be precomputed"
 shaderOfTexture trans sampling (LinearGradientTexture grad (Line a b)) =
   withTrans trans $ linearGradientShader grad a b sampling
 shaderOfTexture trans sampling (RadialGradientTexture grad center radius) =
@@ -203,6 +231,10 @@ shaderOfTexture trans _sampling (PatternTexture _ _ _ _ img) =
 shaderOfTexture trans sampling (ModulateTexture texture modulation) =
   modulateTexture (shaderOfTexture trans sampling texture)
                   (shaderOfTexture trans sampling modulation)
+shaderOfTexture trans sampling (AlphaModulateTexture texture modulation) =
+  alphaModulateTexture
+    (shaderOfTexture trans sampling texture)
+    (shaderOfTexture trans sampling modulation)
 
 
 -- | This function will interpret the texture description, helping
@@ -322,11 +354,11 @@ sampledImageShader img sampling x y =
    pyn = clampedY $ y + 1
 
    dx, dy :: Float
-   dx = x - fromIntegral (floor x :: Int)
-   dy = y - fromIntegral (floor y :: Int)
+   !dx = x - fromIntegral (floor x :: Int)
+   !dy = y - fromIntegral (floor y :: Int)
 
    at :: Int -> Int -> px
-   at xx yy =
+   at !xx !yy =
         unsafePixelAt rawData $ (yy * w + xx) * compCount
 
    (covX, icovX) = clampCoverage dx
@@ -436,4 +468,15 @@ modulateTexture :: ModulablePixel px
 {-# INLINE modulateTexture #-}
 modulateTexture fullTexture modulator x y =
     colorMap (modulate $ modulator x y) $ fullTexture x y
+
+-- | Perform a multiplication operation between a full color texture
+-- and a greyscale one, used for clip-path implementation.
+alphaModulateTexture :: ModulablePixel px
+                => ShaderFunction px
+                -> ShaderFunction (PixelBaseComponent px)
+                -> ShaderFunction px
+{-# INLINE alphaModulateTexture #-}
+alphaModulateTexture fullTexture modulator x y =
+  let px = fullTexture x y in
+  mixWithAlpha (\_ _ a -> a) (\_ _ -> modulator x y) px px
 

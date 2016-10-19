@@ -45,6 +45,7 @@ module Graphics.Rasterific
       -- ** Filling
       fill
     , fillWithMethod
+    , renderMeshPatch
       -- ** Stroking
     , stroke
     , dashedStroke
@@ -132,6 +133,7 @@ module Graphics.Rasterific
     , Cap( .. )
     , SamplerRepeat( .. )
     , FillMethod( .. )
+    , PatchInterpolation( .. )
     , DashPattern
     , drawOrdersOfDrawing
 
@@ -149,7 +151,7 @@ import Data.Monoid( (<>) )
 
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( fromF )
-import Control.Monad.ST( runST )
+import Control.Monad.ST( ST, runST )
 import Control.Monad.State( modify, execState )
 import Data.Maybe( fromMaybe )
 import Codec.Picture.Types( Image( .. )
@@ -158,6 +160,8 @@ import Codec.Picture.Types( Image( .. )
                           , pixelMapXY )
 
 import qualified Data.ByteString.Lazy as LB
+import qualified Data.Vector as V
+
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^) )
 import Graphics.Rasterific.Rasterize
@@ -174,6 +178,9 @@ import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PathWalker
 import Graphics.Rasterific.Command
+import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.Patch
+import Graphics.Rasterific.MeshPatch
 {-import Graphics.Rasterific.TensorPatch-}
 
 import Graphics.Text.TrueType( Font
@@ -373,6 +380,11 @@ printTextAt font pointSize point string =
         , _textTexture = Nothing
         }
 
+-- | Render a mesh patch as an object. Warning, there is
+-- no antialiasing on mesh patch objects!
+renderMeshPatch :: PatchInterpolation -> MeshPatch px -> Drawing px ()
+renderMeshPatch i mesh = liftF $ MeshPatchRender i mesh ()
+
 -- | Print complex text, using different texture font and
 -- point size for different parts of the text.
 --
@@ -490,6 +502,26 @@ cacheDrawing
 cacheDrawing maxWidth maxHeight dpi sub =
   cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
+preComputeTexture :: (RenderablePixel px)
+                  => Int -> Int -> Texture px -> Texture px
+preComputeTexture w h = go where
+  go :: RenderablePixel px => Texture px -> Texture px
+  go t = case t of
+    SolidTexture _ -> t
+    LinearGradientTexture _ _ -> t
+    RadialGradientTexture _ _ _ -> t
+    RadialGradientWithFocusTexture _ _ _ _ -> t
+    WithSampler s sub -> WithSampler s $ go sub
+    WithTextureTransform trans sub -> WithTextureTransform trans $ go sub
+    SampledTexture _ -> t
+    RawTexture _ -> t
+    ShaderTexture _ -> t
+    ModulateTexture t1 t2 -> ModulateTexture (go t1) (go t2)
+    PatternTexture _ _ _ _ _ -> t
+    AlphaModulateTexture i m -> AlphaModulateTexture (go i) (go m)
+    MeshPatchTexture i m ->
+        RawTexture $ renderDrawing w h emptyPx $ renderMeshPatch i m
+
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
     :: forall px . (RenderablePixel px) 
@@ -509,6 +541,10 @@ drawOrdersOfDrawing width height dpi background drawing =
     clipRender =
       renderDrawing width height clipBackground
             . withTexture (SolidTexture clipForeground)
+
+    subRender :: (forall s. DrawContext (ST s) px ()) -> Image px
+    subRender act =
+      runST $ runDrawContext width height background act
 
     textureOf ctxt@RenderContext { currentTransformation = Just (_, t) } =
         WithTextureTransform t $ currentTexture ctxt
@@ -565,6 +601,60 @@ drawOrdersOfDrawing width height dpi background drawing =
 
       final = go subContext (fromF sub) after
 
+    go ctxt (Free (CustomRender cust next)) rest = order : after where
+      after = go ctxt next rest
+      order = DrawOrder 
+            { _orderPrimitives = []
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = FillWinding
+            , _orderMask       = currentClip ctxt
+            , _orderDirect     = cust
+            }
+
+    go ctxt (Free (MeshPatchRender i mesh next)) rest = order : after where
+      after = go ctxt next rest
+      rendering :: DrawContext (ST s) px ()
+      rendering = case i of
+        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf $ geometryOf ctxt opaqueMesh 
+        PatchBicubic ->
+            mapM_ rasterizeCoonPatch
+                . cubicCoonPatchesOf 
+                $ calculateMeshColorDerivative $ geometryOf ctxt opaqueMesh 
+
+      hasTransparency =
+          V.any ((/= fullValue) . pixelOpacity) $ _meshColors mesh
+
+      opacifier px = mixWithAlpha (\_ _ a -> a) (\_ _ -> fullValue) px px
+
+      opaqueMesh = opacifier <$> mesh
+      transparencyMesh = pixelOpacity <$> mesh
+
+      clipPath
+        | not hasTransparency = currentClip ctxt
+        | otherwise =
+            let newMask :: Image (PixelBaseComponent (PixelBaseComponent px))
+                newMask = clipRender $ renderMeshPatch i transparencyMesh in
+            case currentClip ctxt of
+              Nothing -> Just $ RawTexture newMask
+              Just v -> Just $ ModulateTexture v (RawTexture newMask)
+
+      order = case clipPath of
+        -- Good, we can directly render on the final canvas
+        Nothing -> DrawOrder 
+            { _orderPrimitives = []
+            , _orderTexture    = textureOf ctxt
+            , _orderFillMethod = FillWinding
+            , _orderMask       = clipPath
+            , _orderDirect     = rendering
+            }
+        Just c -> DrawOrder
+            { _orderPrimitives = [geometryOf ctxt $ rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
+            , _orderTexture    = AlphaModulateTexture (RawTexture $ subRender rendering) c
+            , _orderFillMethod = FillWinding
+            , _orderMask       = Nothing
+            , _orderDirect     = return ()
+            }
+
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
       order = DrawOrder 
@@ -572,6 +662,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = method
             , _orderMask       = currentClip ctxt
+            , _orderDirect     = return ()
             }
 
     go ctxt (Free (Stroke w j cap prims next)) rest =
@@ -579,7 +670,8 @@ drawOrdersOfDrawing width height dpi background drawing =
             where prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =
-        go (ctxt { currentTexture = tx }) (fromF sub) $ go ctxt next rest
+        go (ctxt { currentTexture = preComputeTexture width height tx }) (fromF sub) $
+            go ctxt next rest
 
     go ctxt (Free (DashedStroke o d w j cap prims next)) rest =
         foldr recurse after $ dashedStrokize o d w j cap prims

@@ -7,6 +7,7 @@ module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
     , cubicBezierFromPath
     , cubicBezierBreakAt
+    , divideCubicBezier
     , clipCubicBezier
     , decomposeCubicBeziers
     , sanitizeCubicBezier
@@ -254,19 +255,25 @@ clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
         edge = vpartition edgeSeparator mini maxi
         m = vpartition (vabs (abbcbccd ^-^ edge) ^< 0.1) edge abbcbccd
 
+divideCubicBezier :: CubicBezier -> (CubicBezier, CubicBezier)
+divideCubicBezier bezier@(CubicBezier a _ _ d) = (left, right) where
+  left = CubicBezier a ab abbc abbcbccd
+  right = CubicBezier abbcbccd bccd cd d
+  (ab, _bc, cd, abbc, bccd, abbcbccd) = splitCubicBezier bezier
+
 -- | Will subdivide the bezier from 0 to coeff and coeff to 1
 cubicBezierBreakAt :: CubicBezier -> Float
                    -> (CubicBezier, CubicBezier)
 cubicBezierBreakAt (CubicBezier a b c d) val =
     (CubicBezier a ab abbc abbcbccd, CubicBezier abbcbccd bccd cd d)
   where
-    ab = lerp val a b
-    bc = lerp val b c
-    cd = lerp val c d
+    ab = lerp val b a
+    bc = lerp val c b
+    cd = lerp val d c
 
-    abbc = lerp val ab bc
-    bccd = lerp val bc cd
-    abbcbccd = lerp val abbc bccd
+    abbc = lerp val bc ab
+    bccd = lerp val cd bc
+    abbcbccd = lerp val bccd abbc
 
 decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
 decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =

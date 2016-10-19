@@ -19,6 +19,7 @@ module Graphics.Rasterific.Texture
     , radialGradientWithFocusTexture
     , sampledImageTexture
     , patternTexture
+    , meshPatchTexture
 
       -- * Texture manipulation
     , modulateTexture
@@ -29,6 +30,7 @@ module Graphics.Rasterific.Texture
 import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
 import Graphics.Text.TrueType( Dpi )
 import Graphics.Rasterific
+import Graphics.Rasterific.MeshPatch
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.Transformations
 
@@ -78,6 +80,11 @@ transformTexture = WithTextureTransform
 uniformTexture :: px -- ^ The color used for all the texture.
                -> Texture px
 uniformTexture = SolidTexture
+
+
+-- | Texture using a mesh patch as definition
+meshPatchTexture :: PatchInterpolation -> MeshPatch px -> Texture px
+meshPatchTexture = MeshPatchTexture
 
 -- | Linear gradient texture.
 --

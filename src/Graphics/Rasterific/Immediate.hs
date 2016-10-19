@@ -24,29 +24,32 @@ module Graphics.Rasterific.Immediate
     , runDrawContext
     , fillWithTextureAndMask
     , fillWithTexture
+    , fillWithTextureNoAA
     , fillOrder
 
     , textToDrawOrders
     , transformOrder
     ) where
 
+
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<$>) )
 import Data.Foldable( foldMap )
 #endif
 
+import Control.Monad.ST( ST )
 import Data.Maybe( fromMaybe )
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
-import Control.Monad.State( StateT, execStateT, get, lift )
-import Control.Monad.State.Class(MonadState)
+import Control.Monad.State( evalStateT, execStateT, lift )
+import Control.Monad.Trans.State( get )
 import Codec.Picture.Types( Image( .. )
                           , Pixel( .. )
                           , MutableImage( .. )
                           , unsafeFreezeImage
                           , fillImageWith )
 
-import Control.Monad.Primitive( PrimState, PrimMonad, primToPrim )
+import Control.Monad.Primitive( PrimMonad, primToPrim )
 import qualified Data.Vector.Storable.Mutable as M
 import Graphics.Rasterific.Compositor
 import Graphics.Rasterific.Linear( V2( .. ) )
@@ -60,10 +63,6 @@ import Graphics.Rasterific.PlaneBoundable
 import qualified Data.Vector.Unboxed as VU
 import Graphics.Text.TrueType( Dpi, getStringCurveAtPoint )
 
--- | Monad used to describe the drawing context.
-type DrawContext m px =
-    StateT (MutableImage (PrimState m) px) m
-
 -- | Reify a filling function call, to be able to manipulate
 -- them in a simpler fashion.
 data DrawOrder px = DrawOrder
@@ -75,6 +74,8 @@ data DrawOrder px = DrawOrder
     , _orderFillMethod :: !FillMethod
       -- | Optional mask used for clipping.
     , _orderMask       :: !(Maybe (Texture (PixelBaseComponent px)))
+      -- | Function to perform direct drawing
+    , _orderDirect     :: !(forall s. DrawContext (ST s) px ())
     }
 
 instance PlaneBoundable (DrawOrder px) where
@@ -85,8 +86,14 @@ transformOrder :: (Point -> Point) -> DrawOrder px -> DrawOrder px
 transformOrder f order =
   order { _orderPrimitives = transform f $ _orderPrimitives order }
 
+transformOrderM :: Monad m => (Point -> m Point) -> DrawOrder px -> m (DrawOrder px)
+transformOrderM f order = do
+  v <- transformM f $ _orderPrimitives order 
+  return $ order { _orderPrimitives = v}
+
 instance Transformable (DrawOrder px) where
   transform = transformOrder
+  transformM = transformOrderM
 
 -- | Transform back a low level drawing order to a more
 -- high level Drawing
@@ -102,12 +109,17 @@ orderToDrawing order =
 -- | Render the drawing orders on the canvas.
 fillOrder :: (PrimMonad m, RenderablePixel px)
           => DrawOrder px -> DrawContext m px ()
-fillOrder o@DrawOrder { _orderMask = Nothing } =
+fillOrder o@DrawOrder { _orderMask = Nothing } = do
   F.forM_ (_orderPrimitives o) $
     fillWithTexture (_orderFillMethod o) (_orderTexture o)
-fillOrder o@DrawOrder { _orderMask = Just mask } =
+  img <- get
+  lift $ primToPrim $ flip evalStateT img $ _orderDirect o
+
+fillOrder o@DrawOrder { _orderMask = Just mask } = do
   F.forM_ (_orderPrimitives o) $
     fillWithTextureAndMask (_orderFillMethod o) (_orderTexture o) mask
+  img <- get
+  lift $ primToPrim $ flip evalStateT img $ _orderDirect o
 
 -- | Start an image rendering. See `fillWithTexture` for
 -- an usage example. This function can work with either
@@ -150,10 +162,7 @@ isCoverageDrawable img coverage =
 --
 -- <<docimages/immediate_fill.png>>
 --
-fillWithTexture :: (PrimMonad m, RenderablePixel px,
-                    MonadState (MutableImage (PrimState m) px)
-                               (DrawContext m px)
-                   )
+fillWithTexture :: (PrimMonad m, RenderablePixel px)
                 => FillMethod
                 -> Texture px  -- ^ Color/Texture used for the filling
                 -> [Primitive] -- ^ Primitives to fill
@@ -166,6 +175,22 @@ fillWithTexture fillMethod texture els = do
         clipped = foldMap (clip mini maxi) els
         spans = rasterize fillMethod clipped
     lift . mapExec filler $ filter (isCoverageDrawable img) spans
+
+-- | Function identical to 'fillWithTexture' but with anti-aliasing
+-- (and transparency) disabled.
+fillWithTextureNoAA :: (PrimMonad m, RenderablePixel px)
+                => FillMethod
+                -> Texture px  -- ^ Color/Texture used for the filling
+                -> [Primitive] -- ^ Primitives to fill
+                -> DrawContext m px ()
+fillWithTextureNoAA fillMethod texture els = do
+    img@(MutableImage width height _) <- get
+    let !mini = V2 0 0
+        !maxi = V2 (fromIntegral width) (fromIntegral height)
+        !filler = primToPrim . transformTextureToFiller texture img
+        clipped = foldMap (clip mini maxi) els
+        spans = rasterize fillMethod clipped
+    lift . mapExec (filler . toOpaqueCoverage) $ filter (isCoverageDrawable img) spans
 
 -- | Fill some geometry using a composition mask for visibility.
 --
@@ -188,11 +213,7 @@ fillWithTexture fillMethod texture els = do
 -- <<docimages/immediate_mask.png>>
 --
 fillWithTextureAndMask
-    :: ( PrimMonad m
-       , RenderablePixel px
-       , MonadState (MutableImage (PrimState m) px)
-                    (DrawContext m px)
-       )
+    :: (PrimMonad m, RenderablePixel px)
     => FillMethod
     -> Texture px  -- ^ Color/Texture used for the filling of the geometry
     -> Texture (PixelBaseComponent px) -- ^ Texture used for the mask.
@@ -221,6 +242,7 @@ textToDrawOrders dpi defaultTexture (V2 x y) descriptions =
     , _orderFillMethod = FillWinding
     , _orderMask = Nothing
     , _orderTexture = fromMaybe defaultTexture $ _textTexture d
+    , _orderDirect = return ()
     }
 
   floatCurves =

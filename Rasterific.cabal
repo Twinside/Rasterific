@@ -83,7 +83,7 @@ library
   -- -ddump-simpl -ddump-to-file -dsuppress-module-prefixes -dsuppress-uniques
   ghc-prof-options: -Wall -prof -auto-all
   default-language: Haskell2010
-  build-depends: base        >= 4.5     && < 5
+  build-depends: base        >= 4.8     && < 5
                , free        >= 4.7
                , JuicyPixels >= 3.2
                , FontyFruity >= 0.5.3.2 && < 0.6

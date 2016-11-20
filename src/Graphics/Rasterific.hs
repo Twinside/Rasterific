@@ -128,6 +128,10 @@ module Graphics.Rasterific
     , firstPointOf
     , lastPointOf
 
+      -- *** Arc traduction
+    , Direction( .. )
+    , arcInDirection
+
       -- * Rasterization control
     , Join( .. )
     , Cap( .. )
@@ -177,6 +181,7 @@ import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PlaneBoundable
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.PathWalker
+import Graphics.Rasterific.Arc
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Patch

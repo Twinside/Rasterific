@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -10,12 +9,6 @@
 module Graphics.Rasterific.MicroPdf( renderDrawingToPdf
                                    , renderOrdersToPdf
                                    ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( Foldable, foldMap )
-import Data.Monoid( mempty )
-import Control.Applicative( (<$>), (<*>), pure )
-#endif
 
 import Control.Monad.Free( liftF, Free( .. ) )
 import Control.Monad.Free.Church( fromF )
@@ -62,13 +55,8 @@ import Graphics.Text.TrueType( Dpi )
 import Text.Printf
 {-import Debug.Trace-}
 
-#if !MIN_VERSION_base(4,8,0)
-glength :: Foldable f => f a -> Int
-glength = F.foldl' (\acc _ -> acc + 1) 0
-#else
 glength :: Foldable f => f a -> Int
 glength = F.length
-#endif
 
 type PdfCommand = B.ByteString
 type PdfId = Int

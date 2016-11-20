@@ -1,12 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE StandaloneDeriving #-}
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( foldMap )
-import Control.Applicative( (<$>) )
-#endif
-
 import Control.Monad.Trans.State.Strict
 import Control.Monad( forM_ )
 import Control.Monad.ST( ST, runST )
@@ -28,8 +22,6 @@ import Codec.Picture.Types
 import Codec.Picture
 
 import qualified Data.Vector as V
-
-
 
 background, blue, black, yellow, red, green, orange, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255

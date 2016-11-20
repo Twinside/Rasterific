@@ -1,5 +1,4 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE CPP #-}
 -- | This module help the walking of path of any shape,
 -- being able to return the current position and the
 -- actual orientation.
@@ -12,11 +11,6 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , currentTangeant
                                      , drawOrdersOnPath
                                      ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid( mempty )
-import Control.Applicative( Applicative, (<*>), (<$>) )
-#endif
 
 import Data.Monoid( (<>) )
 

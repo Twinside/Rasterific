@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 -- | Handle straight lines polygon.
 module Graphics.Rasterific.Line
     ( lineFromPath
@@ -13,11 +12,6 @@ module Graphics.Rasterific.Line
     , isLinePoint
     , extendLine
     ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure, (<$>) )
-import Data.Monoid( mempty )
-#endif
 
 import Data.Monoid( (<>) )
 

@@ -1,5 +1,4 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE CPP #-}
 -- | This module provide lenses compatible with the `lens`
 -- module but without the dependency to it.
 module Graphics.Rasterific.Lenses
@@ -34,11 +33,6 @@ module Graphics.Rasterific.Lenses
     , Traversal
     , Traversal'
     ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Traversable( traverse )
-import Control.Applicative( Applicative, (<*>), (<$>), pure )
-#endif
 
 import Graphics.Rasterific.Types
 

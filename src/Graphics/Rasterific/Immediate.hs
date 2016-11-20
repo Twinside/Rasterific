@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE CPP #-}
 -- | This module implements drawing primitives to draw directly into
 -- the output texture, without generating an intermediate scene
 -- representation.
@@ -31,11 +30,6 @@ module Graphics.Rasterific.Immediate
     , transformOrder
     ) where
 
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<$>) )
-import Data.Foldable( foldMap )
-#endif
 
 import Control.Monad.ST( ST )
 import Data.Maybe( fromMaybe )

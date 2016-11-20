@@ -1,14 +1,9 @@
-{-# LANGUAGE CPP #-}
 -- | Provide definition for some higher level objects (only slightly)
 module Graphics.Rasterific.ComplexPrimitive( rectangle
                                            , roundedRectangle
                                            , circle
                                            , ellipse
                                            ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<$>) )
-#endif
 
 import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^*) )
 import Graphics.Rasterific.Line

@@ -1,5 +1,5 @@
 -- | Translation of cairo-arc.c
-module Graphics.Rasterific.Arc( arcInDirection ) where
+module Graphics.Rasterific.Arc( Direction( .. ), arcInDirection ) where
 
 import Data.Maybe( fromMaybe )
 import Data.Monoid( (<>) )
@@ -84,6 +84,7 @@ matrixTransformedCircleMajorAxis (Transformation a c _
     -- we don't need the minor axis length, which is
     -- double min = radius * sqrt (f - sqrt (g*g+h*h));
 
+-- | Direction of the arc
 data Direction = Forward | Backward
 
 clampAngle :: Float -> Float -> Float
@@ -142,6 +143,8 @@ arcSegment (V2 xc yc) radius angleA angleB = PathCubicBezierCurveTo p1 p2 p3 whe
   p2 = V2 (xc + rCosB + h * rSinB) (yc + rSinB - h * rCosB)
   p3 = V2 (xc + rCosB) (yc + rSinB)
 
+-- | Translate an arc with a definition similar to the
+-- one given in Cairo to a list of bezier path command
 arcInDirection :: Point -- ^ center
                -> Float -- ^ Radius
                -> Direction
@@ -149,7 +152,9 @@ arcInDirection :: Point -- ^ center
                -> Float -- ^ Angle minimum
                -> Float -- ^ Angle maximum
                -> [PathCommand]
-arcInDirection p radius dir tolerance = subdivideAngles dir go where
+arcInDirection p@(V2 px py) radius dir tolerance 
+  | isNaN px || isNaN py || isNaN radius = mempty
+  | otherwise = subdivideAngles dir go where
   go angleMin angleMax = commands where
     deltaAngle = angleMax - angleMin
     segmentCount = arcSegmentsNeeded deltaAngle radius mempty tolerance

@@ -119,7 +119,7 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
            (ForwardDifferenceCoefficient ay' by' cy)) =
                fixIter shiftCount halveFDCoefficients <$> baseFfd
 
-      !(V2 du dv) = (V2 uEnd vEnd ^-^ V2 uStart vStart) ^/ fromIntegral maxStepCount
+      !(V2 _du dv) = (V2 uEnd vEnd ^-^ V2 uStart vStart) ^/ fromIntegral maxStepCount
       !(V2 xStart yStart) = _cBezierX0 bez
       
       go !currentStep _ _ _ _ _ _ _ | currentStep >= maxStepCount = return ()

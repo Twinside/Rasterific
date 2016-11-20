@@ -1,6 +1,17 @@
 Change log
 ==========
 
+v0.7.1
+------
+
+ * Addition: arc path helper
+ * Fix: Composition of clip path with transformation.
+
+V0.7
+----
+
+ * Addition: Gradient Mesh!
+
 v0.6.1.1 May 2016
 -----------------
 

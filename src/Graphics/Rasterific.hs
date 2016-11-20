@@ -543,9 +543,13 @@ drawOrdersOfDrawing width height dpi background drawing =
     clipBackground = emptyValue :: PixelBaseComponent px
     clipForeground = fullValue :: PixelBaseComponent px
 
-    clipRender =
-      renderDrawing width height clipBackground
-            . withTexture (SolidTexture clipForeground)
+    clipRender ctxt =
+      renderDrawing width height clipBackground . 
+        transformer .
+          withTexture (SolidTexture clipForeground)
+       where 
+         transformer = maybe id (withTransformation . fst) $ currentTransformation ctxt
+
 
     subRender :: (forall s. DrawContext (ST s) px ()) -> Image px
     subRender act =
@@ -638,7 +642,7 @@ drawOrdersOfDrawing width height dpi background drawing =
         | not hasTransparency = currentClip ctxt
         | otherwise =
             let newMask :: Image (PixelBaseComponent (PixelBaseComponent px))
-                newMask = clipRender $ renderMeshPatch i transparencyMesh in
+                newMask = clipRender ctxt $ renderMeshPatch i transparencyMesh in
             case currentClip ctxt of
               Nothing -> Just $ RawTexture newMask
               Just v -> Just $ ModulateTexture v (RawTexture newMask)
@@ -694,7 +698,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             go ctxt next rest
       where
         modulationTexture :: Texture (PixelBaseComponent px)
-        modulationTexture = RawTexture $ clipRender clipPath
+        modulationTexture = RawTexture $ clipRender ctxt clipPath
 
         newModuler = Just . subModuler $ currentClip ctxt
 

@@ -1,6 +1,11 @@
 Change log
 ==========
 
+v0.7.2
+------
+
+ * Fix: handling infinity/NaN in geometry helpers
+
 v0.7.1
 ------
 

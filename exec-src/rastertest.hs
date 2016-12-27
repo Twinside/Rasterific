@@ -665,189 +665,6 @@ drawImm path w h d = do
   putStrLn $ "Rendering " ++ path
   writePng path $ runST $ runDrawContext w h white d
 
-drawPatchDebug :: FilePath -> Int -> Int -> CoonPatch PixelRGBA8 -> IO ()
-drawPatchDebug path w h p = do
-  putStrLn $ "Rendering " ++ path
-  writePng path $ runST $ runDrawContext w h white $ do
-    renderCoonPatch p
-    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ debugDrawCoonPatch defaultDebug p
-
-drawTensorDebug :: FilePath -> Int -> Int -> TensorPatch PixelRGBA8 -> IO ()
-drawTensorDebug path w h p = do
-  putStrLn $ "Rendering " ++ path
-  writePng path $ runST $ runDrawContext w h white $ do
-    renderTensorPatch p
-    mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ (debugDrawTensorPatch defaultDebug) p
-
-
-coonTest :: IO ()
-coonTest = do
-  draw "coon_outline.png" $ drawCoonPatchOutline patch
-  drawImm "coon_render_small.png" 200 200 $ renderCoonPatch $ patch'
-  drawImm "coon_render.png" 800 800 $ renderCoonPatch $ patch
-  drawPatchDebug "coon_render_debug.png" 800 800 patch
-  where
-    draw path p = do
-      putStrLn $ "Rendering " ++ path
-      writePng path . renderDrawing 800 800 (PixelRGBA8 255 255 255 255) $
-          withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) p
-
-    cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
-    [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
-        toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36))) * 4) $ Path (V2 13.21 869.2) False
-          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
-          ,cc 193.9 944.6 109.2 950.4 167.5 1021
-          ,cc 117.7 1025 73.48 1043 18.21 1033
-          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
-          ]
-    [CubicBezierPrim c1', CubicBezierPrim c2', CubicBezierPrim c3', CubicBezierPrim c4'] =
-        toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36)))) $ Path (V2 13.21 869.2) False
-          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
-          ,cc 193.9 944.6 109.2 950.4 167.5 1021
-          ,cc 117.7 1025 73.48 1043 18.21 1033
-          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
-          ]
-
-    patch = CoonPatch c1 c2 c3 c4 
-              (ParametricValues (PixelRGBA8 255 0 0 255)
-                                (PixelRGBA8 0 255 0 255)
-                                (PixelRGBA8 0 0 255 255)
-                                (PixelRGBA8 255 255 0 255))
-
-    patch' = CoonPatch c1' c2' c3' c4'
-              (ParametricValues (PixelRGBA8 255 0 0 255)
-                                (PixelRGBA8 0 255 0 255)
-                                (PixelRGBA8 0 0 255 255)
-                                (PixelRGBA8 255 255 0 255))
-
-coonTensorTest :: IO ()
-coonTensorTest = do
-  drawImm "compare_tensor.png" 800 800 $ renderTensorPatch $ tensorPatch
-  drawTensorDebug "compare_tensor_debug.png" 900 800 tensorPatch
-  drawImm "compare_coon.png" 800 800 $ renderCoonPatch $ coonPatch
-  where
-    [ c00, c01, c02, c03
-      , c10, c11, c12, c13
-      , c20, c21, c22, c23
-      , c30, c31, c32, c33
-      ] = fmap (\p -> (p ^+^ (V2 0 (-852.36))) * 4)
-       {- [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
-          ,(V2 13.98 923.5), (V2 90 950),     (V2 117 950),      (V2 193.9 944.6)
-          ,(V2 2.253 974.9), (V2 90 1000),    (V2 117 1000),     (V2 109.2 950.4)
-          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
-          ] -}
-          [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
-          ,(V2 13.98 923.5), (V2 140 990),     (V2 147 1000),      (V2 193.9 944.6)
-          ,(V2 2.253 974.9), (V2 140 1000),    (V2 147 1005),     (V2 109.2 950.4)
-          ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
-          ]
-    coonPatch = CoonPatch
-        { _north = CubicBezier c00 c01 c02 c03
-        , _east  = CubicBezier c03 c13 c23 c33
-        , _south = CubicBezier c33 c32 c31 c30
-        , _west  = CubicBezier c30 c20 c10 c00
-        , _coonValues = colors
-        }
-
-
-    tensorPatch = TensorPatch
-      { _curve0 = CubicBezier c00 c01 c02 c03
-      , _curve1 = CubicBezier c10 c11 c12 c13
-      , _curve2 = CubicBezier c20 c21 c22 c23
-      , _curve3 = CubicBezier c30 c31 c32 c33
-      , _tensorValues = colors
-      }
-
-    colors = ParametricValues blue red red red
-
-tensorSplit :: IO ()
-tensorSplit = do
-  drawImm "split_tensor_orig.png" 800 800 $ renderTensorPatch $ tensorPatch
-  drawTensorDebug "split_tensor_orig_debug.png" 800 800 tensorPatch
-  drawTensorSubdivDebug "split_tensor_orig_subH.png" 800 800 tensorPatch [patchWest, patchEast]
-  drawTensorSubdivDebug "split_tensor_orig_subHVR.png" 800 800 tensorPatch [patchWest, patchNorthEast, patchSouthEast]
-  where
-    drawTensorSubdivDebug path w h p ps = do
-        putStrLn $ "Rendering " ++ path
-        writePng path $ runST $ runDrawContext w h white $ do
-            renderTensorPatch p
-            mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $ mapM_ (debugDrawTensorPatch defaultDebug) ps
-
-    [ c00, c01, c02, c03
-     , c10, c11, c12, c13
-     , c20, c21, c22, c23
-     , c30, c31, c32, c33
-     ] = fmap (\p -> (p ^+^ (V2 30 (-802.36))) * 3)
-        [(V2 13.21 869.2), (V2 49.67 838.5), (V2 145.1 878.4), (V2 178.2 880.7)
-        ,(V2 13.98 923.5), (V2 120 950),     (V2 147 950),      (V2 193.9 944.6)
-        ,(V2 2.253 974.9), (V2 120 1000),    (V2 147 1000),     (V2 220.2 950.4)
-        ,(V2 18.21  1033), (V2 73.48 1043), (V2 117.7 1025),   (V2 167.5 1021)
-        ]
-
-    tensorPatch = TensorPatch
-      { _curve0 = CubicBezier c00 c01 c02 c03
-      , _curve1 = CubicBezier c10 c11 c12 c13
-      , _curve2 = CubicBezier c20 c21 c22 c23
-      , _curve3 = CubicBezier c30 c31 c32 c33
-      , _tensorValues = colors
-      }
-
-    (patchWest, patchEast) = horizontalTensorSubdivide tensorPatch { _tensorValues = parametricBase }
-    (patchNorthEast, patchSouthEast) = horizontalTensorSubdivide $ transposePatch patchEast
-    frontColor = PixelRGBA8 0 0x86 0xc1 255
-    accentColor = PixelRGBA8 0xff 0xf4 0xc1 255
-    accent2Color = PixelRGBA8 0xFF 0x53 0x73 255
-
-    colors = ParametricValues frontColor accentColor accent2Color frontColor
-
-coonTestColorStop :: IO ()
-coonTestColorStop = do
-  drawImm "coon_render_color.png" 800 800 $ renderCoonPatch patch
-  drawPatchDebug "coon_render_color_debug.png" 800 800 patch
-  where
-    cc a b c d e f = PathCubicBezierCurveTo (V2 a b) (V2 c d) (V2 e f)
-    [CubicBezierPrim c1, CubicBezierPrim c2, CubicBezierPrim c3, CubicBezierPrim c4] =
-        toPrimitives . transform (\p -> (p ^+^ (V2 0 (-852.36))) * 4) $ Path (V2 13.21 869.2) False
-          [cc 49.67 838.5 145.1 878.4 178.2 (880.7 :: Float)
-          ,cc 193.9 944.6 109.2 950.4 167.5 1021
-          ,cc 117.7 1025 73.48 1043 18.21 1033
-          ,cc 2.253 974.9 13.98 923.5 13.21 869.2
-          ]
-    patch = CoonPatch c1 c2 c3 c4 
-              (ParametricValues (PixelRGBA8 255 20 0 255)
-                          red
-                          red
-                          red)
-
-toCoon :: V2 Float -> ParametricValues px -> [[V2 Float]] -> CoonPatch px
-toCoon st values = build . go st where
-  build [n, e, s, w] = CoonPatch n e s w values
-  build _ = error "toCoon"
-
-  go _ [] = []
-  go p [lst] = case toAbsolute p lst of
-    [c1, c2] -> [CubicBezier p c1 c2 st]
-    _ -> error "Mouh"
-  go p (x : xs) = case toAbsolute p x of
-    [c1, c2, c3] -> CubicBezier p c1 c2 c3 : go c3 xs
-    _ -> error "Mouh"
-
-  toAbsolute p = fmap (p ^+^)
-
-
-coonTestWild :: IO ()
-coonTestWild = do
-  drawImm "coon_render_wild.png" 800 800 $ renderCoonPatch patch
-  drawPatchDebug "coon_render_wild_debug.png" 800 800 patch
-  where
-    patch = toCoon (V2 50 130 ^* 2)
-        (ParametricValues red yellow orange green) $
-        fmap (^* 2) <$>
-        [ [V2 150  0, V2 300 (-100), V2 120 (-100)]
-        , [V2 0  100, V2  40   200 , V2  40  220]
-        , [V2 (-250) (-100), V2 50 60, V2 (-160) 0]
-        , [V2 (-20) (-80), V2 20 (-40)]
-        ]
 
 testSuite :: IO ()
 testSuite = do
@@ -939,17 +756,22 @@ testSuite = do
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
 
-  coonTest
-  coonTestColorStop 
-  coonTestWild 
-  coonTensorTest
-  tensorSplit 
-
 benchTest :: [String] -> IO ()
 benchTest _args = do
   defaultMainWith defaultConfig
         [bench "testsuite" $ nfIO testSuite,
          bench "Triangles" $ nfIO Sample.triangles]
+
+badCircle :: IO ()
+badCircle = do
+  putStrLn "Bad Circle"
+  print $ circle (V2 0 0) 1e50
+  let white = PixelRGBA8 255 255 255 255
+      drawColor = PixelRGBA8 0 0x86 0xc1 255
+      img = renderDrawing 400 200 white $
+         withTexture (uniformTexture drawColor) $ do
+            fill $ circle (V2 0 0) 1e50 -- overflows to Infinity :: Float -> boom
+  writePng "bug.png" img
 
 main :: IO ()
 main = do
@@ -958,5 +780,6 @@ main = do
          "random":_ -> randomTests
          "bench":rest -> benchTest rest
          "prof":_ -> Sample.triangles
+         "badcircle":_ -> badCircle
          _ -> testSuite
 

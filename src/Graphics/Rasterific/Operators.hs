@@ -149,7 +149,7 @@ ifZero u v | nearZero u = v
 -- point.
 isNearby :: Point -> Point -> Bool
 {-# INLINE isNearby #-}
-isNearby p1 p2 = squareDist < 0.0001
+isNearby p1 p2 = squareDist < 0.2
   where vec = p1 ^-^ p2
         squareDist = vec `dot` vec
 

@@ -11,18 +11,22 @@
 module Graphics.Rasterific.BiSampleable
     ( BiSampleable( .. )
     , bilinearInterpolation
+    , sampledImageShader
     ) where
 
-import Codec.Picture( PixelRGBA8( .. ) )
+import Data.Fixed( mod' )
+import Codec.Picture
+    ( Image( .. )
+    , Pixel8
+    , Pixel( .. )
+    , PixelRGBA8( .. ) )
 
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Shading
+import Graphics.Rasterific.Command
 import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Transformations
-
-import Codec.Picture( Pixel( .. ) )
 
 -- | Interpolate a 2D point in a given type
 class BiSampleable sampled px | sampled -> px where
@@ -47,6 +51,58 @@ instance BiSampleable (ImageMesh PixelRGBA8) PixelRGBA8 where
   {-# INLINE interpolate #-}
   interpolate imesh xb yb = sampledImageShader (_meshImage imesh) SamplerPad x y
     where (V2 x y) = applyTransformation (_meshTransform imesh) (V2 xb yb)
+
+-- | Use another image as a texture for the filling.
+-- Contrary to `imageTexture`, this function perform a bilinear
+-- filtering on the texture.
+--
+sampledImageShader :: forall px.  ModulablePixel px
+                   => Image px -> SamplerRepeat -> ShaderFunction px
+{-# SPECIALIZE
+     sampledImageShader :: Image Pixel8 -> SamplerRepeat
+                        -> ShaderFunction Pixel8 #-}
+{-# SPECIALIZE
+     sampledImageShader :: Image PixelRGBA8 -> SamplerRepeat
+                        -> ShaderFunction PixelRGBA8 #-}
+sampledImageShader img sampling x y =
+  (at px  py `interpX` at pxn py)
+             `interpY`
+  (at px pyn `interpX` at pxn pyn)
+  where
+   coordSampler SamplerPad maxi v =
+      min (maxi - 1) . max 0 $ floor v
+   coordSampler SamplerReflect maxi v =
+      floor $ abs (abs (v - maxif - 1) `mod'` (2 * maxif) - maxif - 1)
+        where maxif = fromIntegral maxi
+   coordSampler SamplerRepeat maxi v = floor v `mod` maxi
+
+   w = fromIntegral $ imageWidth img
+   h = fromIntegral $ imageHeight img
+
+   clampedX = coordSampler sampling w
+   clampedY = coordSampler sampling h
+
+   px = clampedX x
+   pxn = clampedX $ x + 1
+   py = clampedY y
+   pyn = clampedY $ y + 1
+
+   dx, dy :: Float
+   !dx = x - fromIntegral (floor x :: Int)
+   !dy = y - fromIntegral (floor y :: Int)
+
+   at :: Int -> Int -> px
+   at !xx !yy =
+        unsafePixelAt rawData $ (yy * w + xx) * compCount
+
+   (covX, icovX) = clampCoverage dx
+   (covY, icovY) = clampCoverage dy
+
+   interpX = mixWith (const $ alphaOver covX icovX)
+   interpY = mixWith (const $ alphaOver covY icovY)
+
+   compCount = componentCount (undefined :: px)
+   rawData = imageData img
 
 bilinearPixelInterpolation :: (Pixel px, Modulable (PixelBaseComponent px))
                            => ParametricValues px -> Float -> Float -> px

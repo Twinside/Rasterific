@@ -500,6 +500,7 @@ cacheDrawing
 cacheDrawing maxWidth maxHeight dpi sub =
   cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
+{-  
 preComputeTexture :: (RenderablePixel px)
                   => Int -> Int -> Texture px -> Texture px
 preComputeTexture w h = go where
@@ -519,6 +520,7 @@ preComputeTexture w h = go where
     AlphaModulateTexture i m -> AlphaModulateTexture (go i) (go m)
     MeshPatchTexture i m ->
         RawTexture $ renderDrawing w h emptyPx $ renderMeshPatch i m
+-- -}
 
 -- | Transform a drawing into a serie of low-level drawing orders.
 drawOrdersOfDrawing
@@ -672,7 +674,7 @@ drawOrdersOfDrawing width height dpi background drawing =
             where prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =
-        go (ctxt { currentTexture = preComputeTexture width height tx }) (fromF sub) $
+        go (ctxt { currentTexture = tx }) (fromF sub) $
             go ctxt next rest
 
     go ctxt (Free (DashedStroke o d w j cap prims next)) rest =

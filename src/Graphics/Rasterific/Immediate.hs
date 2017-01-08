@@ -28,10 +28,12 @@ module Graphics.Rasterific.Immediate
 
     , textToDrawOrders
     , transformOrder
+
+    , meshToImage
     ) where
 
 
-import Control.Monad.ST( ST )
+import Control.Monad.ST( ST, runST )
 import Data.Maybe( fromMaybe )
 import qualified Data.Foldable as F
 import Control.Monad.Free( liftF )
@@ -51,6 +53,11 @@ import Graphics.Rasterific.Rasterize
 import Graphics.Rasterific.Shading
 import Graphics.Rasterific.QuadraticBezier
 import Graphics.Rasterific.Types
+import Graphics.Rasterific.PatchTypes
+import Graphics.Rasterific.CubicBezier.FastForwardDifference
+import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.MeshPatch
+import Graphics.Rasterific.ComplexPrimitive
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.PlaneBoundable
 
@@ -165,7 +172,7 @@ fillWithTexture fillMethod texture els = do
     img@(MutableImage width height _) <- get
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
-        !filler = primToPrim . transformTextureToFiller texture img
+        !filler = primToPrim . transformTextureToFiller meshToImage texture img
         clipped = foldMap (clip mini maxi) els
         spans = rasterize fillMethod clipped
     lift . mapExec filler $ filter (isCoverageDrawable img) spans
@@ -181,7 +188,7 @@ fillWithTextureNoAA fillMethod texture els = do
     img@(MutableImage width height _) <- get
     let !mini = V2 0 0
         !maxi = V2 (fromIntegral width) (fromIntegral height)
-        !filler = primToPrim . transformTextureToFiller texture img
+        !filler = primToPrim . transformTextureToFiller meshToImage texture img
         clipped = foldMap (clip mini maxi) els
         spans = rasterize fillMethod clipped
     lift . mapExec (filler . toOpaqueCoverage) $ filter (isCoverageDrawable img) spans
@@ -219,7 +226,7 @@ fillWithTextureAndMask fillMethod texture mask els = do
         !maxi = V2 (fromIntegral width) (fromIntegral height)
         spans = rasterize fillMethod $ foldMap (clip mini maxi) els
         !shader = primToPrim
-                . transformTextureToFiller (ModulateTexture texture mask) img
+                . transformTextureToFiller meshToImage (ModulateTexture texture mask) img
     lift . mapM_ shader $ filter (isCoverageDrawable img) spans
 
 -- | Helper function transforming text range to draw order.
@@ -250,3 +257,49 @@ textToDrawOrders dpi defaultTexture (V2 x y) descriptions =
     [fmap BezierPrim . bezierFromPath . fmap (uncurry V2) $ VU.toList c | c <- curves]
 
 
+meshToImage :: forall px. (RenderablePixel px)
+            => Maybe Transformation -> Int-> Int 
+            -> PatchInterpolation -> MeshPatch px
+            -> Image px
+meshToImage mayTrans width height i baseMesh 
+  | not hasTransparency = rendering
+  | otherwise = runST $ runDrawContext width height background $ fillOrder order
+  where
+    mesh = case mayTrans >>= inverseTransformation of
+      Nothing -> baseMesh
+      Just trans -> 
+        transform (applyTransformation trans) baseMesh
+    
+    background = emptyPx :: px
+    clipBackground = emptyValue :: PixelBaseComponent px
+    
+    rendering = runST $ runDrawContext width height background $ case i of
+      PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf opaqueMesh 
+      PatchBicubic ->
+          mapM_ rasterizeCoonPatch
+              . cubicCoonPatchesOf 
+              $ calculateMeshColorDerivative opaqueMesh 
+    
+    hasTransparency =
+        F.any ((/= fullValue) . pixelOpacity) $ _meshColors mesh
+    
+    opacifier px = mixWithAlpha (\_ _ a -> a) (\_ _ -> fullValue) px px
+    
+    opaqueMesh = opacifier <$> mesh
+    transparencyMesh = pixelOpacity <$> mesh
+    
+    clipPath =
+      runST $ runDrawContext width height clipBackground $ case i of
+        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf transparencyMesh
+        PatchBicubic ->
+            mapM_ rasterizeCoonPatch
+                . cubicCoonPatchesOf 
+                $ calculateMeshColorDerivative transparencyMesh
+    
+    order = DrawOrder
+          { _orderPrimitives = [rectangle (V2 0 0) (fromIntegral width) (fromIntegral height)]
+          , _orderTexture    = AlphaModulateTexture (RawTexture rendering) (RawTexture clipPath)
+          , _orderFillMethod = FillWinding
+          , _orderMask       = Nothing
+          , _orderDirect     = return ()
+          }

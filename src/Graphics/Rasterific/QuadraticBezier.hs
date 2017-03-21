@@ -1,7 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 -- | Module handling math regarding the handling of quadratic
 -- and cubic bezier curve.
 module Graphics.Rasterific.QuadraticBezier
@@ -18,10 +17,6 @@ module Graphics.Rasterific.QuadraticBezier
     , isBezierPoint
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure )
-import Data.Monoid( Monoid( mempty ) )
-#endif
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)

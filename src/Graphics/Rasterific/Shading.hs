@@ -18,6 +18,7 @@ import Control.Monad.Primitive( PrimState
 import Data.Fixed( mod' )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific.Command
+import Graphics.Rasterific.BiSampleable
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)
@@ -44,6 +45,7 @@ import Graphics.Rasterific.Types( Point
                                 , SamplerRepeat( .. ) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Rasterize
+import Graphics.Rasterific.PatchTypes
 import Graphics.Rasterific.Compositor( Modulable( .. )
                                      , ModulablePixel
                                      , RenderablePixel
@@ -241,8 +243,9 @@ shaderOfTexture trans sampling (AlphaModulateTexture texture modulation) =
 -- prepare and optimize the real calculation
 transformTextureToFiller
     :: (RenderablePixel px)
-    => Texture px -> CoverageFiller (ST s) px
-transformTextureToFiller = go Nothing SamplerPad
+    => (Maybe Transformation -> Int -> Int -> PatchInterpolation -> MeshPatch px -> Image px)
+    -> Texture px -> CoverageFiller (ST s) px
+transformTextureToFiller renderMesh = go Nothing SamplerPad
   where
     go _ _ (SolidTexture px) =
         \img -> solidColor px img . prepareInfoNoTransform img
@@ -250,6 +253,16 @@ transformTextureToFiller = go Nothing SamplerPad
         go (combineTransform trans transform) sampling sub
     go trans _ (WithSampler sampler sub) =
         go trans sampler sub
+    go trans sampling (MeshPatchTexture i m) = \img ->
+      let newImg = renderMesh
+            trans
+            (mutableImageWidth img)
+            (mutableImageHeight img)
+            i
+            m
+      in
+      go Nothing sampling (RawTexture newImg) img
+        
     go trans sampling tex =
         \img -> shaderFiller shader img . prepareInfo trans img
             where shader = shaderOfTexture Nothing sampling tex
@@ -317,58 +330,6 @@ linearGradientShader gradient start end repeating =
     vector = end ^-^ start
     d = vector ^/ (vector `dot` vector)
     s00 = start `dot` d
-
--- | Use another image as a texture for the filling.
--- Contrary to `imageTexture`, this function perform a bilinear
--- filtering on the texture.
---
-sampledImageShader :: forall px.  ModulablePixel px
-                   => Image px -> SamplerRepeat -> ShaderFunction px
-{-# SPECIALIZE
-     sampledImageShader :: Image Pixel8 -> SamplerRepeat
-                        -> ShaderFunction Pixel8 #-}
-{-# SPECIALIZE
-     sampledImageShader :: Image PixelRGBA8 -> SamplerRepeat
-                        -> ShaderFunction PixelRGBA8 #-}
-sampledImageShader img sampling x y =
-  (at px  py `interpX` at pxn py)
-             `interpY`
-  (at px pyn `interpX` at pxn pyn)
-  where
-   coordSampler SamplerPad maxi v =
-      min (maxi - 1) . max 0 $ floor v
-   coordSampler SamplerReflect maxi v =
-      floor $ abs (abs (v - maxif - 1) `mod'` (2 * maxif) - maxif - 1)
-        where maxif = fromIntegral maxi
-   coordSampler SamplerRepeat maxi v = floor v `mod` maxi
-
-   w = fromIntegral $ imageWidth img
-   h = fromIntegral $ imageHeight img
-
-   clampedX = coordSampler sampling w
-   clampedY = coordSampler sampling h
-
-   px = clampedX x
-   pxn = clampedX $ x + 1
-   py = clampedY y
-   pyn = clampedY $ y + 1
-
-   dx, dy :: Float
-   !dx = x - fromIntegral (floor x :: Int)
-   !dy = y - fromIntegral (floor y :: Int)
-
-   at :: Int -> Int -> px
-   at !xx !yy =
-        unsafePixelAt rawData $ (yy * w + xx) * compCount
-
-   (covX, icovX) = clampCoverage dx
-   (covY, icovY) = clampCoverage dy
-
-   interpX = mixWith (const $ alphaOver covX icovX)
-   interpY = mixWith (const $ alphaOver covY icovY)
-
-   compCount = componentCount (undefined :: px)
-   rawData = imageData img
 
 -- | Use another image as a texture for the filling.
 -- This texture use the "nearest" filtering, AKA no

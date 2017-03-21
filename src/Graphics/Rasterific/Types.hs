@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE CPP #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
     ( -- * Geometry description
@@ -51,11 +50,6 @@ module Graphics.Rasterific.Types
 
 import Data.DList( DList, fromList )
 
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( Foldable )
-import Data.Traversable( Traversable )
-import Control.Applicative( (<$>), (<*>), pure )
-#endif
 import Control.Monad.Identity( runIdentity )
 import Data.Foldable( foldl', toList )
 import qualified Data.Foldable as F

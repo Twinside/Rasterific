@@ -87,7 +87,7 @@ type ModulablePixel px =
 -- must also be pixel and be the "bottom" of component,
 -- we cannot go further than a PixelBaseComponent level.
 --
--- All pixel instances of JuicyPixels should be usable.
+-- Tested pixel types are PixelRGBA8 & Pixel8
 type RenderablePixel px =
     ( ModulablePixel px
     , Pixel (PixelBaseComponent px)

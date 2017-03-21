@@ -1,15 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Rasterize
     ( CoverageSpan( .. )
     , rasterize
     , toOpaqueCoverage
     , clip
     ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable( foldMap )
-#endif
 
 import Control.Monad.ST( runST )
 import Data.Fixed( mod' )

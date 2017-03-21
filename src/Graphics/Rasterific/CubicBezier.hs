@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Graphics.Rasterific.CubicBezier
     ( cubicBezierCircle
@@ -20,11 +19,6 @@ module Graphics.Rasterific.CubicBezier
     ) where
 
 import Prelude hiding( or )
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<$>), pure )
-import Data.Monoid( mempty )
-#endif
 
 import Data.Monoid( (<>) )
 import Control.Applicative( liftA2 )

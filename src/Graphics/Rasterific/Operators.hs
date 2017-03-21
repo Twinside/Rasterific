@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -- | Module providing basic helper functions to help
 -- build vector/point calculations.
 module Graphics.Rasterific.Operators
@@ -28,9 +27,6 @@ module Graphics.Rasterific.Operators
     , isDistingableFrom
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative, (<$>) )
-#endif
 import Control.Applicative( liftA2, liftA3 )
 
 import Graphics.Rasterific.Linear
@@ -153,7 +149,7 @@ ifZero u v | nearZero u = v
 -- point.
 isNearby :: Point -> Point -> Bool
 {-# INLINE isNearby #-}
-isNearby p1 p2 = squareDist < 0.0001
+isNearby p1 p2 = squareDist < 0.2
   where vec = p1 ^-^ p2
         squareDist = vec `dot` vec
 

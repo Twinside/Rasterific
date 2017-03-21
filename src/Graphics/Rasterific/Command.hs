@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Command ( Drawing
                                    , DrawCommand( .. )
                                    , DrawContext
@@ -15,10 +14,6 @@ module Graphics.Rasterific.Command ( Drawing
                                    , ImageTransformer
                                    , dumpTexture
                                    ) where
-
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid( Monoid( .. ) )
-#endif
 
 import Control.Monad.ST( ST )
 import Control.Monad.State( StateT )

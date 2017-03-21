@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -52,11 +51,6 @@ module Graphics.Rasterific.Patch
     , horizontalTensorSubdivide
     , transposePatch
     )  where
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative( pure, (<*>) ), (<$>) )
-import Data.Foldable( Foldable( foldMap ) )
-#endif
 
 import Control.Monad.Free( liftF )
 import Control.Monad( when, forM_ )

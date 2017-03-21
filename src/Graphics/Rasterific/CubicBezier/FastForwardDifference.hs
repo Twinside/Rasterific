@@ -19,7 +19,7 @@ import Codec.Picture( PixelRGBA8 )
 import Codec.Picture.Types( MutableImage( .. ) )
 
 import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Immediate
+import Graphics.Rasterific.Command
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear
 import Graphics.Rasterific.BiSampleable

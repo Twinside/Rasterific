@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.StrokeInternal
     ( flatten
     , dashize
@@ -8,12 +7,6 @@ module Graphics.Rasterific.StrokeInternal
     , approximatePathLength
     , isPrimitivePoint
     )  where
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<$>), pure )
-import Data.Monoid( mempty )
-import Data.Foldable( foldMap )
-#endif
 
 import Data.Monoid( (<>) )
 

@@ -4,8 +4,8 @@
 -- If the flag `embed_linear` is disabled, this module is
 -- just a reexport from the real linear package.
 --
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Linear
     ( V1( .. )
     , V2( .. )
@@ -25,13 +25,6 @@ module Graphics.Rasterific.Linear
 -- We just reexport
 import Linear
 #else
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( Applicative, pure, (<$>), (<*>) )
-import Data.Monoid( mappend )
-import Data.Foldable( Foldable( .. ) )
-import Data.Traversable( Traversable( .. ) )
-#endif
 
 import Graphics.Rasterific.MiniLens
 

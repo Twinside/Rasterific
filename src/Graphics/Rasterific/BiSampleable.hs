@@ -56,7 +56,7 @@ instance BiSampleable (ImageMesh PixelRGBA8) PixelRGBA8 where
 -- Contrary to `imageTexture`, this function perform a bilinear
 -- filtering on the texture.
 --
-sampledImageShader :: forall px.  ModulablePixel px
+sampledImageShader :: forall px. RenderablePixel px
                    => Image px -> SamplerRepeat -> ShaderFunction px
 {-# SPECIALIZE
      sampledImageShader :: Image Pixel8 -> SamplerRepeat
@@ -64,13 +64,14 @@ sampledImageShader :: forall px.  ModulablePixel px
 {-# SPECIALIZE
      sampledImageShader :: Image PixelRGBA8 -> SamplerRepeat
                         -> ShaderFunction PixelRGBA8 #-}
+sampledImageShader img _ _ _
+  | imageWidth img == 0 || imageHeight img == 0 = emptyPx
 sampledImageShader img sampling x y =
   (at px  py `interpX` at pxn py)
              `interpY`
   (at px pyn `interpX` at pxn pyn)
   where
-   coordSampler SamplerPad maxi v =
-      min (maxi - 1) . max 0 $ floor v
+   coordSampler SamplerPad maxi v = min (maxi - 1) . max 0 $ floor v
    coordSampler SamplerReflect maxi v =
       floor $ abs (abs (v - maxif - 1) `mod'` (2 * maxif) - maxif - 1)
         where maxif = fromIntegral maxi

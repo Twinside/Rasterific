@@ -3,7 +3,6 @@ Rasterific
 
 ![Rasterific logo](https://raw.github.com/Twinside/Rasterific/master/img/logo.png)
 
-[![Build Status](https://travis-ci.org/Twinside/Rasterific.png?branch=master)](https://travis-ci.org/Twinside/Rasterific)
 [![Hackage](https://img.shields.io/hackage/v/Rasterific.svg)](http://hackage.haskell.org/package/Rasterific)
 
 Rasterific is a Haskell rasterization engine (a vectorial renderer)

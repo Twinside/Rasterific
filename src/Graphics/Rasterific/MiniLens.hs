@@ -32,7 +32,7 @@ infixl 8 .^
 infixr 4 .~
 infix  4 .=,%=,+=
 
--- | Does it look familiar? yes it's the official
+-- | Does it look familiar? Yes, it's the official
 -- Lens type.
 type Lens s t a b =
     forall f. Functor f => (a -> f b) -> s -> f t
@@ -47,7 +47,7 @@ type Traversal s t a b =
 
 type Traversal' s a = Traversal s s a a
 
--- | Create a full lens out of setter and getter
+-- | Create a full lens out of a setter and a getter
 lens :: (s -> a)
      -> (s -> b -> t)
      -> Lens s t a b

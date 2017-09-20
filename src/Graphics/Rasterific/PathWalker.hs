@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- | This module help the walking of path of any shape,
+-- | This module allows us to walk along paths of any shape,
 -- being able to return the current position and the
 -- actual orientation.
 module Graphics.Rasterific.PathWalker( PathWalkerT
@@ -12,23 +12,20 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , drawOrdersOnPath
                                      ) where
 
-import Data.Monoid( (<>) )
+import           Data.Monoid                         ((<>))
 
-import Control.Monad.Identity( Identity )
-import Control.Monad.State( StateT
-                          , MonadTrans
-                          , lift
-                          , evalStateT
-                          , modify
-                          , gets )
-import Data.Maybe( fromMaybe )
+import           Control.Monad.Identity              (Identity)
+import           Control.Monad.State                 (MonadTrans, StateT,
+                                                      evalStateT, gets, lift,
+                                                      modify)
+import           Data.Maybe                          (fromMaybe)
 
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.StrokeInternal
-import Graphics.Rasterific.PlaneBoundable
-import Graphics.Rasterific.Immediate
+import           Graphics.Rasterific.Immediate
+import           Graphics.Rasterific.Linear
+import           Graphics.Rasterific.PlaneBoundable
+import           Graphics.Rasterific.StrokeInternal
+import           Graphics.Rasterific.Transformations
+import           Graphics.Rasterific.Types
 
 -- | The walking transformer monad.
 newtype PathWalkerT m a = PathWalkerT (StateT WalkerState m a)
@@ -40,7 +37,7 @@ type PathWalker a = PathWalkerT Identity a
 
 -- | State of the path walker, just a bunch of primitives
 -- with continuity guarantee. The continuity is guaranteed
--- by the Path used to derive this primitives.
+-- by the Path used to derive these primitives.
 data WalkerState = WalkerState
     { _walkerPrims :: ![Primitive]
     }
@@ -66,18 +63,18 @@ advanceBy by = PathWalkerT . modify $ \s ->
 currentPosition :: (Monad m) => PathWalkerT m (Maybe Point)
 currentPosition = PathWalkerT $ gets (currPos . _walkerPrims)
   where
-    currPos [] = Nothing
+    currPos []       = Nothing
     currPos (prim:_) = Just $ firstPointOf prim
 
--- | Obtain the current tangeant of the path if we're still
+-- | Obtain the current tangent of the path if we're still
 -- on it. Return Nothing otherwise.
 currentTangeant :: (Monad m) => PathWalkerT m (Maybe Vector)
 currentTangeant = PathWalkerT $ gets (currTangeant . _walkerPrims)
   where
-    currTangeant [] = Nothing
+    currTangeant []       = Nothing
     currTangeant (prim:_) = Just . normalize $ firstTangeantOf prim
 
--- | Callback function in charge to transform the DrawOrder
+-- | Callback function in charge of transforming the DrawOrder
 -- given the transformation to place it on the path.
 type PathDrawer m px =
     Transformation -> PlaneBound -> DrawOrder px -> m ()

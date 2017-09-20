@@ -1,13 +1,13 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies        #-}
 
--- | Module describing the various filling method of the
+-- | Module describing the various filling methods of the
 -- geometric primitives.
 --
--- All points coordinate given in this module are expressed
--- final image pixel coordinates.
+-- All coordinates given in this module are expressed
+-- set final image pixel coordinates.
 module Graphics.Rasterific.Texture
     ( Texture
     , Gradient
@@ -23,16 +23,16 @@ module Graphics.Rasterific.Texture
 
       -- * Texture manipulation
     , modulateTexture
-    , transformTexture 
+    , transformTexture
     ) where
 
 
-import Codec.Picture.Types( Pixel( .. ), Image( .. ) )
-import Graphics.Text.TrueType( Dpi )
-import Graphics.Rasterific
-import Graphics.Rasterific.MeshPatch
-import Graphics.Rasterific.Command
-import Graphics.Rasterific.Transformations
+import           Codec.Picture.Types                 (Image (..), Pixel (..))
+import           Graphics.Rasterific
+import           Graphics.Rasterific.Command
+import           Graphics.Rasterific.MeshPatch
+import           Graphics.Rasterific.Transformations
+import           Graphics.Text.TrueType              (Dpi)
 
 -- | Set the repeat pattern of the texture (if any).
 -- With padding:
@@ -61,11 +61,11 @@ import Graphics.Rasterific.Transformations
 withSampler :: SamplerRepeat -> Texture px -> Texture px
 withSampler = WithSampler
 
--- | Transform the coordinates used for texture before applying
--- it, allow interesting transformations.
+-- | Transform the coordinates used for the texture before applying
+-- it, allowing interesting transformations.
 --
 -- > withTexture (withSampler SamplerRepeat $
--- >             transformTexture (rotateCenter 1 (V2 0 0) <> 
+-- >             transformTexture (rotateCenter 1 (V2 0 0) <>
 -- >                               scale 0.5 0.25)
 -- >             $ sampledImageTexture textureImage) $
 -- >     fill $ rectangle (V2 0 0) 200 200
@@ -76,7 +76,7 @@ transformTexture :: Transformation -> Texture px -> Texture px
 transformTexture = WithTextureTransform
 
 -- | The uniform texture is the simplest texture of all:
--- an uniform color.
+-- a uniform color.
 uniformTexture :: px -- ^ The color used for all the texture.
                -> Texture px
 uniformTexture = SolidTexture
@@ -105,7 +105,7 @@ linearGradientTexture gradient start end =
     LinearGradientTexture gradient (Line start end)
 
 -- | Use another image as a texture for the filling.
--- Contrary to `imageTexture`, this function perform a bilinear
+-- Contrary to `imageTexture`, this function performs a bilinear
 -- filtering on the texture.
 --
 sampledImageTexture :: Image px -> Texture px

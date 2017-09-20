@@ -1,5 +1,5 @@
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 -- | Module implementing types used for geometry
 -- bound calculations.
 module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
@@ -9,21 +9,21 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
                                           , boundLowerLeftCorner
                                           ) where
 
-import Data.Monoid( (<>) )
+import           Data.Monoid                     ((<>))
 
-import Graphics.Rasterific.Linear( V2( .. ) )
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.Linear      (V2 (..))
+import           Graphics.Rasterific.Types
 
 -- | Represent the minimal axis aligned rectangle
 -- in which some primitives can be drawn. Should
--- fit to bezier curve and not use directly their
--- control points.
+-- fit to a bezier curve and not use their
+-- control points directly.
 data PlaneBound = PlaneBound
-    { -- | Corner upper left of the bounding box of
+    { -- | Upper left corner of the bounding box of
       -- the considered primitives.
       _planeMinBound :: !Point
-      -- | Corner lower right of the bounding box of
+      -- | Lower right corner of the bounding box of
       -- the considered primitives.
     , _planeMaxBound :: !Point
     }
@@ -53,10 +53,10 @@ instance Monoid PlaneBound where
                (max <$> maxi1 <*> maxi2)
 
 -- | Class used to calculate bounds of various geometrical
--- primitives. The calculated is precise, the bounding should
--- be minimal with respect with drawn curve.
+-- primitives. The calculation is precise, the bounding should
+-- be minimal with respect to the drawn curve.
 class PlaneBoundable a where
-    -- | Given a graphical elements, calculate it's bounds.
+    -- | Given a graphical element, calculate its bounds.
     planeBounds :: a -> PlaneBound
 
 instance PlaneBoundable Point where
@@ -73,7 +73,7 @@ instance PlaneBoundable CubicBezier where
     planeBounds = foldMap planeBounds . cubicBezierBounds
 
 instance PlaneBoundable Primitive where
-    planeBounds (LinePrim l) = planeBounds l
-    planeBounds (BezierPrim b) = planeBounds b
+    planeBounds (LinePrim l)        = planeBounds l
+    planeBounds (BezierPrim b)      = planeBounds b
     planeBounds (CubicBezierPrim c) = planeBounds c
 

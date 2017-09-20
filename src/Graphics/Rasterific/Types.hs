@@ -1,7 +1,7 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE TypeFamilies      #-}
 -- | Gather all the types used in the rasterization engine.
 module Graphics.Rasterific.Types
     ( -- * Geometry description
@@ -48,20 +48,15 @@ module Graphics.Rasterific.Types
     , Proxy( Proxy )
     ) where
 
-import Data.DList( DList, fromList )
+import           Data.DList                    (DList, fromList)
 
-import Control.Monad.Identity( runIdentity )
-import Data.Foldable( foldl', toList )
-import qualified Data.Foldable as F
-import Graphics.Rasterific.Linear( V2( .. ), (^-^), nearZero )
-import Graphics.Rasterific.Operators
-import Foreign.Ptr( castPtr )
-import Foreign.Storable( Storable( sizeOf
-                       , alignment
-                       , peek
-                       , poke
-                       , peekElemOff
-                       , pokeElemOff ) )
+import           Control.Monad.Identity        (runIdentity)
+import           Data.Foldable                 (foldl', toList)
+import qualified Data.Foldable                 as F
+import           Foreign.Ptr                   (castPtr)
+import           Foreign.Storable              (Storable (alignment, peek, peekElemOff, poke, pokeElemOff, sizeOf))
+import           Graphics.Rasterific.Linear    (V2 (..), nearZero, (^-^))
+import           Graphics.Rasterific.Operators
 
 -- | Represent a vector
 type Vector = V2 Float
@@ -75,10 +70,10 @@ type DashPattern = [Float]
 
 data Proxy p = Proxy
 
--- | Describe how we will "finish" the stroking
+-- | Describe how we will "finish" strokes
 -- that don't loop.
 data Cap
-    -- | Create a straight caping on the stroke.
+    -- | Create a straight capping on the stroke.
     -- Cap value should be positive and represent
     -- the distance from the end of curve to the actual cap
     --
@@ -88,18 +83,18 @@ data Cap
     --
   = CapStraight Float
 
-    -- | Create a rounded caping on the stroke.
+    -- | Create a rounded capping on the stroke.
     -- <<docimages/cap_round.png>>
   | CapRound
   deriving (Eq, Show)
 
--- | Describe how to display the join of broken lines
--- while stroking.
+-- | Describe how to display the joint of broken lines
+-- in a series of strokes.
 data Join
     -- | Make a curved join.
     -- <<docimages/join_round.png>>
   = JoinRound
-    -- | Make a mitter join. Value must be positive or null.
+    -- | Make a mitter join. Value must not be negative.
     -- Seems to make sense in [0;1] only
     --
     --  * Miter join with 0 : <<docimages/join_miter.png>>
@@ -109,7 +104,7 @@ data Join
   | JoinMiter Float
   deriving (Eq, Show)
 
--- | Tell how to fill complex shapes when there is self 
+-- | Tell how to fill complex shapes when there are self
 -- intersections. If the filling mode is not specified,
 -- then it's the `FillWinding` method which is used.
 --
@@ -137,7 +132,7 @@ data Join
 -- >      ]
 data FillMethod
   -- | Also known as nonzero rule.
-  -- To determine if a point falls inside the curve, you draw 
+  -- To determine if a point falls inside the curve, you draw
   -- an imaginary line through that point. Next you will count
   -- how many times that line crosses the curve before it reaches
   -- that point. For every clockwise rotation, you subtract 1 and
@@ -146,7 +141,7 @@ data FillMethod
   -- <<docimages/fill_winding.png>>
   = FillWinding
 
-  -- | This rule determines the insideness of a point on 
+  -- | This rule determines the insideness of a point on
   -- the canvas by drawing a ray from that point to infinity
   -- in any direction and counting the number of path segments
   -- from the given shape that the ray crosses. If this number
@@ -166,7 +161,7 @@ data SamplerRepeat
     -- | Will loop on it's definition domain
     -- <<docimages/sampler_repeat.png>>
   | SamplerRepeat
-    -- | Will loop inverting axises
+    -- | Will loop inverting axes
     -- <<docimages/sampler_reflect.png>>
   | SamplerReflect
   deriving (Eq, Enum, Show)
@@ -193,7 +188,7 @@ instance Storable EdgeSample where
      sa <- peekElemOff q 2
      sh <- peekElemOff q 3
      return $ EdgeSample sx sy sa sh
-      
+
    {-# INLINE poke #-}
    poke ptr (EdgeSample sx sy sa sh) = do
      let q = castPtr ptr
@@ -260,8 +255,7 @@ instance PointFoldable Line where
     {-# INLINE foldPoints #-}
     foldPoints f acc (Line a b) = f (f acc b) a
 
--- | Describe a quadratic bezier spline, described
--- using 3 points.
+-- | Describe a quadratic bezier spline, using 3 points.
 --
 -- > fill [Bezier (V2 10 10) (V2 200 50) (V2 200 100)
 -- >      ,Bezier (V2 200 100) (V2 150 200) (V2 120 175)
@@ -272,7 +266,7 @@ instance PointFoldable Line where
 data Bezier = Bezier
   { -- | Origin points, the spline will pass through it.
     _bezierX0 :: {-# UNPACK #-} !Point
-    -- | Control point, the spline won't pass on it.
+    -- | Control point, the spline won't pass through it.
   , _bezierX1 :: {-# UNPACK #-} !Point
     -- | End point, the spline will pass through it.
   , _bezierX2 :: {-# UNPACK #-} !Point
@@ -296,8 +290,7 @@ instance PointFoldable Bezier where
     foldPoints f acc (Bezier a b c) =
         foldl' f acc [a, b, c]
 
--- | Describe a cubic bezier spline, described
--- using 4 points.
+-- | Describe a cubic bezier spline, using 4 points.
 --
 -- > stroke 4 JoinRound (CapRound, CapRound) $
 -- >    CubicBezier (V2 0 10) (V2 205 250) (V2 (-10) 250) (V2 160 35)
@@ -335,7 +328,7 @@ instance PointFoldable CubicBezier where
     foldPoints f acc (CubicBezier a b c d) =
         foldl' f acc [a, b, c, d]
 
--- | This datatype gather all the renderable primitives,
+-- | This datatype gathers all the renderable primitives,
 -- they are kept separated otherwise to allow specialization
 -- on some specific algorithms. You can mix the different
 -- primitives in a single call :
@@ -370,11 +363,11 @@ instance Primitivable Bezier where toPrim = BezierPrim
 -- | @toPrim = CubicBezierPrim@
 instance Primitivable CubicBezier where toPrim = CubicBezierPrim
 
--- | All the rasterization works on lists of primitives,
--- in order to ease the use of the library, the Geometry
+-- | All the rasterization works on lists of primitives.
+-- In order to ease the use of the library, the Geometry
 -- type class provides conversion facility, which help
 -- generalising the geometry definition and avoid applying
--- Primitive constructor.
+-- the Primitive constructor.
 --
 -- Also streamline the Path conversion.
 class Geometry a where
@@ -419,19 +412,19 @@ instance (Foldable f, Geometry a) => Geometry (f a) where
 
 instance Transformable Primitive where
     {-# INLINE transform #-}
-    transform f (LinePrim l) = LinePrim $ transform f l
-    transform f (BezierPrim b) = BezierPrim $ transform f b
+    transform f (LinePrim l)        = LinePrim $ transform f l
+    transform f (BezierPrim b)      = BezierPrim $ transform f b
     transform f (CubicBezierPrim c) = CubicBezierPrim $ transform f c
 
-    transformM f (LinePrim l) = LinePrim <$> transformM f l
-    transformM f (BezierPrim b) = BezierPrim <$> transformM f b
+    transformM f (LinePrim l)        = LinePrim <$> transformM f l
+    transformM f (BezierPrim b)      = BezierPrim <$> transformM f b
     transformM f (CubicBezierPrim c) = CubicBezierPrim <$> transformM f c
 
 instance PointFoldable Primitive where
     {-# INLINE foldPoints #-}
     foldPoints f acc = go
-      where go (LinePrim l) = foldPoints f acc l
-            go (BezierPrim b) = foldPoints f acc b
+      where go (LinePrim l)        = foldPoints f acc l
+            go (BezierPrim b)      = foldPoints f acc b
             go (CubicBezierPrim c) = foldPoints f acc c
 
 instance {-# OVERLAPPABLE #-} (Traversable f, Transformable a)
@@ -471,7 +464,7 @@ data Path = Path
     { -- | Origin of the point, equivalent to the
       -- first "move" command.
       _pathOriginPoint :: Point
-      -- | Tell if we must close the path.
+      -- | Should we close the path?
     , _pathClose       :: Bool
       -- | List of commands in the path
     , _pathCommand     :: [PathCommand]
@@ -545,7 +538,7 @@ firstTangeantOf p = case p of
   LinePrim (Line p0 p1) -> p1 ^-^ p0
   BezierPrim (Bezier p0 p1 p2) ->
       (p1 ^-^ p0) `ifBigEnough` (p2 ^-^ p1)
-  CubicBezierPrim (CubicBezier p0 p1 p2 _) -> 
+  CubicBezierPrim (CubicBezier p0 p1 p2 _) ->
        (p1 ^-^ p0) `ifBigEnough` (p2 ^-^ p1)
  where
    ifBigEnough a b | nearZero a = b
@@ -555,22 +548,22 @@ firstTangeantOf p = case p of
 -- primitive.
 lastTangeantOf :: Primitive -> Vector
 lastTangeantOf p = case p of
-  LinePrim (Line p0 p1) -> p1 ^-^ p0
-  BezierPrim (Bezier _ p1 p2) -> p2 ^-^ p1
+  LinePrim (Line p0 p1)                   -> p1 ^-^ p0
+  BezierPrim (Bezier _ p1 p2)             -> p2 ^-^ p1
   CubicBezierPrim (CubicBezier _ _ p2 p3) -> p3 ^-^ p2
 
 -- | Extract the first point of the primitive.
 firstPointOf :: Primitive -> Point
 firstPointOf p = case p of
-  LinePrim (Line p0 _) -> p0
-  BezierPrim (Bezier p0 _ _) -> p0
+  LinePrim (Line p0 _)                   -> p0
+  BezierPrim (Bezier p0 _ _)             -> p0
   CubicBezierPrim (CubicBezier p0 _ _ _) -> p0
 
 -- | Return the last point of a given primitive.
 lastPointOf :: Primitive -> Point
 lastPointOf p = case p of
-  LinePrim (Line _ p0) -> p0
-  BezierPrim (Bezier _ _ p0) -> p0
+  LinePrim (Line _ p0)                   -> p0
+  BezierPrim (Bezier _ _ p0)             -> p0
   CubicBezierPrim (CubicBezier _ _ _ p0) -> p0
 
 resplit :: [Primitive] -> [[Primitive]]

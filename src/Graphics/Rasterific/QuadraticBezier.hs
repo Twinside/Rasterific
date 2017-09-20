@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
 -- | Module handling math regarding the handling of quadratic
--- and cubic bezier curve.
+-- and cubic bezier curves.
 module Graphics.Rasterific.QuadraticBezier
     ( -- * Helper functions
       straightLine
@@ -31,7 +31,7 @@ import Data.Monoid( (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 
--- | Create a list of bezier patch from a list of points,
+-- | Create a list of bezier patches from a list of points,
 --
 -- > bezierFromPath [a, b, c, d, e] == [Bezier a b c, Bezier c d e]
 -- > bezierFromPath [a, b, c, d, e, f] == [Bezier a b c, Bezier c d e]
@@ -47,7 +47,7 @@ isBezierPoint (Bezier a b c) =
   not $ a `isDistingableFrom` b || 
         b `isDistingableFrom` c
 
--- | Only work if the quadratic bezier curve
+-- | Only works if the quadratic bezier curve
 -- is nearly flat
 bezierLengthApproximation :: Bezier -> Float
 bezierLengthApproximation (Bezier a _ c) =
@@ -116,10 +116,10 @@ clipBezier mini maxi bezier@(Bezier a b c)
     -- If we are in the range bound, return the curve
     -- unaltered
     | insideX && insideY = pure $ BezierPrim bezier
-    -- If one of the component is outside, clamp
+    -- If one of the components is outside, clamp
     -- the components on the boundaries and output a
     -- straight line on this boundary. Useful for the
-    -- filing case, to clamp the polygon drawing on
+    -- filling case, to clamp the polygon drawing on
     -- the edge
     | outsideX || outsideY =
         pure . BezierPrim $ clampedA `straightLine` clampedC
@@ -159,9 +159,9 @@ clipBezier mini maxi bezier@(Bezier a b c)
         --     |             |
         --     +-------------+
         --                   maxi
-        -- the edgeSeparator vector encode which edge
-        -- is te nearest to the midpoint.
-        -- if True then it's the 'min' edges which are
+        -- the edgeSeparator vector encodes which edge
+        -- is the nearest to the midpoint.
+        -- if True then it's the 'min' edge that is
         -- the nearest, otherwise it's the maximum edge
         edgeSeparator =
             vabs (abbc ^-^ mini) ^<^ vabs (abbc ^-^ maxi)
@@ -178,23 +178,23 @@ clipBezier mini maxi bezier@(Bezier a b c)
 -- | Rewrite the bezier curve to avoid degenerate cases.
 sanitizeBezier :: Bezier -> Container Primitive
 sanitizeBezier bezier@(Bezier a b c)
-   -- If the two normals vector are far apart (cos nearly -1)
+   -- If the two normal vectors are far apart (cos is nearly -1)
    --
    --       u           v
    -- <----------   ------------>
    -- because u dot v = ||u|| * ||v|| * cos(uv)
    --
-   -- This imply that AB and BC are nearly parallel
+   -- This implies that AB and BC are nearly parallel
    | u `dot` v < -0.9999 =
      -- divide in to halves with
     sanitizeBezier (Bezier a (a `midPoint` abbc) abbc) <>
         sanitizeBezier (Bezier abbc (abbc `midPoint` c) c)
 
-   -- b is far enough of b and c, (it's not a point)
+   -- b is far enough from b and c, (it's not a point)
    | a `isDistingableFrom` b && b `isDistingableFrom` c =
        pure . BezierPrim $ bezier
 
-   -- if b is to nearby a or c, take the midpoint as new reference.
+   -- if b is too close to a or c, take the midpoint as the new reference.
    | ac `isDistingableFrom` b = sanitizeBezier (Bezier a ac c)
    | otherwise = mempty
   where u = a `normal` b

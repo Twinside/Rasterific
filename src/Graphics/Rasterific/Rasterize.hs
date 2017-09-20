@@ -6,15 +6,15 @@ module Graphics.Rasterific.Rasterize
     , clip
     ) where
 
-import Control.Monad.ST( runST )
-import Data.Fixed( mod' )
-import Data.Monoid( Endo( Endo, appEndo ) )
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.Line
-import qualified Data.Vector as V
-import qualified Data.Vector.Algorithms.Intro as VS
+import           Control.Monad.ST                    (runST)
+import           Data.Fixed                          (mod')
+import           Data.Monoid                         (Endo (Endo, appEndo))
+import qualified Data.Vector                         as V
+import qualified Data.Vector.Algorithms.Intro        as VS
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.Line
+import           Graphics.Rasterific.QuadraticBezier
+import           Graphics.Rasterific.Types
 
 data CoverageSpan = CoverageSpan
     { _coverageX      :: {-# UNPACK #-} !Float
@@ -45,12 +45,12 @@ combineEdgeSamples prepareCoverage vec = go 0 0 0 0 0
                    p2 = CoverageSpan (x + 1) y (prepareCoverage h) (x' - x - 1)
 
 -- | Clip the geometry to a rectangle.
-clip :: Point     -- ^ Minimum point (corner upper left)
-     -> Point     -- ^ Maximum point (corner bottom right)
+clip :: Point     -- ^ Minimum point (upper left corner)
+     -> Point     -- ^ Maximum point (bottom right corner)
      -> Primitive -- ^ Primitive to be clipped
      -> Container Primitive
-clip mini maxi (LinePrim l) = clipLine mini maxi l
-clip mini maxi (BezierPrim b) = clipBezier mini maxi b
+clip mini maxi (LinePrim l)        = clipLine mini maxi l
+clip mini maxi (BezierPrim b)      = clipBezier mini maxi b
 clip mini maxi (CubicBezierPrim c) = clipCubicBezier mini maxi c
 
 decompose :: Primitive -> Producer EdgeSample
@@ -66,7 +66,7 @@ xyCompare !(EdgeSample { _sampleY = ay, _sampleX = ax })
           !(EdgeSample { _sampleY = by, _sampleX = bx }) =
   case compare ay by of
     EQ -> compare ax bx
-    c -> c
+    c  -> c
 
 sortEdgeSamples :: [EdgeSample] -> V.Vector EdgeSample
 sortEdgeSamples samples = runST $ do
@@ -77,9 +77,9 @@ sortEdgeSamples samples = runST $ do
     V.unsafeFreeze mutableVector
 
 rasterize :: FillMethod -> Container Primitive -> [CoverageSpan]
-rasterize method = 
+rasterize method =
   case method of
-    FillWinding -> combineEdgeSamples combineWinding 
+    FillWinding -> combineEdgeSamples combineWinding
                         . sortEdgeSamples
                         . (($ []) . appEndo)
                         . foldMap (Endo . decompose)

@@ -254,7 +254,7 @@ freezeMesh MutableMesh { .. } = do
   _meshColors <- V.freeze _meshMutColors
   return MeshPatch { .. }
 
--- | Retrieve a mesh primary vertice purely
+-- | Retrieve a mesh primary vertex purely
 verticeAt :: MeshPatch px
           -> Int -- ^ Between 0 and _meshPatchWidth + 1 (excluded)
           -> Int -- ^ Between 0 and _meshPatchHeight + 1 (excluded)
@@ -274,7 +274,7 @@ withMesh mesh act = runST $ do
   final <- freezeMesh mut
   return (v, final)
 
--- | Set the vertice of a mesh at a given coordinate
+-- | Set the vertex of a mesh at a given coordinate
 setVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
            => Int   -- ^ x coordinate in [0, w]
            -> Int   -- ^ y coordinate in [0, h]
@@ -285,7 +285,7 @@ setVertice x y p = do
   let idx = y * (_meshMutWidth + 1) + x
   MV.write _meshMutPrimaryVertices idx p
 
--- | Get the position of vertice
+-- | Get the position of vertex
 getVertice :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
            => Int -> Int -> m Point
 getVertice x y = do
@@ -310,7 +310,7 @@ setVertPoints x y p = do
   MV.write _meshMutVertSecondary idx p
 
 
--- | Set the value associated to a vertex
+-- | Set the value associated with a vertex
 setColor :: (MonadReader (MutableMesh (PrimState m) px) m, PrimMonad m)
          => Int -> Int -> px -> m ()
 setColor x y p = do
@@ -319,7 +319,7 @@ setColor x y p = do
   MV.write _meshMutColors idx p
 
 -- | Generate a meshpatch at the size given by the image and
--- a number of cell in a mesh
+-- a number of cells in a mesh
 generateImageMesh :: Int      -- ^ Horizontal cell count
                   -> Int      -- ^ Vertical cell count
                   -> Point    -- ^ Position of the corner upper left
@@ -380,7 +380,7 @@ generateLinearGrid w h base (V2 dx dy) colors = MeshPatch
 
 type ColorPreparator px pxt = ParametricValues px -> pxt
 
--- | Extract a coon patch at a given position.
+-- | Extract a Coons patch at a given position.
 coonPatchAt :: MeshPatch px
             -> Int -- ^ x
             -> Int -- ^ y
@@ -410,7 +410,7 @@ tensorImagePatchAt :: MeshPatch (ImageMesh px)
                    -> TensorPatch (ImageMesh px)
 tensorImagePatchAt = tensorPatchAt' _northValue
 
--- | Extract a coon patch for cubic interpolation at a given position
+-- | Extract a Coons patch for cubic interpolation at a given position
 -- see `calculateMeshColorDerivative`
 coonPatchAtWithDerivative :: (InterpolablePixel px)
                           => MeshPatch (Derivative px)
@@ -564,7 +564,7 @@ coonPatchAt' preparator mesh x y = CoonPatch
     InterBezier p10 p20 = vInter ! baseV
     InterBezier p13 p23 = vInter ! (baseV + 1)
 
--- | Extract a list of all the coon patches of the mesh.
+-- | Extract a list of all the Coons patches of the mesh.
 coonPatchesOf :: MeshPatch px -> [CoonPatch (ParametricValues px)]
 coonPatchesOf mesh@MeshPatch { .. } =
   [coonPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
@@ -574,17 +574,17 @@ tensorPatchesOf :: MeshPatch px -> [TensorPatch (ParametricValues px)]
 tensorPatchesOf mesh@MeshPatch { .. } =
   [tensorPatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
--- | Extract all the coon patch of a mesh using an image interpolation.
+-- | Extract all the Coons patches of a mesh using an image interpolation.
 imagePatchesOf :: MeshPatch (ImageMesh px) -> [CoonPatch (ImageMesh px)]
 imagePatchesOf mesh@MeshPatch { .. } =
   [coonImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
--- | Extract all the tensor patch of a mesh using an image interpolation.
+-- | Extract all the tensor patches of a mesh using an image interpolation.
 tensorImagePatchesOf :: MeshPatch (ImageMesh px) -> [TensorPatch (ImageMesh px)]
 tensorImagePatchesOf mesh@MeshPatch { .. } =
   [tensorImagePatchAt mesh x y | y <- [0 .. _meshPatchHeight - 1], x <- [0 .. _meshPatchWidth - 1]]
 
--- | Extract all the coon patch of a mesh using cubic interpolation.
+-- | Extract all the Coons patches of a mesh using cubic interpolation.
 cubicCoonPatchesOf :: (InterpolablePixel px)
                    => MeshPatch (Derivative px)
                    -> [CoonPatch (CubicCoefficient px)]
@@ -593,7 +593,7 @@ cubicCoonPatchesOf mesh@MeshPatch { .. } =
         | y <- [0 .. _meshPatchHeight - 1]
         , x <- [0 .. _meshPatchWidth - 1] ]
 
--- | Extract all the tensor patch of a mesh using cubic interpolation.
+-- | Extract all the tensor patches of a mesh using cubic interpolation.
 cubicTensorPatchesOf :: (InterpolablePixel px)
                      => MeshPatch (Derivative px)
                      -> [TensorPatch (CubicCoefficient px)]

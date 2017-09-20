@@ -1,11 +1,11 @@
 -- | This module is a reduction of the `Linear` package
--- from Edward Kmett to match just the need of Rasterific.
+-- from Edward Kmett to match just the needs of Rasterific.
 --
 -- If the flag `embed_linear` is disabled, this module is
 -- just a reexport from the real linear package.
 --
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE CPP #-}
 module Graphics.Rasterific.Linear
     ( V1( .. )
     , V2( .. )
@@ -23,10 +23,10 @@ module Graphics.Rasterific.Linear
 
 #ifdef EXTERNAL_LINEAR
 -- We just reexport
-import Linear
+import           Linear
 #else
 
-import Graphics.Rasterific.MiniLens
+import           Graphics.Rasterific.MiniLens
 
 infixl 6 ^+^, ^-^
 infixl 7 ^*, ^/
@@ -202,7 +202,7 @@ instance Applicative V2 where
 
 instance Applicative V1 where
     {-# INLINE pure #-}
-    pure = V1 
+    pure = V1
     {-# INLINE (<*>) #-}
     (V1 f) <*> (V1 v) = V1 $ f v
 
@@ -349,7 +349,7 @@ class Additive f => Metric f where
   {-# INLINE norm #-}
   norm v = sqrt (quadrance v)
 
-  -- | Convert a non-zero vector to unit vector.
+  -- | Convert a non-zero vector to a unit vector.
   signorm :: Floating a => f a -> f a
   signorm v = fmap (/ m) v where
     m = norm v

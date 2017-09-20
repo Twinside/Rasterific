@@ -1,15 +1,15 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ConstraintKinds #-}
 
--- | Main module of Rasterific, an Haskell rasterization engine.
+-- | Main module of Rasterific, a Haskell rasterization engine.
 --
--- Creating an image is rather simple, here is a simple example
--- of a drawing and saving it in a PNG file:
+-- Creating an image is rather simple, here is an example
+-- of creating one and saving it as a PNG file:
 --
 -- > import Codec.Picture( PixelRGBA8( .. ), writePng )
 -- > import Graphics.Rasterific
@@ -45,7 +45,7 @@ module Graphics.Rasterific
       fill
     , fillWithMethod
     , renderMeshPatch
-      -- ** Stroking
+      -- ** Strokes
     , stroke
     , dashedStroke
     , dashedStrokeWithOffset
@@ -68,7 +68,7 @@ module Graphics.Rasterific
     , renderDrawing
     , renderDrawingAtDpi
     , renderDrawingAtDpiToPDF
-    , renderOrdersAtDpiToPdf 
+    , renderOrdersAtDpiToPdf
     , pathToPrimitives
 
       -- * Rasterization types
@@ -144,47 +144,43 @@ module Graphics.Rasterific
     , dumpDrawing
     ) where
 
-import Data.Monoid( (<>) )
+import           Data.Monoid                          ((<>))
 
-import Control.Monad.Free( Free( .. ), liftF )
-import Control.Monad.Free.Church( fromF )
-import Control.Monad.ST( ST, runST )
-import Control.Monad.State( modify, execState )
-import Data.Maybe( fromMaybe )
-import Codec.Picture.Types( Image( .. )
-                          , Pixel( .. )
-                          , PixelRGBA8
-                          , pixelMapXY )
+import           Codec.Picture.Types                  (Image (..), Pixel (..),
+                                                       PixelRGBA8, pixelMapXY)
+import           Control.Monad.Free                   (Free (..), liftF)
+import           Control.Monad.Free.Church            (fromF)
+import           Control.Monad.ST                     (ST, runST)
+import           Control.Monad.State                  (execState, modify)
+import           Data.Maybe                           (fromMaybe)
 
-import qualified Data.ByteString.Lazy as LB
-import qualified Data.Vector as V
+import qualified Data.ByteString.Lazy                 as LB
+import qualified Data.Vector                          as V
 
-import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Linear( V2( .. ), (^+^), (^-^) )
-import Graphics.Rasterific.Rasterize
-import Graphics.Rasterific.MicroPdf
+import           Graphics.Rasterific.Compositor
+import           Graphics.Rasterific.Linear           (V2 (..), (^+^), (^-^))
+import           Graphics.Rasterific.MicroPdf
+import           Graphics.Rasterific.Rasterize
 {-import Graphics.Rasterific.Texture-}
-import Graphics.Rasterific.ComplexPrimitive
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.Line
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.StrokeInternal
-import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.PlaneBoundable
-import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.PathWalker
-import Graphics.Rasterific.Arc
-import Graphics.Rasterific.Command
-import Graphics.Rasterific.PatchTypes
-import Graphics.Rasterific.Patch
-import Graphics.Rasterific.MeshPatch
+import           Graphics.Rasterific.Arc
+import           Graphics.Rasterific.Command
+import           Graphics.Rasterific.ComplexPrimitive
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.Immediate
+import           Graphics.Rasterific.Line
+import           Graphics.Rasterific.MeshPatch
+import           Graphics.Rasterific.Patch
+import           Graphics.Rasterific.PatchTypes
+import           Graphics.Rasterific.PathWalker
+import           Graphics.Rasterific.PlaneBoundable
+import           Graphics.Rasterific.QuadraticBezier
+import           Graphics.Rasterific.StrokeInternal
+import           Graphics.Rasterific.Transformations
+import           Graphics.Rasterific.Types
 {-import Graphics.Rasterific.TensorPatch-}
 
-import Graphics.Text.TrueType( Font
-                             , Dpi
-                             , PointSize( .. )
-                             )
+import           Graphics.Text.TrueType               (Dpi, Font,
+                                                       PointSize (..))
 
 {-import Debug.Trace-}
 {-import Text.Printf-}
@@ -193,8 +189,8 @@ import Graphics.Text.TrueType( Font
 ----    Free Monad DSL section
 ------------------------------------------------
 
--- | Define the texture applyied to all the children
--- draw call.
+-- | Define the texture applied to all the children
+-- draw calls.
 --
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0x86 0xc1 255) $ do
 -- >     fill $ circle (V2 50 50) 20
@@ -256,17 +252,17 @@ withTransformation trans sub =
 --
 -- <<docimages/text_on_path.png>>
 --
--- You can note that the position of the baseline match the size of the
+-- Note that the position of the baseline matches the size of the
 -- characters.
 --
 -- You are not limited to text drawing while using this function,
--- you can draw arbitrary geometry like in the following example:
+-- you can draw arbitrary geometry as in the following example:
 --
 -- > let path = Path (V2 100 180) False
 -- >                 [PathCubicBezierCurveTo (V2 20 20) (V2 170 20) (V2 300 200)]
 -- > withTexture (uniformTexture $ PixelRGBA8 0 0 0 255) $
 -- >   stroke 3 JoinRound (CapStraight 0, CapStraight 0) path
--- > 
+-- >
 -- > withPathOrientation path 0 $ do
 -- >   printTextAt font (PointSize 24) (V2 0 0) "TX"
 -- >   fill $ rectangle (V2 (-10) (-10)) 30 20
@@ -296,7 +292,7 @@ withPathOrientation path p sub =
 fill :: Geometry geom => geom -> Drawing px ()
 fill prims = liftF $ Fill FillWinding (toPrimitives prims) ()
 
--- | This function let you choose how to fill the primitives
+-- | This function lets you choose how to fill the primitives
 -- in case of self intersection. See `FillMethod` documentation
 -- for more information.
 fillWithMethod :: Geometry geom
@@ -321,7 +317,7 @@ withClipping
 withClipping clipPath drawing =
     liftF $ WithCliping clipPath drawing ()
 
--- | Will stroke geometry with a given stroke width.
+-- | Fill stroke geometry with a given stroke width.
 -- The elements should be connected
 --
 -- > stroke 5 JoinRound (CapRound, CapRound) $ circle (V2 100 100) 75
@@ -338,8 +334,8 @@ stroke width join caping prims =
     liftF $ Stroke width join caping (toPrimitives prims) ()
 
 -- | Draw a string at a given position.
--- Text printing imply loading a font, there is no default
--- font (yet). Below an example of font rendering using a
+-- Text printing implies loading a font, there is no default
+-- font (yet). Below is an example of font rendering using a
 -- font installed on Microsoft Windows.
 --
 -- > import Graphics.Text.TrueType( loadFontFile )
@@ -361,10 +357,10 @@ stroke width join caping prims =
 --
 -- <<docimages/text_example.png>>
 --
--- You can use any texture, like a gradient while rendering text.
+-- You can use any texture - like a gradient - while rendering text.
 --
 printTextAt :: Font            -- ^ Drawing font
-            -> PointSize       -- ^ font Point size
+            -> PointSize       -- ^ font point size
             -> Point           -- ^ Drawing starting point (base line)
             -> String          -- ^ String to print
             -> Drawing px ()
@@ -383,7 +379,7 @@ printTextAt font pointSize point string =
 renderMeshPatch :: PatchInterpolation -> MeshPatch px -> Drawing px ()
 renderMeshPatch i mesh = liftF $ MeshPatchRender i mesh ()
 
--- | Print complex text, using different texture font and
+-- | Print complex text, using a different texture font and
 -- point size for different parts of the text.
 --
 -- > let blackTexture =
@@ -410,8 +406,8 @@ data RenderContext px = RenderContext
 
 -- | Function to call in order to start the image creation.
 -- Tested pixels type are PixelRGBA8 and Pixel8, pixel types
--- in other colorspace will probably produce weird results.
--- Default DPI is 96
+-- in other colorspaces will probably produce weird results.
+-- The default DPI is 96
 renderDrawing
     :: forall px . (RenderablePixel px)
     => Int -- ^ Rendering width
@@ -421,7 +417,7 @@ renderDrawing
     -> Image px
 renderDrawing width height = renderDrawingAtDpi width height 96
 
-renderOrdersAtDpiToPdf 
+renderOrdersAtDpiToPdf
     :: Int -- ^ Rendering width
     -> Int -- ^ Rendering height
     -> Dpi -- ^ Current DPI used for text rendering.
@@ -472,20 +468,20 @@ cacheOrders imageFilter orders = case imageFilter of
    cornerUpperLeft = fromIntegral <$> cornerUpperLeftInt
 
    V2 width height = maxi ^-^ cornerUpperLeft ^+^ V2 1 1
-   
+
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
-       order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims 
+       order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims
              , _orderTexture =
                  WithTextureTransform (translate cornerUpperLeft) $ _orderTexture order
              }
-   
+
    resultImage =
      runST $ runDrawContext (ceiling width) (ceiling height) emptyPx
            $ mapM_ (fillOrder . shiftOrder) orders
 
 -- | This function perform an optimisation, it will render a drawing
--- to an image interanlly and create a new order to render this image
--- instead of the geometry, effectively cuting the geometry generation
+-- to an image internally and create a new order to render this image
+-- instead of the geometry, effectively cutting the geometry generation
 -- part.
 --
 -- It can save execution time when drawing complex elements multiple
@@ -500,7 +496,7 @@ cacheDrawing
 cacheDrawing maxWidth maxHeight dpi sub =
   cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
-{-  
+{-
 preComputeTexture :: (RenderablePixel px)
                   => Int -> Int -> Texture px -> Texture px
 preComputeTexture w h = go where
@@ -522,9 +518,9 @@ preComputeTexture w h = go where
         RawTexture $ renderDrawing w h emptyPx $ renderMeshPatch i m
 -- -}
 
--- | Transform a drawing into a serie of low-level drawing orders.
+-- | Transform a drawing into a series of low-level drawing orders.
 drawOrdersOfDrawing
-    :: forall px . (RenderablePixel px) 
+    :: forall px . (RenderablePixel px)
     => Int -- ^ Rendering width
     -> Int -- ^ Rendering height
     -> Dpi -- ^ Current assumed DPI
@@ -539,10 +535,10 @@ drawOrdersOfDrawing width height dpi background drawing =
     clipForeground = fullValue :: PixelBaseComponent px
 
     clipRender ctxt =
-      renderDrawing width height clipBackground . 
+      renderDrawing width height clipBackground .
         transformer .
           withTexture (SolidTexture clipForeground)
-       where 
+       where
          transformer = maybe id (withTransformation . fst) $ currentTransformation ctxt
 
 
@@ -571,7 +567,7 @@ drawOrdersOfDrawing width height dpi background drawing =
     go _ (Pure ()) rest = rest
     go ctxt (Free (WithGlobalOpacity opa sub next)) rest =
         go ctxt (Free (WithImageEffect opacifier sub next)) rest
-      where 
+      where
         -- Todo: a colorMapWithAlpha is really needed in JP API.
         opacifier _ _ _ px = mixWithAlpha ignore alphaModulate px px
         ignore _ _ a = a
@@ -607,7 +603,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (CustomRender cust next)) rest = order : after where
       after = go ctxt next rest
-      order = DrawOrder 
+      order = DrawOrder
             { _orderPrimitives = []
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = FillWinding
@@ -619,11 +615,11 @@ drawOrdersOfDrawing width height dpi background drawing =
       after = go ctxt next rest
       rendering :: DrawContext (ST s) px ()
       rendering = case i of
-        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf $ geometryOf ctxt opaqueMesh 
+        PatchBilinear -> mapM_ rasterizeCoonPatch $ coonPatchesOf $ geometryOf ctxt opaqueMesh
         PatchBicubic ->
             mapM_ rasterizeCoonPatch
-                . cubicCoonPatchesOf 
-                $ calculateMeshColorDerivative $ geometryOf ctxt opaqueMesh 
+                . cubicCoonPatchesOf
+                $ calculateMeshColorDerivative $ geometryOf ctxt opaqueMesh
 
       hasTransparency =
           V.any ((/= fullValue) . pixelOpacity) $ _meshColors mesh
@@ -640,11 +636,11 @@ drawOrdersOfDrawing width height dpi background drawing =
                 newMask = clipRender ctxt $ renderMeshPatch i transparencyMesh in
             case currentClip ctxt of
               Nothing -> Just $ RawTexture newMask
-              Just v -> Just $ ModulateTexture v (RawTexture newMask)
+              Just v  -> Just $ ModulateTexture v (RawTexture newMask)
 
       order = case clipPath of
         -- Good, we can directly render on the final canvas
-        Nothing -> DrawOrder 
+        Nothing -> DrawOrder
             { _orderPrimitives = []
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = FillWinding
@@ -661,7 +657,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
-      order = DrawOrder 
+      order = DrawOrder
             { _orderPrimitives = [geometryOf ctxt prims]
             , _orderTexture    = textureOf ctxt
             , _orderFillMethod = method
@@ -742,8 +738,8 @@ dashedStrokeWithOffset _ [] width join caping prims =
 dashedStrokeWithOffset offset dashing width join caping prims =
     liftF $ DashedStroke offset dashing width join caping (toPrimitives prims) ()
 
--- | Generate a strokable line out of points list.
--- Just an helper around `lineFromPath`.
+-- | Generate a strokable line out of a points list.
+-- Just a helper around `lineFromPath`.
 --
 -- > stroke 4 JoinRound (CapRound, CapRound) $
 -- >    polyline [V2 10 10, V2 100 70, V2 190 190]
@@ -753,7 +749,7 @@ dashedStrokeWithOffset offset dashing width join caping prims =
 polyline :: [Point] -> [Primitive]
 polyline = map LinePrim . lineFromPath
 
--- | Generate a fillable polygon out of points list.
+-- | Generate a fillable polygon out of a points list.
 -- Similar to the `polyline` function, but close the
 -- path.
 --
@@ -762,9 +758,9 @@ polyline = map LinePrim . lineFromPath
 -- <<docimages/fill_polygon.png>>
 --
 polygon :: [Point] -> [Primitive]
-polygon [] = []
-polygon [_] = []
-polygon [_,_] = []
+polygon []        = []
+polygon [_]       = []
+polygon [_,_]     = []
 polygon lst@(p:_) = polyline $ lst ++ [p]
 
 -- | Simply draw an image into the canvas. Take into account
@@ -815,7 +811,7 @@ drawImageAtSize img@Image { imageWidth = w, imageHeight = h } borderSize ip
           scaleY | reqHeight == 0 = 1
                  | otherwise = reqHeight / rh
 
--- | Return a simple line ready to be stroked.
+-- | Return a simple line, easily turned into a stroke.
 --
 -- > stroke 17 JoinRound (CapRound, CapRound) $
 -- >     line (V2 10 10) (V2 180 170)

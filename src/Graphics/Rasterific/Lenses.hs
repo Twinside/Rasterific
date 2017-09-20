@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
--- | This module provide lenses compatible with the `lens`
--- module but without the dependency to it.
+-- | This module provides lenses compatible with the `lens`
+-- module, without depending on it.
 module Graphics.Rasterific.Lenses
     ( -- * Line lenses
       lineX0
@@ -36,7 +36,7 @@ module Graphics.Rasterific.Lenses
 
 import Graphics.Rasterific.Types
 
--- | Does it look familiar? yes it's the official
+-- | Does it look familiar? Yes, it's the official
 -- Lens type.
 type Lens s t a b =
     forall f. Functor f => (a -> f b) -> s -> f t

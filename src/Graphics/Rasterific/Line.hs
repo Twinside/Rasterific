@@ -26,7 +26,7 @@ import Graphics.Rasterific.Linear
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 
--- | Transform a list a point to a list of lines
+-- | Transform a list of points to a list of lines
 --
 -- > lineFromPath [a, b, c, d] = [Line a b, Line b c, Line c d]
 --
@@ -62,22 +62,22 @@ offsetLine offset (Line a b) = pure . LinePrim $ Line shiftedA shiftedB
 
 -- | Clamp the bezier curve inside a rectangle
 -- given in parameter.
-clipLine :: Point     -- ^ Point representing the "minimal" point for cliping
-         -> Point     -- ^ Point representing the "maximal" point for cliping
+clipLine :: Point     -- ^ Point representing the "minimal" point for clipping
+         -> Point     -- ^ Point representing the "maximal" point for clipping
          -> Line      -- ^ The line
          -> Container Primitive
 clipLine mini maxi poly@(Line a b)
     -- If we are in the range bound, return the curve
     -- unaltered
     | insideX && insideY = pure . LinePrim $ poly
-    -- If one of the component is outside, clamp
+    -- If one of the components is outside, clamp
     -- the components on the boundaries and output a
     -- straight line on this boundary. Useful for the
-    -- filing case, to clamp the polygon drawing on
+    -- filling case, to clamp the polygon drawing on
     -- the edge
     | outsideX || outsideY = pure . LinePrim $ Line clampedA clampedB
 
-    -- Not completly inside nor outside, just divide
+    -- Not completely inside nor outside, just divide
     -- and conquer.
     | otherwise = recurse (Line a m) <> recurse (Line m b)
   where -- Minimal & maximal dimension of the bezier curve
@@ -119,7 +119,7 @@ clipLine mini maxi poly@(Line a b)
         -- edge.
         m = vpartition (vabs (ab ^-^ edge) ^< 0.1) edge ab
 
--- TODO: implement better algorithm for lines, should
+-- TODO: implement a better algorithm for lines, should
 -- be doable.
 decomposeLine :: Line -> Producer EdgeSample
 decomposeLine (Line (V2 aRx aRy) (V2 bRx bRy)) = go aRx aRy bRx bRy where

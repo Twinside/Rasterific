@@ -1,15 +1,15 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ViewPatterns          #-}
 -- | Implementation using
--- "An efficient algorithm for subdivising linear Coons surfaces"
+-- "An efficient algorithm for subdividing linear Coons surfaces"
 -- C.Yao and J.Rokne
 -- Computer aided design 8 (1991) 291-303
 module Graphics.Rasterific.Patch
@@ -25,7 +25,7 @@ module Graphics.Rasterific.Patch
       -- * Rendering functions
 
       -- ** Using Fast Forward Differences
-    , rasterizeTensorPatch 
+    , rasterizeTensorPatch
     , rasterizeCoonPatch
     , renderImageMesh
     , renderCoonMesh
@@ -52,25 +52,26 @@ module Graphics.Rasterific.Patch
     , transposePatch
     )  where
 
-import Control.Monad.Free( liftF )
-import Control.Monad( when, forM_ )
-import Control.Monad.Primitive( PrimMonad )
-import Data.Monoid( Sum( .. ) )
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.CubicBezier.FastForwardDifference
-import Graphics.Rasterific.Operators
-import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.ComplexPrimitive
-import Graphics.Rasterific.Line( lineFromPath )
-import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.BiSampleable
-import Graphics.Rasterific.PatchTypes
-import Graphics.Rasterific.MeshPatch
-import Graphics.Rasterific.Command
+import           Control.Monad                                         (forM_,
+                                                                        when)
+import           Control.Monad.Free                                    (liftF)
+import           Control.Monad.Primitive                               (PrimMonad)
+import           Data.Monoid                                           (Sum (..))
+import           Graphics.Rasterific.BiSampleable
+import           Graphics.Rasterific.Command
+import           Graphics.Rasterific.ComplexPrimitive
+import           Graphics.Rasterific.Compositor
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.CubicBezier.FastForwardDifference
+import           Graphics.Rasterific.Immediate
+import           Graphics.Rasterific.Line                              (lineFromPath)
+import           Graphics.Rasterific.Linear
+import           Graphics.Rasterific.MeshPatch
+import           Graphics.Rasterific.Operators
+import           Graphics.Rasterific.PatchTypes
+import           Graphics.Rasterific.Types
 
-import Codec.Picture.Types( PixelRGBA8( .. ) )
+import           Codec.Picture.Types                                   (PixelRGBA8 (..))
 
 -- @
 --  North    ----->     East
@@ -89,7 +90,7 @@ import Codec.Picture.Types( PixelRGBA8( .. ) )
 maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
 maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
   range = maxRepresentable (Proxy :: Proxy px)
-  maxDelta = 
+  maxDelta =
     maximum [ maxDistance north east
             , maxDistance east south
             , maxDistance south west
@@ -189,7 +190,7 @@ subdivideWeights values = Subdivided { .. } where
     , _southValue = midSoutValue
     , _westValue = west
     }
-  
+
   _southEast = ParametricValues
     { _northValue = gridMidValue
     , _eastValue = midEastValue
@@ -282,8 +283,8 @@ horizontalTensorSubdivide p = (TensorPatch l0 l1 l2 l3 vl, TensorPatch r0 r1 r2 
   (l3, r3) = divideCubicBezier $ _curve3 p
   (vl, vr) = subdivideHorizontal $ _tensorValues p
 
--- | Subdivide a tensor patch into 4 new quadrant.
--- Perform twice the horizontal subdivision with a transposition.
+-- | Subdivide a tensor patch into 4 new quadrants.
+-- Perform the horizontal subdivision with a transposition twice.
 subdivideTensorPatch :: TensorPatch UVPatch -> Subdivided (TensorPatch UVPatch)
 subdivideTensorPatch p = subdivided where
   (west, east) = horizontalTensorSubdivide p
@@ -320,7 +321,7 @@ data Subdivided a = Subdivided
   , _southEast :: !a -- ^ Lower right
   }
 
--- | Split a coon patch into four new quadrants
+-- | Split a Coons patch into four new quadrants
 subdividePatch :: CoonPatch UVPatch -> Subdivided (CoonPatch UVPatch)
 subdividePatch patch = Subdivided
     { _northWest = northWest
@@ -342,9 +343,9 @@ subdividePatch patch = Subdivided
   (westBottom, westTop@(CubicBezier midWest _ _ _)) = divideCubicBezier $ _west patch
   (eastTop@(CubicBezier _ _ _ midEast), eastBottom) = divideCubicBezier $ _east patch
 
-  -- This points are to calculate S_B
+  -- These points are to calculate S_B
   midNorthSouth = north `midCurve` south
-  midEastWest = _east patch `midCurve` _west patch 
+  midEastWest = _east patch `midCurve` _west patch
 
   (splitNorthSouthTop, splitNorthSouthBottom) =
       divideCubicBezier $ combine
@@ -415,7 +416,7 @@ straightLine a b = CubicBezier a p1 p2 b where
   p2 = lerp (2/3) b a
 
 
--- | The curves in the coon patch are inversed!
+-- | The curves in the Coons patch are inversed!
 midCurve :: CubicBezier -> CubicBezier -> CubicBezier
 midCurve (CubicBezier a b c d) (CubicBezier d' c' b' a') =
   CubicBezier
@@ -434,7 +435,7 @@ drawCoonPatchOutline CoonPatch { .. } =
 pointsOf :: PointFoldable v => v -> [Point]
 pointsOf = foldPoints (flip (:)) []
 
--- | Used to describe how to debug print a coon/tensort patch.
+-- | Used to describe how to debug print a Coons/tensor patch.
 data DebugOption = DebugOption
   { _drawControlMesh    :: !Bool
   , _drawBaseVertices   :: !Bool
@@ -461,7 +462,7 @@ defaultDebug = DebugOption
   , _controlColor       = PixelRGBA8 20 20 40 255
   }
 
--- | Helper function drawing many information about a coon patch.
+-- | Helper function that draws a lot of information about a Coons patch.
 debugDrawCoonPatch :: DebugOption -> CoonPatch (ParametricValues PixelRGBA8)
                    -> Drawing PixelRGBA8 ()
 debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
@@ -488,7 +489,7 @@ debugDrawCoonPatch DebugOption { .. } patch@(CoonPatch { .. }) = do
     setColor' _controlMeshColor $ do
         mapM_ controlDraw [_north, _east, _west, _south]
 
--- | Helper function drawing many information about a tensor patch.
+-- | Helper function that draws a lot of information about a tensor patch.
 debugDrawTensorPatch :: DebugOption -> TensorPatch (ParametricValues px)
                      -> Drawing PixelRGBA8 ()
 debugDrawTensorPatch DebugOption { .. } p = do
@@ -523,13 +524,13 @@ parametricBase = ParametricValues
   , _westValue  = V2 0 1
   }
 
--- | Render a simple coon mesh, with only color on the vertices.
+-- | Render a simple Coons mesh, with only color on the vertices.
 renderCoonMesh :: forall m px.
                   (PrimMonad m, RenderablePixel px, BiSampleable (ParametricValues px) px)
                => MeshPatch px -> DrawContext m px ()
 renderCoonMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . coonPatchesOf
 
--- | Render a coon mesh but using cubic interpolation for the color.
+-- | Render a Coons mesh but using cubic interpolation for the color.
 renderCoonMeshBicubic :: forall m px.
                          ( PrimMonad m
                          , RenderablePixel px
@@ -540,24 +541,24 @@ renderCoonMeshBicubic =
     . cubicCoonPatchesOf
     . calculateMeshColorDerivative
 
--- | Render an mesh patch by interpolating accross an image.
+-- | Render a mesh patch by interpolating accross an image.
 renderImageMesh :: PrimMonad m
                 => MeshPatch (ImageMesh PixelRGBA8) -> DrawContext m PixelRGBA8 ()
 renderImageMesh = mapM_ (rasterizeTensorPatch . toTensorPatch) . imagePatchesOf
 
--- | Render a coon patch using the subdivision algorithm (potentially slower
--- and less precise in case of image mesh.
+-- | Render a Coons patch using the subdivision algorithm (potentially slower
+-- and less precise in case of an image mesh.
 renderCoonPatch :: forall m interp px.
                    (PrimMonad m, RenderablePixel px, BiSampleable interp px)
                 => CoonPatch interp -> DrawContext m px ()
 renderCoonPatch p = renderCoonPatchAtDeepness (estimateCoonSubdivision p) p
 
--- | Render a coon patch using the subdivision algorithm (potentially slower
--- and less precise in case of image mesh). You can provide a max deepness
+-- | Render a Coons patch using the subdivision algorithm (potentially slower
+-- and less precise in case of an image mesh). You can provide a max depth.
 renderCoonPatchAtDeepness
     :: forall m interp px.
        (PrimMonad m, RenderablePixel px, BiSampleable interp px)
-    => Int              -- ^ Maximum subdivision deepness
+    => Int              -- ^ Maximum subdivision depth.
     -> CoonPatch interp
     -> DrawContext m px ()
 renderCoonPatchAtDeepness maxDeepness originalPatch = go maxDeepness basePatch where
@@ -575,15 +576,15 @@ renderCoonPatchAtDeepness maxDeepness originalPatch = go maxDeepness basePatch w
     let d = depth - (1 :: Int) in
     go d _northWest >> go d _northEast >> go d _southWest >> go d _southEast
 
-renderTensorPatch :: forall m sampled px. 
+renderTensorPatch :: forall m sampled px.
                      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
                   => TensorPatch sampled -> DrawContext m px ()
 renderTensorPatch p = renderTensorPatchAtDeepness (estimateTensorSubdivision p) p
 
 -- | Render a tensor patch using the subdivision algorithm (potentially slower
--- and less precise in case of image mesh.
+-- and less precise in case of an image mesh.
 renderTensorPatchAtDeepness
-  :: forall m sampled px. 
+  :: forall m sampled px.
      (PrimMonad m, RenderablePixel px, BiSampleable sampled px)
   => Int -> TensorPatch sampled -> DrawContext m px ()
 renderTensorPatchAtDeepness maxDeepness originalPatch = go maxDeepness basePatch where

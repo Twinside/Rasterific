@@ -1,8 +1,8 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Graphics.Rasterific.Shading
     ( transformTextureToFiller
     , sampledImageShader
@@ -10,46 +10,35 @@ module Graphics.Rasterific.Shading
     , unsafePlotOpaquePixel
     ) where
 
-import Control.Monad.ST( ST )
-import Control.Monad.Primitive( PrimState
-                              -- one day (GHC >= 7.10 ?)
-                              , PrimMonad
-                              )
-import Data.Fixed( mod' )
-import Data.Monoid( (<>) )
-import Graphics.Rasterific.Command
-import Graphics.Rasterific.BiSampleable
-import Graphics.Rasterific.Linear
-             ( V2( .. )
-             , (^-^)
-             , (^/)
-             , dot
-             , norm
-             )
+import           Control.Monad.Primitive             (PrimMonad, PrimState)
+import           Control.Monad.ST                    (ST)
+import           Data.Fixed                          (mod')
+import           Data.Monoid                         ((<>))
+import           Graphics.Rasterific.BiSampleable
+import           Graphics.Rasterific.Command
+import           Graphics.Rasterific.Linear          (V2 (..), dot, norm, (^-^),
+                                                      (^/))
 
-import qualified Data.Vector as V
+import qualified Data.Vector                         as V
 
-import Codec.Picture.Types( Pixel( .. )
-                          , Image( .. )
-                          , MutableImage( .. )
-                          , Pixel8
-                          , PixelRGBA8
-                          , unsafeWritePixelBetweenAt
-                          , readPackedPixelAt
-                          , writePackedPixelAt
-                          )
+import           Codec.Picture.Types                 (Image (..),
+                                                      MutableImage (..),
+                                                      Pixel (..), Pixel8,
+                                                      PixelRGBA8,
+                                                      readPackedPixelAt,
+                                                      unsafeWritePixelBetweenAt,
+                                                      writePackedPixelAt)
 
-import Graphics.Rasterific.Types( Point
-                                , Vector
-                                , Line( .. )
-                                , SamplerRepeat( .. ) )
-import Graphics.Rasterific.Transformations
-import Graphics.Rasterific.Rasterize
-import Graphics.Rasterific.PatchTypes
-import Graphics.Rasterific.Compositor( Modulable( .. )
-                                     , ModulablePixel
-                                     , RenderablePixel
-                                     , compositionAlpha )
+import           Graphics.Rasterific.Compositor      (Modulable (..),
+                                                      ModulablePixel,
+                                                      RenderablePixel,
+                                                      compositionAlpha)
+import           Graphics.Rasterific.PatchTypes
+import           Graphics.Rasterific.Rasterize
+import           Graphics.Rasterific.Transformations
+import           Graphics.Rasterific.Types           (Line (..), Point,
+                                                      SamplerRepeat (..),
+                                                      Vector)
 
 
 data TextureSpaceInfo = TextureSpaceInfo
@@ -111,13 +100,13 @@ plotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
                 -> m ()
 {-# INLINE plotOpaquePixel #-}
 plotOpaquePixel img _color x y
-   | x < 0 || y < 0 || 
+   | x < 0 || y < 0 ||
      x >= mutableImageWidth img || y >= mutableImageHeight img = return ()
 plotOpaquePixel img color x y = do
   let !idx = (y * mutableImageWidth img + x) * (componentCount (undefined :: px))
   writePackedPixelAt img idx color
 
--- | Plot a single pixel on the resulting image, no bounds check are
+-- | Plot a single pixel on the resulting image, no bounds check is
 -- performed, ensure index is correct!
 unsafePlotOpaquePixel :: forall m px. (ModulablePixel px, PrimMonad m)
                       => MutableImage (PrimState m) px -> px -> Int -> Int
@@ -185,7 +174,7 @@ prepareInfo (Just t) img covSpan = TextureSpaceInfo
 
 combineTransform :: Maybe Transformation -> Transformation
                  -> Maybe Transformation
-combineTransform Nothing a = Just a
+combineTransform Nothing a  = Just a
 combineTransform (Just v) a = Just $ v <> a
 
 withTrans :: Maybe Transformation -> ShaderFunction px
@@ -195,8 +184,8 @@ withTrans (Just v) shader = \x y ->
     let V2 x' y' = applyTransformation v (V2 x y) in
     shader x' y'
 
--- | The intent of shader texture is to provide ease of implementation
--- If possible providing a custom filler will be more efficient,
+-- | The intent of shader textures is to provide ease of implementation.
+-- If possible, providing a custom filler will be more efficient,
 -- like already done for the solid colors.
 shaderOfTexture :: forall px . RenderablePixel px
                 => Maybe Transformation -> SamplerRepeat -> Texture px
@@ -213,7 +202,7 @@ shaderOfTexture trans sampling (LinearGradientTexture grad (Line a b)) =
   withTrans trans $ linearGradientShader grad a b sampling
 shaderOfTexture trans sampling (RadialGradientTexture grad center radius) =
   withTrans trans $ radialGradientShader grad center radius sampling
-shaderOfTexture trans sampling (RadialGradientWithFocusTexture grad center 
+shaderOfTexture trans sampling (RadialGradientWithFocusTexture grad center
                                                     radius focus) =
   withTrans trans
              $ radialGradientWithFocusShader grad center radius focus
@@ -262,7 +251,7 @@ transformTextureToFiller renderMesh = go Nothing SamplerPad
             m
       in
       go Nothing sampling (RawTexture newImg) img
-        
+
     go trans sampling tex =
         \img -> shaderFiller shader img . prepareInfo trans img
             where shader = shaderOfTexture Nothing sampling tex
@@ -275,7 +264,7 @@ repeatGradient s = s - fromIntegral (floor s :: Int)
 reflectGradient :: Float -> Float
 reflectGradient s =
     abs (abs (s - 1) `mod'` 2 - 1)
-   
+
 gradientColorAt :: ModulablePixel px
                 => GradientArray px -> Float -> px
 {-# SPECIALIZE
@@ -355,11 +344,11 @@ radialGradientShader :: ModulablePixel px
                      -> Float       -- ^ Radial gradient radius
                      -> SamplerRepeat
                      -> ShaderFunction px
-{-# SPECIALIZE 
+{-# SPECIALIZE
     radialGradientShader
        :: Gradient PixelRGBA8 -> Point -> Float -> SamplerRepeat
        -> ShaderFunction PixelRGBA8 #-}
-{-# SPECIALIZE 
+{-# SPECIALIZE
     radialGradientShader
        :: Gradient Pixel8 -> Point -> Float -> SamplerRepeat
        -> ShaderFunction Pixel8 #-}

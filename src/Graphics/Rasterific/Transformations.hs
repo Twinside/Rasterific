@@ -1,9 +1,9 @@
--- | This module provide some helpers in order
+-- | This module provides some helpers in order
 -- to perform basic geometric transformation on
 -- the drawable primitives.
 --
--- You can combine the transformation is `mappend` or
--- the `(\<\>)` operator from "Data.Monoid" .
+-- You can combine the transformations with `mappend` or
+-- the `(\<\>)` operator from "Data.Monoid".
 module Graphics.Rasterific.Transformations
     ( Transformation( .. )
     , applyTransformation
@@ -18,9 +18,9 @@ module Graphics.Rasterific.Transformations
     , inverseTransformation
     ) where
 
-import Data.Monoid( (<>) )
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.Linear( V2( .. ), normalize )
+import           Data.Monoid                ((<>))
+import           Graphics.Rasterific.Linear (V2 (..), normalize)
+import           Graphics.Rasterific.Types
 
 -- | Represent a 3*3 matrix for homogenous coordinates.
 --
@@ -46,12 +46,12 @@ transformCombine (Transformation a c e
                  (Transformation a' c' e'
                                  b' d' f') =
     Transformation (a * a' + c * b' {- below b' is zero -})
-              (a * c' + c * d' {- below d' is zero -})
-              (a * e' + c * f' + e {- below f' is one -})
+                   (a * c' + c * d' {- below d' is zero -})
+                   (a * e' + c * f' + e {- below f' is one -})
 
-              (b * a' + d * b' {- below b' is zero -})
-              (b * c' + d * d' {- below d' is zero -})
-              (b * e' + d * f' + f {- below f' is one -})
+                   (b * a' + d * b' {- below b' is zero -})
+                   (b * c' + d * d' {- below d' is zero -})
+                   (b * e' + d * f' + f {- below f' is one -})
 
 instance Monoid Transformation where
     mappend = transformCombine
@@ -89,7 +89,7 @@ rotate angle = Transformation ca (-sa) 0
         sa = sin angle
 
 -- | Create a transformation representing a rotation
--- on the plane. The rotation center is given in parameter
+-- on the plane, around a given point.
 --
 -- > fill . transform (applyTransformation $ rotateCenter 0.2 (V2 200 200))
 -- >      $ rectangle (V2 40 40) 120 120
@@ -167,7 +167,7 @@ transformationDeterminant :: Transformation -> Float
 transformationDeterminant (Transformation a c _e
                                           b d _f) = a * d - c * b
 
--- | Inverse a transformation (if possible)
+-- | Invert a transformation (if possible)
 inverseTransformation :: Transformation -> Maybe Transformation
 inverseTransformation trans
     | transformationDeterminant trans == 0 = Nothing

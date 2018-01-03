@@ -8,30 +8,25 @@ module Graphics.Rasterific.StrokeInternal
     , isPrimitivePoint
     )  where
 
-import Data.Monoid( (<>) )
+import           Data.Monoid                         ((<>))
 
-import Graphics.Rasterific.Linear
-             ( V2( .. )
-             , (^-^)
-             , (^+^)
-             , (^*)
-             , dot
-             )
+import           Graphics.Rasterific.Linear          (V2 (..), dot, (^*), (^+^),
+                                                      (^-^))
 
-import Graphics.Rasterific.Operators
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.QuadraticBezier
-import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.Line
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.Line
+import           Graphics.Rasterific.Operators
+import           Graphics.Rasterific.QuadraticBezier
+import           Graphics.Rasterific.Types
 
 lastPoint :: Primitive -> Point
-lastPoint (LinePrim (Line _ x1)) = x1
-lastPoint (BezierPrim (Bezier _ _ x2)) = x2
+lastPoint (LinePrim (Line _ x1))                   = x1
+lastPoint (BezierPrim (Bezier _ _ x2))             = x2
 lastPoint (CubicBezierPrim (CubicBezier _ _ _ x3)) = x3
 
 lastPointAndNormal :: Primitive -> (Point, Vector)
-lastPointAndNormal (LinePrim (Line a b)) = (b, a `normal` b)
-lastPointAndNormal (BezierPrim (Bezier _ b c)) = (c, b `normal` c)
+lastPointAndNormal (LinePrim (Line a b))                   = (b, a `normal` b)
+lastPointAndNormal (BezierPrim (Bezier _ b c))             = (c, b `normal` c)
 lastPointAndNormal (CubicBezierPrim (CubicBezier _ _ c d)) = (d, c `normal` d)
 
 firstPointAndNormal :: Primitive -> (Point, Vector)
@@ -41,8 +36,8 @@ firstPointAndNormal (CubicBezierPrim (CubicBezier a b _ _)) = (a, a `normal` b)
 
 isPrimitivePoint :: Primitive -> Bool
 isPrimitivePoint p = case p of
-  LinePrim l -> isLinePoint l
-  BezierPrim b -> isBezierPoint b
+  LinePrim l        -> isLinePoint l
+  BezierPrim b      -> isBezierPoint b
   CubicBezierPrim c -> isCubicBezierPoint c
 
 reversePrimitive :: Primitive -> Primitive
@@ -153,14 +148,14 @@ joinPrimitives :: StrokeWidth -> Join -> Primitive -> Primitive
                -> Container Primitive
 joinPrimitives offset join prim1 prim2  =
   case join of
-    JoinRound -> roundJoin offset p u v
+    JoinRound   -> roundJoin offset p u v
     JoinMiter l -> miterJoin offset l p u v
   where (p, u) = lastPointAndNormal prim1
         (_, v) = firstPointAndNormal prim2
 
 offsetPrimitives :: Float -> Primitive -> Container Primitive
-offsetPrimitives offset (LinePrim l) = offsetLine offset l
-offsetPrimitives offset (BezierPrim b) = offsetBezier offset b
+offsetPrimitives offset (LinePrim l)        = offsetLine offset l
+offsetPrimitives offset (BezierPrim b)      = offsetBezier offset b
 offsetPrimitives offset (CubicBezierPrim c) = offsetCubicBezier offset c
 
 offsetAndJoin :: Float -> Join -> Cap -> [Primitive]
@@ -178,30 +173,30 @@ offsetAndJoin offset join caping (firstShape:rest) = go firstShape rest
              offseter prev <> joiner prev x <> go x xs
 
 approximateLength :: Primitive -> Float
-approximateLength (LinePrim l) = lineLength l
-approximateLength (BezierPrim b) = bezierLengthApproximation b
+approximateLength (LinePrim l)        = lineLength l
+approximateLength (BezierPrim b)      = bezierLengthApproximation b
 approximateLength (CubicBezierPrim c) = cubicBezierLengthApproximation c
 
 
 sanitize :: Primitive -> Container Primitive
-sanitize (LinePrim l) = sanitizeLine l
-sanitize (BezierPrim b) = sanitizeBezier b
+sanitize (LinePrim l)        = sanitizeLine l
+sanitize (BezierPrim b)      = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
 
 strokize :: Geometry geom
          => StrokeWidth -> Join -> (Cap, Cap) -> geom
          -> Container Primitive
 strokize width join (capStart, capEnd) geom = foldMap pathOffseter sanitized
-  where 
+  where
     sanitized = foldMap (listOfContainer . sanitize) <$> resplit (toPrimitives geom)
     offseter = offsetAndJoin (width / 2) join
     pathOffseter v =
         offseter capEnd v <> offseter capStart (reverse $ reversePrimitive <$> v)
 
 flattenPrimitive :: Primitive -> Container Primitive
-flattenPrimitive (BezierPrim bezier) = flattenBezier bezier
+flattenPrimitive (BezierPrim bezier)      = flattenBezier bezier
 flattenPrimitive (CubicBezierPrim bezier) = flattenCubicBezier bezier
-flattenPrimitive (LinePrim line) = flattenLine line
+flattenPrimitive (LinePrim line)          = flattenLine line
 
 breakPrimitiveAt :: Primitive -> Float -> (Primitive, Primitive)
 breakPrimitiveAt (BezierPrim bezier) at = (BezierPrim a, BezierPrim b)
@@ -240,14 +235,14 @@ dropPattern = go
         | offset < x = x - offset : xs
         | otherwise {- offset >= x -} = go (offset - x) xs
 
--- | Don't make them completly flat, but suficiently
+-- | Don't make them completly flat, but sufficiently
 -- to assume they are.
 linearizePrimitives :: [Primitive] -> [Primitive]
 linearizePrimitives =
   listOfContainer . foldMap flattenPrimitive . foldMap sanitize
 
 -- | Return an approximation of the length of a given path.
--- It's results is not precise but should be enough for
+-- Its result is not precise but should be enough for
 -- rough calculations
 approximatePathLength :: Path -> Float
 approximatePathLength = approximatePrimitivesLength . pathToPrimitives
@@ -257,7 +252,7 @@ approximatePrimitivesLength prims =
   sum $ approximateLength <$> linearizePrimitives prims
 
 dashize :: Float -> DashPattern -> [Primitive] -> [[Primitive]]
-dashize offset pattern = taker infinitePattern . linearizePrimitives 
+dashize offset pattern = taker infinitePattern . linearizePrimitives
   where
     realOffset | offset >= 0 = offset
                | otherwise = offset + sum pattern

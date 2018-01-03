@@ -1,7 +1,7 @@
+{-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeFamilies #-}
--- | Compositor handle the pixel composition, which
+{-# LANGUAGE TypeFamilies     #-}
+-- | Compositor handles the pixel composition, which
 -- leads to texture composition.
 -- Very much a work in progress
 module Graphics.Rasterific.Compositor
@@ -16,24 +16,21 @@ module Graphics.Rasterific.Compositor
     , emptyPx
     ) where
 
-import Foreign.Storable( Storable )
-import Data.Bits( unsafeShiftR )
-import Data.Word( Word8, Word32 )
+import           Data.Bits                  (unsafeShiftR)
+import           Data.Word                  (Word32, Word8)
+import           Foreign.Storable           (Storable)
 
-import Codec.Picture.Types
-    ( Pixel( .. )
-    , PixelRGB8( .. )
-    , PixelRGBA8( .. )
-    , PackeablePixel( .. ) )
+import           Codec.Picture.Types        (PackeablePixel (..), Pixel (..),
+                                             PixelRGB8 (..), PixelRGBA8 (..))
 
-import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Types
+import           Graphics.Rasterific.Linear
+import           Graphics.Rasterific.Types
 
 type Compositor px =
     PixelBaseComponent px ->
         PixelBaseComponent px -> px -> px -> px
 
--- | Used for Coon patch rendering
+-- | Used for Coons patch rendering
 class ( Applicative (Holder a)
       , Functor  (Holder a)
       , Foldable (Holder a)
@@ -72,8 +69,8 @@ instance InterpolablePixel PixelRGBA8 where
     where to = floor
   maxRepresentable Proxy = 255
 
--- | This constraint ensure that a type is a pixel
--- and we're allowed to modulate it's color components
+-- | This constraint ensures that a type is a pixel
+-- and we're allowed to modulate its color components
 -- generically.
 type ModulablePixel px =
     ( Pixel px
@@ -83,8 +80,8 @@ type ModulablePixel px =
     , Storable (PackedRepresentation px)
     , Modulable (PixelBaseComponent px))
 
--- | This constraint tells us that pixel component
--- must also be pixel and be the "bottom" of component,
+-- | This constraint tells us that a pixel component
+-- must also be a pixel and be the "bottom" of component,
 -- we cannot go further than a PixelBaseComponent level.
 --
 -- Tested pixel types are PixelRGBA8 & Pixel8
@@ -101,8 +98,8 @@ type RenderablePixel px =
             ~ (PixelBaseComponent px)
     )
 
--- | Typeclass intented at pixel value modulation.
--- May be throwed out soon.
+-- | Typeclass intented for pixel value modulation.
+-- May be thrown out soon.
 class (Ord a, Num a) => Modulable a where
   -- | Empty value representing total transparency for the given type.
   emptyValue :: a

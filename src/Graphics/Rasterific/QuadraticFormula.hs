@@ -25,9 +25,9 @@ instance Applicative QuadraticFormula where
 
 -- | Discriminant equation, if the result is:
 --
---  * Below 0, then the formula doesn't have any solution
+--  * Below 0, then the formula doesn't have any solutions
 --
---  * Equal to 0, then the formula has an unique root.
+--  * Equal to 0, then the formula has a unique root.
 --
 --  * Above 0, the formula has two solutions
 --

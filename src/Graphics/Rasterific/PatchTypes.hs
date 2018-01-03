@@ -1,12 +1,12 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module Graphics.Rasterific.PatchTypes
   ( -- * New geometry
     CoonPatch( .. )
@@ -26,7 +26,7 @@ module Graphics.Rasterific.PatchTypes
   , ImageMesh( .. )
 
     -- * Helper functions
-  , transposeParametricValues 
+  , transposeParametricValues
   , coonPointAt
   , toTensorPatch
   , foldMeshPoints
@@ -37,17 +37,17 @@ module Graphics.Rasterific.PatchTypes
   , yDerivative
   ) where
 
-import Data.Monoid( (<>) )
-import qualified Data.Vector as V
+import           Data.Monoid                         ((<>))
+import qualified Data.Vector                         as V
 
-import Codec.Picture( Image )
+import           Codec.Picture                       (Image)
 
-import Graphics.Rasterific.CubicBezier
-import Graphics.Rasterific.MiniLens
-import Graphics.Rasterific.Linear
-import Graphics.Rasterific.Types
-import Graphics.Rasterific.Compositor
-import Graphics.Rasterific.Transformations
+import           Graphics.Rasterific.Compositor
+import           Graphics.Rasterific.CubicBezier
+import           Graphics.Rasterific.Linear
+import           Graphics.Rasterific.MiniLens
+import           Graphics.Rasterific.Transformations
+import           Graphics.Rasterific.Types
 
 -- | Type of coordinate interpolation
 type CoonColorWeight = Float
@@ -116,9 +116,9 @@ data ParametricValues a = ParametricValues
 -- | Store the derivative necessary for cubic interpolation in
 -- the gradient mesh.
 data Derivative px = Derivative
-  { _derivValues :: !(Holder px Float)
-  , _xDerivative :: !(Holder px Float)
-  , _yDerivative :: !(Holder px Float)
+  { _derivValues  :: !(Holder px Float)
+  , _xDerivative  :: !(Holder px Float)
+  , _yDerivative  :: !(Holder px Float)
   , _xyDerivative :: !(Holder px Float)
   }
 
@@ -129,7 +129,7 @@ xDerivative :: Lens' (Derivative px) (Holder px Float)
 xDerivative = lens _xDerivative setter where
   setter o v = o { _xDerivative = v }
 
--- | Help lens
+-- | Helping lens
 yDerivative :: Lens' (Derivative px) (Holder px Float)
 yDerivative = lens _yDerivative setter where
   setter o v = o { _yDerivative = v }
@@ -148,10 +148,10 @@ transposeParametricValues (ParametricValues n e s w) = ParametricValues n w s e
 
 -- | Describe a tensor patch
 data TensorPatch weight = TensorPatch
-  { _curve0 :: !CubicBezier
-  , _curve1 :: !CubicBezier
-  , _curve2 :: !CubicBezier
-  , _curve3 :: !CubicBezier
+  { _curve0       :: !CubicBezier
+  , _curve1       :: !CubicBezier
+  , _curve2       :: !CubicBezier
+  , _curve3       :: !CubicBezier
   , _tensorValues :: !weight
   }
 
@@ -181,7 +181,7 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
   foldPoints f acc (TensorPatch c0 c1 c2 c3 _) = g c3 . g c2 . g c1 $ g c0 acc
     where g v a = foldPoints f a v
 
--- | Define the boundary and interpolated values of a coon patch.
+-- | Define the boundary and interpolated values of a Coons patch.
 --
 -- @
 --                        ----->
@@ -200,17 +200,17 @@ instance {-# OVERLAPPING #-} PointFoldable (TensorPatch px) where
 -- @
 --
 data CoonPatch weight = CoonPatch
-    { _north :: !CubicBezier -- ^ North border, from left to right at top
-    , _east :: !CubicBezier  -- ^ East obrder, from top to bottom
-    , _south :: !CubicBezier -- ^ South border from right to left
-    , _west :: !CubicBezier  -- ^ West border from bottom to top
+    { _north      :: !CubicBezier -- ^ North border, from left to right at top
+    , _east       :: !CubicBezier  -- ^ East obrder, from top to bottom
+    , _south      :: !CubicBezier -- ^ South border from right to left
+    , _west       :: !CubicBezier  -- ^ West border from bottom to top
     , _coonValues :: !weight -- ^ The patch values
     }
     deriving Show
 
 instance {-# OVERLAPPING #-} Transformable (CoonPatch px) where
   transformM = transformCoonM
-  transform = transformCoon 
+  transform = transformCoon
 
 instance {-# OVERLAPPING #-} PointFoldable (CoonPatch px) where
   foldPoints f acc (CoonPatch n e s w _) = g n . g e . g s $ g w acc
@@ -235,12 +235,12 @@ transformCoon f (CoonPatch n e s w v) =
 -- patches but with shared edges
 data MeshPatch px = MeshPatch
   { -- | Count of horizontal of *patch*
-    _meshPatchWidth  :: !Int
+    _meshPatchWidth          :: !Int
     -- | Count of vertical of *patch*
-  , _meshPatchHeight :: !Int
+  , _meshPatchHeight         :: !Int
     -- | Main points defining the patch, of size
     -- (_meshPatchWidth + 1) * (_meshPatchHeight + 1)
-  , _meshPrimaryVertices :: !(V.Vector Point)
+  , _meshPrimaryVertices     :: !(V.Vector Point)
     -- | For each line, store the points in between each
     -- vertex. There is two points between each vertex, so
     -- _meshPatchWidth * (_meshPatchHeight + 1) points
@@ -248,18 +248,18 @@ data MeshPatch px = MeshPatch
     -- | For each colun, store the points in between each
     -- vertex. Two points between each vertex, so
     -- _meshPatchHeight * (_meshPatchWidth + 1)
-  , _meshVerticalSecondary :: !(V.Vector InterBezier)
+  , _meshVerticalSecondary   :: !(V.Vector InterBezier)
     -- | Colors for each vertex points
-  , _meshColors :: !(V.Vector px)
+  , _meshColors              :: !(V.Vector px)
     -- | Points used to define tensor patch, if  not define,
     -- the rest of the data structure describes a Coon patch.
     -- size must be equal to `_meshPatchWidth*_meshPatchHeight`
-  , _meshTensorDerivatives :: !(Maybe (V.Vector Derivatives))
+  , _meshTensorDerivatives   :: !(Maybe (V.Vector Derivatives))
   }
   deriving (Eq, Show, Functor)
 
 -- | Store the two bezier control points of a bezier.
-data InterBezier = InterBezier 
+data InterBezier = InterBezier
   { _inter0 :: !Point
   , _inter1 :: !Point
   }
@@ -278,10 +278,10 @@ transformMeshM f MeshPatch { .. } = do
   hSecondary <- mapM (transformM f) _meshHorizontalSecondary
   vSecondary <- mapM (transformM f) _meshVerticalSecondary
   return $ MeshPatch
-      { _meshPatchWidth = _meshPatchWidth 
+      { _meshPatchWidth = _meshPatchWidth
       , _meshPatchHeight = _meshPatchHeight
-      , _meshPrimaryVertices = vertices 
-      , _meshHorizontalSecondary = hSecondary 
+      , _meshPrimaryVertices = vertices
+      , _meshHorizontalSecondary = hSecondary
       , _meshVerticalSecondary = vSecondary
       , _meshColors = _meshColors
       , _meshTensorDerivatives = Nothing
@@ -300,7 +300,7 @@ foldMeshPoints f acc m = acc4 where
   acc3 = foldPoints f acc2 (_meshVerticalSecondary m)
   acc4 = case _meshTensorDerivatives m of
     Nothing -> acc3
-    Just v -> foldPoints f acc3 v
+    Just v  -> foldPoints f acc3 v
 
 -- | Store the inner points of a tensor patch.
 data Derivatives = Derivatives
@@ -335,7 +335,7 @@ newtype CubicCoefficient px = CubicCoefficient
 -- | Type storing the information to be able to interpolate
 -- part of an image in a patch.
 data ImageMesh px = ImageMesh
-    { _meshImage :: !(Image px)
+    { _meshImage     :: !(Image px)
     , _meshTransform :: !Transformation
     }
 
@@ -344,7 +344,7 @@ data ImageMesh px = ImageMesh
 -- D1: left     _west
 -- D2: right    _east
 
--- | Return a postion of a point in the coon patch.
+-- | Return a postion of a point in the Coons patch.
 coonPointAt :: CoonPatch a -> UV -> Point
 coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
   where
@@ -362,7 +362,7 @@ coonPointAt CoonPatch { .. } (V2 u v) = sc ^+^ sd ^-^ sb
     CubicBezier _ _ _ d2 = fst $ cubicBezierBreakAt _east v
     CubicBezier _ _ _ d1 = fst $ cubicBezierBreakAt _west (1 - v)
 
--- | Convert a coon patch in
+-- | Convert a Coons patch to a TensorPatch
 toTensorPatch :: CoonPatch a -> TensorPatch a
 toTensorPatch CoonPatch { .. } = TensorPatch
     { _curve0 = _north

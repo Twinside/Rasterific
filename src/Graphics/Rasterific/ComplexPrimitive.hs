@@ -1,4 +1,4 @@
--- | Provide definition for some higher level objects (only slightly)
+-- | Provides definitions for some higher level objects (only slightly)
 module Graphics.Rasterific.ComplexPrimitive( rectangle
                                            , roundedRectangle
                                            , circle
@@ -22,7 +22,7 @@ isCoordValid v
 isPointValid :: RealFloat a => V2 a -> Maybe ArithException
 isPointValid (V2 x y) = isCoordValid x <|> isCoordValid y
 
--- | Generate a list of primitive representing a circle.
+-- | Generate a list of primitives representing a circle.
 --
 -- > fill $ circle (V2 100 100) 75
 --
@@ -38,7 +38,7 @@ circle center radius =
   where
     mv p = (p ^* radius) ^+^ center
 
--- | Generate a list of primitive representing an ellipse.
+-- | Generate a list of primitives representing an ellipse.
 --
 -- > fill $ ellipse (V2 100 100) 75 30
 --
@@ -52,7 +52,7 @@ ellipse center rx ry =
   where
     mv (V2 x y) = V2 (x * rx) (y * ry) ^+^ center
 
--- | Generate a list of primitive representing a
+-- | Generate a list of primitives representing a
 -- rectangle
 --
 -- > fill $ rectangle (V2 30 30) 150 100
@@ -69,8 +69,8 @@ rectangle p@(V2 px py) w h =
   LinePrim <$> lineFromPath
     [ p, V2 (px + w) py, V2 (px + w) (py + h), V2 px (py + h), p ]
 
--- | Generate a list of primitive representing a rectangle
--- with rounded corner.
+-- | Generate a list of primitives representing a rectangle
+-- with rounded corners.
 --
 -- > fill $ roundedRectangle (V2 10 10) 150 150 20 10
 --

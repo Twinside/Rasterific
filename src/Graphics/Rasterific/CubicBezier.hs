@@ -200,18 +200,18 @@ offsetCubicBezier offset bezier@(CubicBezier a b c d)
 -- | Clamp the cubic bezier curve inside a rectangle
 -- given in parameter.
 clipCubicBezier
-    :: Point   -- ^ Point representing the "minimal" point for cliping
-    -> Point  -- ^ Point representing the "maximal" point for cliping
+    :: Point   -- ^ Point representing the "minimal" point for clipping
+    -> Point  -- ^ Point representing the "maximal" point for clipping
     -> CubicBezier -- ^ The cubic bezier curve to be clamped
     -> Container Primitive
 clipCubicBezier mini maxi bezier@(CubicBezier a b c d)
     -- If we are in the range bound, return the curve
     -- unaltered
     | insideX && insideY = pure $ CubicBezierPrim bezier
-    -- If one of the component is outside, clamp
+    -- If one of the components is outside, clamp
     -- the components on the boundaries and output a
     -- straight line on this boundary. Useful for the
-    -- filing case, to clamp the polygon drawing on
+    -- filling case, to clamp the polygon drawing on
     -- the edge
     | outsideX || outsideY =
         pure . CubicBezierPrim $ clampedA `straightLine` clampedD

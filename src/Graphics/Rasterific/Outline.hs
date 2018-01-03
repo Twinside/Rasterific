@@ -1,5 +1,5 @@
--- | This module provide helper functions to create outline
--- of  shapes.
+-- | This module provides helper functions to create outlines
+-- of shapes.
 module Graphics.Rasterific.Outline
     ( StrokeWidth
     , strokize

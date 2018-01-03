@@ -123,7 +123,7 @@ fillOrder o@DrawOrder { _orderMask = Just mask } = do
   lift $ primToPrim $ flip evalStateT img $ _orderDirect o
 
 -- | Start an image rendering. See `fillWithTexture` for
--- an usage example. This function can work with either
+-- a usage example. This function can work with either
 -- `IO` or `ST`.
 runDrawContext :: forall m px . (PrimMonad m, RenderablePixel px)
                => Int   -- ^ Rendering width

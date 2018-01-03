@@ -97,7 +97,7 @@ isCubicBezierInImage img (CubicBezier a b c d) =
     isIn a && isIn b && isIn c && isIn d
   where isIn = isPointInImage img
 
--- | Rasterize a cubic bezier curve using the Fast Forward Diffrence
+-- | Rasterize a cubic bezier curve using the Fast Forward Difference
 -- algorithm.
 rasterizerCubicBezier :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                       => src -> CubicBezier
@@ -149,7 +149,7 @@ rasterizerCubicBezier source bez uStart vStart uEnd vEnd = do
   else
     lift $ go 0 ax' bx' ay' by' xStart yStart vStart
 
--- | Rasterize a coon patch using the Fast Forward Diffrence algorithm,
+-- | Rasterize a Coons patch using the Fast Forward Difference algorithm,
 -- likely to be faster than the subdivision one.
 rasterizeCoonPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                     => CoonPatch src -> DrawContext m px ()
@@ -157,7 +157,7 @@ rasterizeCoonPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                                   -> DrawContext (ST s) PixelRGBA8 () #-}
 rasterizeCoonPatch = rasterizeTensorPatch . toTensorPatch
 
--- | Rasterize a tensor patch using the Fast Forward Diffrence algorithm,
+-- | Rasterize a tensor patch using the Fast Forward Difference algorithm,
 -- likely to be faster than the subdivision one.
 rasterizeTensorPatch :: (PrimMonad m, ModulablePixel px, BiSampleable src px)
                      => TensorPatch src -> DrawContext m px ()

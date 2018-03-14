@@ -18,7 +18,7 @@ module Graphics.Rasterific.Transformations
     , inverseTransformation
     ) where
 
-import Data.Monoid( (<>) )
+import Data.Semigroup( Semigroup( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear( V2( .. ), normalize )
 
@@ -53,8 +53,11 @@ transformCombine (Transformation a c e
               (b * c' + d * d' {- below d' is zero -})
               (b * e' + d * f' + f {- below f' is one -})
 
+instance Semigroup Transformation where
+    (<>) = transformCombine
+
 instance Monoid Transformation where
-    mappend = transformCombine
+    mappend = (<>)
     mempty = Transformation 1 0 0
                             0 1 0
 

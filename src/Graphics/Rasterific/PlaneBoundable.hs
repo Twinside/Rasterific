@@ -9,7 +9,7 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
                                           , boundLowerLeftCorner
                                           ) where
 
-import Data.Monoid( (<>) )
+import Data.Semigroup( Semigroup( .. ) )
 
 import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Types
@@ -42,15 +42,17 @@ boundHeight (PlaneBound (V2 _ y0) (V2 _ y1)) = y1 - y0
 boundLowerLeftCorner :: PlaneBound -> Point
 boundLowerLeftCorner (PlaneBound (V2 x _) (V2 _ y)) = V2 x y
 
+instance Semigroup PlaneBound where
+  (<>) (PlaneBound mini1 maxi1) (PlaneBound mini2 maxi2) =
+    PlaneBound (min <$> mini1 <*> mini2)
+               (max <$> maxi1 <*> maxi2)
+
 instance Monoid PlaneBound where
+  mappend = (<>)
   mempty = PlaneBound infPoint negInfPoint
     where
       infPoint = V2 (1 / 0) (1 / 0)
       negInfPoint = V2 (negate 1 / 0) (negate 1 / 0)
-
-  mappend (PlaneBound mini1 maxi1) (PlaneBound mini2 maxi2) =
-    PlaneBound (min <$> mini1 <*> mini2)
-               (max <$> maxi1 <*> maxi2)
 
 -- | Class used to calculate bounds of various geometrical
 -- primitives. The calculated is precise, the bounding should

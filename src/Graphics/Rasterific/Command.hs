@@ -15,6 +15,7 @@ module Graphics.Rasterific.Command ( Drawing
                                    , dumpTexture
                                    ) where
 
+import Data.Semigroup( Semigroup( .. ) )
 import Control.Monad.ST( ST )
 import Control.Monad.State( StateT )
 import Control.Monad.Primitive( PrimState )
@@ -215,7 +216,10 @@ instance Functor (DrawCommand px) where
     fmap f (MeshPatchRender i mesh next) =
         MeshPatchRender i mesh $ f next
 
+instance Semigroup (Drawing px ()) where
+    (<>) a b = a >> b
+
 instance Monoid (Drawing px ()) where
     mempty = return ()
-    mappend a b = a >> b
+    mappend = (<>)
 

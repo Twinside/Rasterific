@@ -1034,15 +1034,18 @@ pdfProducer baseTexture draw = do
        pure $ foldMap pathToPdf (resplit prims)
             <> filler method
             <> after
+
      Stroke w j (c, _) prims next -> do
        after <- recurse next
        let output p = pathToPdf p <> reClose p
-       pure $ toPdf w <> tp " w "
-            <> lineJoinOf j
-            <> lineCapOf  c <> "\n"
-            <> foldMap output (resplit prims)
-            <> tp "S\n"
-            <> after
+           stroke = case w of
+             0 -> mempty
+             _ -> toPdf w <> tp " w "
+                          <> lineJoinOf j
+                          <> lineCapOf  c <> "\n"
+                          <> foldMap output (resplit prims)
+                          <> tp "S\n"
+       pure $ stroke <> after
      
      DashedStroke o pat w j (c, _) prims next -> do
        sub <- go forceInverse activeTrans filler prevTexture $ Stroke w j (c, c) prims (Pure ())

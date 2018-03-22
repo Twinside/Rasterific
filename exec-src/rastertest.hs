@@ -352,6 +352,19 @@ strokeTest stroker texture prefix =
                    logo 100 False $ V2 240 240]
           ]
 
+strokeWidthTest :: (forall g. Stroker g)
+                -> IO ()
+strokeWidthTest stroker =
+    produceImageAtSize 500 500 "stroke_width.png"
+        $ withTexture (uniformTexture black)
+        $ drawing
+  where
+    drawing = sequence_ $
+          [ stroker w JoinRound (CapRound, CapRound) l
+          | (w, l) <- zip [0..] ls ]
+    ls = [ lineFromPath [ V2 50 (50 * i), V2 450 (50 * i) ]
+         | i <- [1..9] ]
+
 orientationAxisText :: IO ()
 orientationAxisText =
     let trans = translate (V2 200 200) <> toNewXBase (V2 1 (-0.5)) in
@@ -734,6 +747,7 @@ testSuite = do
   strokeTest stroke bigBiGradient "gradient_"
   strokeTest stroke radTriGradient "rad_gradient_"
   strokeLogo stroke ""
+  strokeWidthTest stroke
 
   strokeQuadraticIntersection stroke uniform ""
   strokeQuadraticIntersection stroke triGradient "gradient_"

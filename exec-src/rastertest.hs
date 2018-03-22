@@ -3,7 +3,6 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Control.Monad.ST( ST, runST )
 import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
@@ -11,10 +10,9 @@ import Graphics.Rasterific hiding ( fill
                                   , fillWithMethod, stroke)
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Texture
-import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
+import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.Patch
 
 import qualified Data.ByteString.Lazy as LB
 import Graphics.Text.TrueType( loadFontFile )
@@ -82,17 +80,17 @@ logo size inv offset = bezierFromPath . way $ map (^+^ offset)
             | otherwise = id
 
 
-background, blue, black, yellow, red, green, orange, white :: PixelRGBA8
+background, blue, black, yellow, red, white :: PixelRGBA8
 background = PixelRGBA8 128 128 128 255
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
-green =  PixelRGBA8 0 255 0 255
 black = PixelRGBA8 0 0 0 255
-{-grey = PixelRGBA8 128 128 128 255-}
-orange = PixelRGBA8 255 0xA5 0 255
 yellow = PixelRGBA8 255 255 0 255
-{-brightblue = PixelRGBA8 0 255 255 255-}
 white = PixelRGBA8 255 255 255 255
+{-brightblue = PixelRGBA8 0 255 255 255-}
+{-green =  PixelRGBA8 0 255 0 255-}
+{-grey = PixelRGBA8 128 128 128 255-}
+{-orange = PixelRGBA8 255 0xA5 0 255-}
 
 biColor, triColor :: Gradient PixelRGBA8
 biColor = [ (0.0, black) , (1.0, yellow) ]
@@ -660,11 +658,6 @@ doubleCache =
                 fill $ circle (V2 70 100) 30
             fill $ circle (V2 120 100) 30
   
-drawImm :: FilePath -> Int -> Int -> (forall s. DrawContext (ST s) PixelRGBA8 ()) -> IO ()
-drawImm path w h d = do
-  putStrLn $ "Rendering " ++ path
-  writePng path $ runST $ runDrawContext w h white d
-
 
 testSuite :: IO ()
 testSuite = do
@@ -766,8 +759,7 @@ badCircle :: IO ()
 badCircle = do
   putStrLn "Bad Circle"
   print $ circle (V2 0 0) 1e50
-  let white = PixelRGBA8 255 255 255 255
-      drawColor = PixelRGBA8 0 0x86 0xc1 255
+  let drawColor = PixelRGBA8 0 0x86 0xc1 255
       img = renderDrawing 400 200 white $
          withTexture (uniformTexture drawColor) $ do
             fill $ circle (V2 0 0) 1e50 -- overflows to Infinity :: Float -> boom

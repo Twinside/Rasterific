@@ -363,6 +363,29 @@ strokeWidthTest stroker =
     ls = [ lineFromPath [ V2 50 (50 * i), V2 450 (50 * i) ]
          | i <- [1..9] ]
 
+strokePixelTest :: (forall g. Stroker g)
+                -> IO ()
+strokePixelTest stroker =
+    produceImageAtSize 10 5 "stroke_pixel.png"
+        $ withTexture (uniformTexture black)
+        $ drawing
+  where
+    drawing = sequence_ $
+          [ stroker 1 JoinRound (CapStraight 0, CapStraight 0) (lineFromPath p)
+          | p <- ps ]
+    ps = -- line of 1, 2, 3 pixels
+         [ [ V2 1 1.5, V2 2 1.5 ]
+         , [ V2 3 1.5, V2 5 1.5 ]
+         , [ V2 6 1.5, V2 9 1.5 ]
+         -- line of halved lines
+         , [ V2 1 3.5, V2 1.5 3.5 ]
+         , [ V2 1.5 3.5, V2 2 3.5 ]
+         , [ V2 3 3.5, V2 4 3.5 ]
+         , [ V2 4 3.5, V2 5 3.5 ]
+         , [ V2 6 3.5, V2 7.5 3.5 ]
+         , [ V2 7.5 3.5, V2 9 3.5 ]
+         ]
+
 orientationAxisText :: IO ()
 orientationAxisText =
     let trans = translate (V2 200 200) <> toNewXBase (V2 1 (-0.5)) in
@@ -741,6 +764,7 @@ testSuite = do
   strokeTest stroke radTriGradient "rad_gradient_"
   strokeLogo stroke ""
   strokeWidthTest stroke
+  strokePixelTest stroke
 
   strokeQuadraticIntersection stroke uniform ""
   strokeQuadraticIntersection stroke triGradient "gradient_"

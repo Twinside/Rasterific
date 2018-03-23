@@ -13,7 +13,6 @@ import Graphics.Rasterific.Linear( (^+^), (^*) )
 import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Patch
 import Graphics.Rasterific.MeshPatch
-import Graphics.Rasterific
 
 import Criterion
 import Criterion.Main
@@ -23,21 +22,14 @@ import Codec.Picture
 
 import qualified Data.Vector as V
 
-background, blue, black, yellow, red, green, orange, white :: PixelRGBA8
-background = PixelRGBA8 128 128 128 255
+blue, black, yellow, red, green, orange, white :: PixelRGBA8
 blue = PixelRGBA8 0 020 150 255
 red = PixelRGBA8 255 0 0 255
 green =  PixelRGBA8 0 255 0 255
 black = PixelRGBA8 0 0 0 255
-{-grey = PixelRGBA8 128 128 128 255-}
 orange = PixelRGBA8 255 0xA5 0 255
 yellow = PixelRGBA8 255 255 0 255
-{-brightblue = PixelRGBA8 0 255 255 255-}
 white = PixelRGBA8 255 255 255 255
-
-biColor, triColor :: Gradient PixelRGBA8
-biColor = [ (0.0, black) , (1.0, yellow) ]
-triColor = [ (0.0, blue), (0.5, white) , (1.0, red) ]
 
 frontColor, accentColor, accent2Color :: PixelRGBA8
 frontColor = PixelRGBA8 0 0x86 0xc1 255
@@ -72,23 +64,18 @@ drawPure path w h act = do
 
 coonTest :: IO ()
 coonTest = do
-  drawing "coon_img/single_patch.png" defaultDebug 400 440 patch [patch]
-  drawing "coon_img/single_patch_subdiv.png" defaultDebug 400 410 patch [n, e, w, s]
+  drawing "coon_img/single_patch.png" 400 440 patch [patch]
+  drawing "coon_img/single_patch_subdiv.png" 400 410 patch [north, east, west, south]
   putStrLn "coon_img/subdiv.gif"
   case imgAtSubdiv of
     Left _ -> return ()
     Right f -> f
   where
-    draw path p = do
-      putStrLn $ "Rendering " ++ path
-      writePng path . renderDrawing 800 800 (PixelRGBA8 255 255 255 255) $
-          withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) p
-
-    drawing :: FilePath -> DebugOption -> Int -> Int
+    drawing :: FilePath -> Int -> Int
             -> CoonPatch (ParametricValues PixelRGBA8)
             -> [CoonPatch (ParametricValues a)]
             -> IO ()
-    drawing path opt w h rootPatch patches = do
+    drawing path w h rootPatch patches = do
       putStrLn $ "Rendering " ++ path
       writePng path $ runST $ runDrawContext w h white $ do
         rasterizeCoonPatch rootPatch
@@ -96,7 +83,7 @@ coonTest = do
           mapM_ fillOrder $ drawOrdersOfDrawing w h 96 white $
             debugDrawCoonPatch defaultDebug p { _coonValues = colors }
 
-    Subdivided n e w s = subdividePatch patch { _coonValues = parametricBase }
+    Subdivided north east west south = subdividePatch patch { _coonValues = parametricBase }
 
     imgAtSubdiv = writeGifImages "coon_img/subdiv.gif" LoopingForever images
       where
@@ -237,13 +224,6 @@ toCoon st values = build . go st where
 
   toAbsolute p = fmap (p ^+^)
 
-drawVertex :: Point -> Drawing PixelRGBA8 ()
-drawVertex p = stroke 2 JoinRound (CapRound, CapRound) $ circle p 4
-
-drawBetweenPoint :: Point -> Point -> Drawing PixelRGBA8 ()
-drawBetweenPoint p1 p2 =
-  stroke 1.5 JoinRound (CapRound, CapRound) $ line p1 p2
-
 jitPoints :: Transformable a => Float -> a -> a
 jitPoints force e = evalState (transformM jit e) jitter where
   jitter = cycle $ (^* force) <$> [ V2 1 0.5, V2 0.5 1 , V2 (-0.5) (-1)
@@ -327,28 +307,6 @@ debugCubic = do
     mesh3 =
       generateLinearGrid 9 9 (V2 10 10) (V2 100 100) . V.fromListN (10 * 10) $ cycle colorBase
   
-    colors2 = V.fromListN (4 * 4)
-      [ px 255 179  47
-      , px 255 242  34
-      , px  61 227 206
-      , px  90 255   0
-
-      , px 255 242  34
-      , px  61 227 206
-      , px 103 157 255
-      , px 255 179  47
-
-      , px 255  74  74
-      , px  90 255   0
-      , px 255 179  47
-      , px  61 227 206
-
-      , px 103 157 255
-      , px  61 227 206
-      , px 255 242  34
-      , px 103 157 255
-      ]
-
     colors = V.fromListN (5 * 5) colorBase
 
     colorBase =

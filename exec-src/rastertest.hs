@@ -366,24 +366,29 @@ strokeWidthTest stroker =
 strokePixelTest :: (forall g. Stroker g)
                 -> IO ()
 strokePixelTest stroker =
-    produceImageAtSize 10 5 "stroke_pixel.png"
+    produceImageAtSize 10 7 "stroke_pixel.png"
         $ withTexture (uniformTexture black)
         $ drawing
   where
     drawing = sequence_ $
-          [ stroker 1 JoinRound (CapStraight 0, CapStraight 0) (lineFromPath p)
-          | p <- ps ]
-    ps = -- line of 1, 2, 3 pixels
-         [ [ V2 1 1.5, V2 2 1.5 ]
-         , [ V2 3 1.5, V2 5 1.5 ]
-         , [ V2 6 1.5, V2 9 1.5 ]
-         -- line of halved lines
-         , [ V2 1 3.5, V2 1.5 3.5 ]
-         , [ V2 1.5 3.5, V2 2 3.5 ]
-         , [ V2 3 3.5, V2 4 3.5 ]
-         , [ V2 4 3.5, V2 5 3.5 ]
-         , [ V2 6 3.5, V2 7.5 3.5 ]
-         , [ V2 7.5 3.5, V2 9 3.5 ]
+          [ stroker 1 JoinRound (CapStraight 0, CapStraight 0) g
+          | g <- gs ]
+    l = lineFromPath
+    gs = -- line of 1, 2, 3 pixels
+         [ [ l [ V2 1 1.5, V2 2 1.5 ] ]
+         , [ l [ V2 3 1.5, V2 5 1.5 ] ]
+         , [ l [ V2 6 1.5, V2 9 1.5 ] ]
+         -- line of halved lines, stroked individually
+         , [ l [ V2 1 3.5, V2 1.5 3.5 ] ]
+         , [ l [ V2 1.5 3.5, V2 2 3.5 ] ]
+         , [ l [ V2 3 3.5, V2 4 3.5 ] ]
+         , [ l [ V2 4 3.5, V2 5 3.5 ] ]
+         , [ l [ V2 6 3.5, V2 7.5 3.5 ] ]
+         , [ l [ V2 7.5 3.5, V2 9 3.5 ] ]
+         -- line of halved lines, stroked as one
+         , [ l [ V2 1 5.5, V2 1.5 5.5 ], l [ V2 1.5 5.5, V2 2 5.5 ] ]
+         , [ l [ V2 3 5.5, V2 4 5.5 ], l [ V2 4 5.5, V2 5 5.5 ] ]
+         , [ l [ V2 6 5.5, V2 7.5 5.5 ], l [ V2 7.5 5.5, V2 9 5.5 ] ]
          ]
 
 orientationAxisText :: IO ()

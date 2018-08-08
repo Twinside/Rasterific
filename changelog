@@ -1,6 +1,11 @@
 Change log
 ==========
 
+v0.7.4
+------
+
+ * Fix: Rendering bug with self-closing cubic bezier curve
+
 v0.7.3
 ------
 

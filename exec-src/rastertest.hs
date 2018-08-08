@@ -27,6 +27,8 @@ import Criterion.Main( defaultMainWith
 {-import Text.Groom( groom )-}
 import qualified Sample as Sample
 
+import Debug.Trace
+
 type Stroker g =
   (Geometry g) =>
       Float -> Join -> (Cap, Cap) -> g -> Drawing PixelRGBA8 ()
@@ -714,7 +716,7 @@ testSuite = do
       radFocusTriGradient2 =
         radialGradientWithFocusTexture
             triColor (V2 200 200) 70 (V2 150 170)
-
+  omitted
   createDirectoryIfMissing True outFolder
   doubleCache
   clipFail
@@ -793,6 +795,21 @@ benchTest _args = do
         [bench "testsuite" $ nfIO testSuite,
          bench "Triangles" $ nfIO Sample.triangles]
 
+omitted :: IO ()
+omitted = do
+    putStrLn "Omitting"
+    -- writePng (outFolder </> "IssueSample.png") $ go 400
+    writePng (outFolder </> "IssueSample2.png") $ go 300
+  where
+    (imgx, imgy) = (1280.0, 720.0)
+    greyN n = PixelRGBA8 n n n 255
+    go a =
+      renderDrawing (floor imgx) (floor imgy) (greyN 200) $
+        withTransformation (translate (V2 (imgx/2) (imgy/2))) $
+            withTexture (uniformTexture (greyN 100)) $ R.fill . traceShowId . toPrimitives $ 
+                Path (V2 0 0) True [PathCubicBezierCurveTo (V2 a a) (V2 a (-a)) (V2 0 0)]
+
+
 badCircle :: IO ()
 badCircle = do
   putStrLn "Bad Circle"
@@ -801,7 +818,7 @@ badCircle = do
       img = renderDrawing 400 200 white $
          withTexture (uniformTexture drawColor) $ do
             fill $ circle (V2 0 0) 1e50 -- overflows to Infinity :: Float -> boom
-  writePng "bug.png" img
+  writePng (outFolder </> "bug.png") img
 
 main :: IO ()
 main = do
@@ -811,5 +828,6 @@ main = do
          "bench":rest -> benchTest rest
          "prof":_ -> Sample.triangles
          "badcircle":_ -> badCircle
+         "ommit":_ -> omitted
          _ -> testSuite
 

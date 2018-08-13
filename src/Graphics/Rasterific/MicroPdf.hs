@@ -128,6 +128,10 @@ domainOfLinearGradient (Line p1 p2) (mini, maxi) =
 --------------------------------------------------
 type PdfEnv = StateT PdfContext (Reader PdfConfiguration)
 
+runPdfEnvs :: PdfConfiguration -> PdfId -> [PdfEnv a] -> ([a], PdfContext)
+runPdfEnvs conf firstFreeId producers =
+  runReader (runStateT (sequence producers) $ emptyContext firstFreeId) conf 
+
 runPdfEnv :: PdfConfiguration -> PdfId -> PdfEnv a -> (a, PdfContext)
 runPdfEnv conf firstFreeId producer =
   runReader (runStateT producer $ emptyContext firstFreeId) conf 
@@ -953,7 +957,11 @@ toPdfSpace h = translate (V2 0 h) <> scale 1 (-1)
 
 pdfFromProducer :: PdfBaseColorable px
                 => Proxy px -> PdfConfiguration -> PdfEnv Builder -> LB.ByteString
-pdfFromProducer px conf producer = toLazyByteString $
+pdfFromProducer px conf producer = pdfFromProducers px conf [producer]
+
+pdfFromProducers :: PdfBaseColorable px
+                => Proxy px -> PdfConfiguration -> [PdfEnv Builder] -> LB.ByteString
+pdfFromProducers px conf producers = toLazyByteString $
   foldMap byteString objs
     <> xref
     <> buildTrailer objects catalogId
@@ -961,17 +969,27 @@ pdfFromProducer px conf producer = toLazyByteString $
     <> tp "%%EOF"
   where
   height = _pdfHeight conf
-  (catalogId : outlineId : pagesId : pageId : contentId : endObjId : firstFreeId :  _) = [1..]
-  (content, endContext) = runPdfEnv conf firstFreeId producer
+  (catalogId : outlineId : pagesId : endObjId : remainingIds) = [1..]
+  (pageIds, remainingIds') = splitAt (length producers) remainingIds
+  (contentIds, remainingIds'') = splitAt (length producers) remainingIds'
+  firstFreeId = head remainingIds''
+  (contents, endContext) = runPdfEnvs conf firstFreeId producers
   initialTransform = toPdf . toPdfSpace $ fromIntegral height
+
 
   objects =
     [ catalogObject  pagesId outlineId catalogId 
     , outlinesObject [] outlineId
-    , pagesObject    [pageId] pagesId
-    , pageObject     px (_pdfWidth conf) height pagesId contentId endObjId pageId
-    , contentObject  (buildToStrict $ initialTransform <> content) contentId
-    , resourceObject
+    , pagesObject    pageIds pagesId
+    ] <>
+
+    concatMap (\(contentId, pageId, content) -> 
+        [ pageObject     px (_pdfWidth conf) height pagesId contentId endObjId pageId
+        , contentObject  (buildToStrict $ initialTransform <> content) contentId]
+      ) (zip3 contentIds pageIds contents)
+
+    <>
+    [ resourceObject
         (endContext .^ pdfShadings.resAssoc)
         (endContext .^ pdfGraphicStates.resAssoc)
         (endContext .^ pdfPatterns.resAssoc)

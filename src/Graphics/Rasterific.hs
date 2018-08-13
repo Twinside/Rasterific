@@ -68,6 +68,7 @@ module Graphics.Rasterific
     , renderDrawing
     , renderDrawingAtDpi
     , renderDrawingAtDpiToPDF
+    , renderDrawingsAtDpiToPDF
     , renderOrdersAtDpiToPdf 
     , pathToPrimitives
 
@@ -439,8 +440,16 @@ renderDrawingAtDpiToPDF
     -> Dpi -- ^ Current DPI used for text rendering.
     -> Drawing PixelRGBA8 () -- ^ Rendering action
     -> LB.ByteString
-renderDrawingAtDpiToPDF w h dpi =
-  renderDrawingToPdf renderer w h dpi
+renderDrawingAtDpiToPDF w h dpi d = renderDrawingsAtDpiToPDF w h dpi [d]
+
+renderDrawingsAtDpiToPDF
+    :: Int -- ^ Rendering width
+    -> Int -- ^ Rendering height
+    -> Dpi -- ^ Current DPI used for text rendering.
+    -> [Drawing PixelRGBA8 ()] -- ^ Rendering actions
+    -> LB.ByteString
+renderDrawingsAtDpiToPDF w h dpi =
+  renderDrawingsToPdf renderer w h dpi
     where
       renderer :: forall px . RenderablePixel px => Drawing px () -> [DrawOrder px]
       renderer = drawOrdersOfDrawing w h dpi emptyPx

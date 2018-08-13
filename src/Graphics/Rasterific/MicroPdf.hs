@@ -7,6 +7,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TupleSections #-}
 module Graphics.Rasterific.MicroPdf( renderDrawingToPdf
+                                   , renderDrawingsToPdf
                                    , renderOrdersToPdf
                                    ) where
 
@@ -377,7 +378,7 @@ pdfSignature :: B.ByteString
 pdfSignature = "%PDF-1.4\n%\xBF\xF7\xA2\xFE\n"
 
 refOf :: PdfId -> B.ByteString
-refOf i = buildToStrict $ intDec i <> " 0 R"
+refOf i = buildToStrict $ intDec i <> " 0 R "
 
 arrayOf :: Builder -> Builder
 arrayOf a = tp "[ " <> a <> tp " ]"
@@ -1009,8 +1010,13 @@ pdfFromProducers px conf producers = toLazyByteString $
 renderDrawingToPdf :: (forall px . PdfColorable px => Drawing px () -> [DrawOrder px])
                    -> Int -> Int -> Dpi -> Drawing PixelRGBA8 ()
                    -> LB.ByteString
-renderDrawingToPdf toOrders width height dpi =
-    pdfFromProducer px conf . pdfProducer baseTexture
+renderDrawingToPdf toOrders width height dpi d = renderDrawingsToPdf toOrders width height dpi [d]
+
+renderDrawingsToPdf :: (forall px . PdfColorable px => Drawing px () -> [DrawOrder px])
+                   -> Int -> Int -> Dpi -> [Drawing PixelRGBA8 ()]
+                   -> LB.ByteString
+renderDrawingsToPdf toOrders width height dpi ds =
+    pdfFromProducers px conf $ map (pdfProducer baseTexture) ds
   where
     px = Proxy :: Proxy PixelRGBA8
     baseTexture = SolidTexture emptyPx 

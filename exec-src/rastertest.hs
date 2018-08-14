@@ -119,8 +119,9 @@ stroke w j cap prims =
 dashedStroke :: Geometry g
              => DashPattern -> Float -> Join -> (Cap, Cap) -> g
              -> Drawing PixelRGBA8 ()
-dashedStroke p w j c prims =
-    R.dashedStroke p w j c prims >> drawBoundingBox prims
+dashedStroke p w j c prims = do
+    drawBoundingBox prims
+    R.dashedStroke p w j c prims
 
 dashedStrokeWithOffset
     :: Geometry g
@@ -302,6 +303,26 @@ strokeCubicDashed stroker texture prefix =
                 (CapStraight 0, CapStraight 0)
                 loop]
         ]
+
+strokeCubicDashed2 :: (forall g. DashStroker g) -> Texture PixelRGBA8 -> String
+                   -> IO ()
+strokeCubicDashed2 stroker texture prefix =
+    produceImageAtSize 500 500 (prefix ++ "cubicStrokeDashed2.png") drawing
+  where
+    circ =
+        [ CubicBezier (V2 34.0 20.0) (V2 34.0 12.268013) (V2 27.731987 6.0) (V2 20.0 6.0)
+        , CubicBezier (V2 20.0 6.0) (V2 12.268013 6.0) (V2 6.0 12.268013) (V2 6.0 20.0)
+        , CubicBezier (V2 6.0 20.0) (V2 6.0 27.731987) (V2 12.268013 34.0) (V2 20.0 34.0)
+        , CubicBezier (V2 20.0 34.0) (V2 27.731987 34.0) (V2 34.0 27.731987) (V2 34.0 20.0)
+        ]
+
+    strokeCircle = stroker [2, 2] 2 (JoinMiter 0) (CapStraight 0, CapStraight 0) circ
+
+    drawing = withTexture texture $ do
+      strokeCircle 
+      withTransformation (translate (V2 30 30) <> scale 2 2) strokeCircle
+      withTransformation (translate (V2 80 80) <> scale 4 4) strokeCircle
+      withTransformation (translate (V2 180 180) <> scale 5 5) strokeCircle
 
 textAlignStringTest :: String -> String -> String -> IO ()
 textAlignStringTest fontName filename txt = do
@@ -716,7 +737,6 @@ testSuite = do
       radFocusTriGradient2 =
         radialGradientWithFocusTexture
             triColor (V2 200 200) 70 (V2 150 170)
-  omitted
   createDirectoryIfMissing True outFolder
   doubleCache
   clipFail
@@ -779,6 +799,7 @@ testSuite = do
   strokeCubic stroke radTriGradient "rad_gradient_"
 
   strokeCubicDashed dashedStroke uniform ""
+  strokeCubicDashed2 dashedStroke uniform ""
   shouldBeTheSame
 
   let testText =
@@ -797,8 +818,6 @@ benchTest _args = do
 
 omitted :: IO ()
 omitted = do
-    putStrLn "Omitting"
-    -- writePng (outFolder </> "IssueSample.png") $ go 400
     writePng (outFolder </> "IssueSample2.png") $ go 300
   where
     (imgx, imgy) = (1280.0, 720.0)

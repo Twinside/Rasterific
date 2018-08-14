@@ -270,6 +270,11 @@ cubicBezierBreakAt (CubicBezier a b c d) val =
     abbcbccd = lerp val bccd abbc
 
 decomposeCubicBeziers :: CubicBezier -> Producer EdgeSample
+decomposeCubicBeziers cb@(CubicBezier a b c d)
+   -- handle case of self closed bezier curve
+  | not (a `isDistingableFrom` d) && ((a `isDistingableFrom` b) || (a `isDistingableFrom` c)) =
+    let (l, r) = cubicBezierBreakAt cb 0.5 in
+    decomposeCubicBeziers l . decomposeCubicBeziers r 
 decomposeCubicBeziers (CubicBezier (V2 aRx aRy) (V2 bRx bRy) (V2 cRx cRy) (V2 dRx dRy)) =
     go aRx aRy bRx bRy cRx cRy dRx dRy where
   go ax ay _bx _by _cx _cy dx dy cont | insideX && insideY =

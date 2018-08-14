@@ -1,6 +1,13 @@
 Change log
 ==========
 
+v0.7.4 August 2018
+------------------
+
+ * Fix: Rendering bug with self-closing cubic bezier curve
+ * Fix: dashed stroking of tiny features
+ * Adding: multiple page pdf rendering (jprider63)
+
 v0.7.3
 ------
 

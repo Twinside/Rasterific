@@ -41,8 +41,8 @@ type PathWalker a = PathWalkerT Identity a
 -- | State of the path walker, just a bunch of primitives
 -- with continuity guarantee. The continuity is guaranteed
 -- by the Path used to derive this primitives.
-data WalkerState = WalkerState
-    { _walkerPrims :: ![Primitive]
+newtype WalkerState = WalkerState
+    { _walkerPrims :: [Primitive]
     }
 
 -- | Create a path walker from a given path

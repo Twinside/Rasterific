@@ -17,6 +17,7 @@ import Control.Monad.State( StateT, get, put, runStateT, modify, execState )
 import Control.Monad.Reader( Reader, local, asks, runReader )
 
 import Numeric( showFFloat )
+import Data.List( sortOn )
 import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
 import Data.Word( Word32 )
@@ -945,7 +946,7 @@ buildXRefTable :: [Int] -> Builder
 buildXRefTable lst = tp "xref\n0 " <> intDec (glength lst) <> tp "\n"
                    <> foldMap build lst where
   build 0 = "0000000000 65535 f \n"
-  build ix = toPdf . B.pack $ printf "%010d 00000 n \n" ix
+  build off = toPdf . B.pack $ printf "%010d 00000 n \n" off
 
 buildTrailer :: Foldable f => f a -> PdfId -> Builder
 buildTrailer objs startId = tp "trailer\n" <> toPdf
@@ -1000,12 +1001,13 @@ pdfFromProducers px conf producers = toLazyByteString $
     <> reverse (_generatedPdfObjects endContext)
 
   (indexes, objs) = unzip $ prepareObjects objects
-  lastIndex = last indexes
-  xrefIndex = lastIndex + B.length (last objs)
+  (_, lastOffset) = last indexes
+  xrefOffset = lastOffset + B.length (last objs)
 
-  xrefPosition = "startxref\n" <> intDec xrefIndex <> tp "\n"
+  xrefPosition = "startxref\n" <> intDec xrefOffset <> tp "\n"
 
-  xref = buildXRefTable indexes
+  offsets = map snd $ sortOn fst indexes
+  xref = buildXRefTable offsets
 
 renderDrawingToPdf :: (forall px . PdfColorable px => Drawing px () -> [DrawOrder px])
                    -> Int -> Int -> Dpi -> Drawing PixelRGBA8 ()
@@ -1165,7 +1167,6 @@ renderOrdersToPdf toOrders width height dpi orders =
       , _pdfConfToOrder = toOrders
       }
 
-prepareObjects :: [PdfObject] -> [(Int, B.ByteString)]
-prepareObjects = scanl go (0, pdfSignature) where
-  go (ix, prev) obj = (ix + B.length prev, buildToStrict $ toPdf obj)
-
+prepareObjects :: [PdfObject] -> [((PdfId, Int), B.ByteString)]
+prepareObjects = scanl go ((0, 0), pdfSignature) where
+  go ((_, off), prev) obj = ((_pdfId obj, off + B.length prev), buildToStrict $ toPdf obj)

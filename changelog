@@ -1,6 +1,14 @@
 Change log
 ==========
 
+v0.7.4.2 December 2018
+----------------------
+
+ * Refactoring: minor enhancement in the PathWalker
+   (newtype instead of single constructor data) (thanks to yairchu)
+ * Fix: PDF rendering didn't produce valid pdf in some cases,
+        the XRef table wasn't sorted by ID (thanks to robx)
+
 v0.7.4.1 October 2018
 ---------------------
 

@@ -156,6 +156,7 @@ joinPrimitives :: StrokeWidth -> Join -> Primitive -> Primitive
                -> Container Primitive
 joinPrimitives offset join prim1 prim2  =
   case join of
+    JoinRound | nearZero u || nearZero v -> miterJoin offset 0 p u v
     JoinRound -> roundJoin offset p u v
     JoinMiter l -> miterJoin offset l p u v
   where (p, u) = lastPointAndNormal prim1

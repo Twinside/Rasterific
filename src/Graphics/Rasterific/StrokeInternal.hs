@@ -16,6 +16,7 @@ import Graphics.Rasterific.Linear
              , (^+^)
              , (^*)
              , dot
+             , nearZero
              )
 
 import Graphics.Rasterific.Operators
@@ -80,7 +81,9 @@ roundJoin offset p = go
 -- | Put a cap at the end of a bezier curve, depending
 -- on the kind of cap wanted.
 cap :: Float -> Cap -> Primitive -> Container Primitive
-cap offset CapRound prim = roundJoin offset p u (- u)
+cap offset CapRound prim 
+  | nearZero u = cap offset (CapStraight 0) prim
+  | otherwise = roundJoin offset p u (- u)
   where (p, u) = lastPointAndNormal prim
 
 cap offset (CapStraight cVal) prim =

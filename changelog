@@ -1,6 +1,12 @@
 Change log
 ==========
 
+v0.7.5 ??? 2019
+---------------
+
+ * Adding better sanitization of geometry in presence of NaN
+   and infinity.
+
 v0.7.4.3 May 2019
 -----------------
 

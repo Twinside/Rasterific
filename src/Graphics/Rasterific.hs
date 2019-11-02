@@ -575,6 +575,14 @@ drawOrdersOfDrawing width height dpi background drawing =
     stupidDefaultTexture =
         SolidTexture $ colorMap (const clipBackground) background
 
+    orderOf ctxt method primitives = DrawOrder 
+        { _orderPrimitives = primitives
+        , _orderTexture    = textureOf ctxt
+        , _orderFillMethod = method
+        , _orderMask       = currentClip ctxt
+        , _orderDirect     = return ()
+        }
+
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
@@ -670,17 +678,12 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
-      order = DrawOrder 
-            { _orderPrimitives = [geometryOf ctxt prims]
-            , _orderTexture    = textureOf ctxt
-            , _orderFillMethod = method
-            , _orderMask       = currentClip ctxt
-            , _orderDirect     = return ()
-            }
+      order = orderOf ctxt method [geometryOf ctxt prims >>= listOfContainer . sanitize]
 
-    go ctxt (Free (Stroke w j cap prims next)) rest =
-        go ctxt (Free $ Fill FillWinding prim' next) rest
-            where prim' = listOfContainer $ strokize w j cap prims
+    go ctxt (Free (Stroke w j cap prims next)) rest = order : after where
+      after = go ctxt next rest
+      order = orderOf ctxt FillWinding [prim']
+      prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =
         go (ctxt { currentTexture = tx }) (fromF sub) $

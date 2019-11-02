@@ -19,11 +19,13 @@ import Graphics.Text.TrueType( loadFontFile )
 import Codec.Picture
 import Arbitrary
 import System.Environment( getArgs )
+{-
 import Criterion.Main.Options( defaultConfig )
 import Criterion.Main( defaultMainWith
                      , bench
                      , nfIO
                      )
+-- -}
 {-import Text.Groom( groom )-}
 import qualified Sample as Sample
 
@@ -722,6 +724,27 @@ doubleCache =
                 fill $ circle (V2 70 100) 30
             fill $ circle (V2 120 100) 30
   
+clipTestCaching :: IO ()
+clipTestCaching = do
+  let
+    red = PixelRGBA8 255 0 0 255
+    blue = PixelRGBA8 0 0 255 255
+    rect =
+      withTexture (uniformTexture red) $
+        R.fill $ rectangle (V2 0 0) 100 100
+    clippedRect =
+      withClipping
+        (R.fill $ rectangle (V2 0 0) 50 50)
+        rect
+    cachedRect =
+      cacheDrawing 50 50 96 clippedRect
+
+  writePng "rect.png" $
+    renderDrawing 100 100 blue rect
+  writePng "clippedRect.png" $
+    renderDrawing 100 100 blue clippedRect
+  writePng "cachedRect.png" $
+    renderDrawing 100 100 blue cachedRect
 
 testSuite :: IO ()
 testSuite = do
@@ -814,12 +837,15 @@ testSuite = do
   textAlignStringTest sansSerifFont "alignedArial.png"
         "Just a simple test, gogo !!! Yay ; quoi ?"
   textStrokeTest sansSerifFont "stroke_verdana.png" "e"
+  clipTestCaching
 
+{-
 benchTest :: [String] -> IO ()
 benchTest _args = do
   defaultMainWith defaultConfig
         [bench "testsuite" $ nfIO testSuite,
          bench "Triangles" $ nfIO Sample.triangles]
+         -- -}
 
 omitted :: IO ()
 omitted = do
@@ -849,7 +875,7 @@ main = do
     args <- getArgs
     case args of
          "random":_ -> randomTests
-         "bench":rest -> benchTest rest
+         -- "bench":rest -> benchTest rest
          "prof":_ -> Sample.triangles
          "badcircle":_ -> badCircle
          "ommit":_ -> omitted

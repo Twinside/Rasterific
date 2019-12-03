@@ -471,21 +471,27 @@ renderDrawingAtDpi width height dpi background drawing =
           $ drawOrdersOfDrawing width height dpi background drawing
 
 cacheOrders :: forall px. (RenderablePixel px)
-            => Maybe (Image px -> ImageTransformer px) -> [DrawOrder px] -> Drawing px ()
-cacheOrders imageFilter orders = case imageFilter of
-    Nothing -> drawImage resultImage 0 cornerUpperLeft
+            => Maybe (Image px -> ImageTransformer px)
+            -> Int -- ^ width
+            -> Int -- ^ Height
+            -> [DrawOrder px] -> Drawing px ()
+cacheOrders imageFilter maxWidth maxHeight orders = case imageFilter of
+    Nothing -> drawImageAtSize resultImage 0 cornerUpperLeft width height
     Just f -> drawImage (pixelMapXY (f resultImage) resultImage) 0 cornerUpperLeft
   where
    PlaneBound mini maxi = foldMap planeBounds orders
    cornerUpperLeftInt = floor <$> mini :: V2 Int
    cornerUpperLeft = fromIntegral <$> cornerUpperLeftInt
 
-   V2 width height = maxi ^-^ cornerUpperLeft ^+^ V2 1 1
+   V2 width height = min <$> (maxi ^-^ cornerUpperLeft ^+^ V2 1 1)
+                         <*> (V2 (fromIntegral maxWidth) (fromIntegral maxHeight))
    
    shiftOrder order@DrawOrder { _orderPrimitives = prims } =
        order { _orderPrimitives = fmap (transform (^-^ cornerUpperLeft)) <$> prims 
              , _orderTexture =
                  WithTextureTransform (translate cornerUpperLeft) $ _orderTexture order
+             , _orderMask =
+                 WithTextureTransform (translate cornerUpperLeft) <$> _orderMask order
              }
    
    resultImage =
@@ -507,7 +513,8 @@ cacheDrawing
     -> Drawing px ()
     -> Drawing px ()
 cacheDrawing maxWidth maxHeight dpi sub =
-  cacheOrders Nothing $ drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
+  cacheOrders Nothing maxWidth maxHeight $
+    drawOrdersOfDrawing maxWidth maxHeight dpi emptyPx sub
 
 {-  
 preComputeTexture :: (RenderablePixel px)
@@ -575,6 +582,14 @@ drawOrdersOfDrawing width height dpi background drawing =
     stupidDefaultTexture =
         SolidTexture $ colorMap (const clipBackground) background
 
+    orderOf ctxt method primitives = DrawOrder 
+        { _orderPrimitives = primitives
+        , _orderTexture    = textureOf ctxt
+        , _orderFillMethod = method
+        , _orderMask       = currentClip ctxt
+        , _orderDirect     = return ()
+        }
+
     go :: RenderContext px -> Free (DrawCommand px) () -> [DrawOrder px]
        -> [DrawOrder px]
     go _ (Pure ()) rest = rest
@@ -589,7 +604,7 @@ drawOrdersOfDrawing width height dpi background drawing =
     go ctxt (Free (WithImageEffect effect sub next)) rest =
         go freeContext (fromF cached) after
       where
-        cached = cacheOrders (Just effect) $ go ctxt (fromF sub) []
+        cached = cacheOrders (Just effect) maxBound maxBound $ go ctxt (fromF sub) []
         after = go ctxt next rest
         freeContext = ctxt { currentClip = Nothing, currentTransformation = Nothing }
 
@@ -670,17 +685,12 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
-      order = DrawOrder 
-            { _orderPrimitives = [geometryOf ctxt prims]
-            , _orderTexture    = textureOf ctxt
-            , _orderFillMethod = method
-            , _orderMask       = currentClip ctxt
-            , _orderDirect     = return ()
-            }
+      order = orderOf ctxt method [geometryOf ctxt prims >>= listOfContainer . sanitize]
 
-    go ctxt (Free (Stroke w j cap prims next)) rest =
-        go ctxt (Free $ Fill FillWinding prim' next) rest
-            where prim' = listOfContainer $ strokize w j cap prims
+    go ctxt (Free (Stroke w j cap prims next)) rest = order : after where
+      after = go ctxt next rest
+      order = orderOf ctxt FillWinding [prim']
+      prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =
         go (ctxt { currentTexture = tx }) (fromF sub) $

@@ -6,6 +6,7 @@ module Graphics.Rasterific.StrokeInternal
     , splitPrimitiveUntil
     , approximatePathLength
     , isPrimitivePoint
+    , sanitize
     )  where
 
 import Data.Monoid( (<>) )

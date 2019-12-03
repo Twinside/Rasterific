@@ -1,6 +1,14 @@
 Change log
 ==========
 
+v0.7.5 November 2019
+--------------------
+
+ * Adding better sanitization of geometry in presence of NaN
+   and infinity.
+ * Better handling of max width and height of caching (related
+   to weird clip issue combined with caching)
+
 v0.7.4.3 May 2019
 -----------------
 

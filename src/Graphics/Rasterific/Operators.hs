@@ -147,9 +147,13 @@ ifZero u v | nearZero u = v
 -- | Tell if two points are nearly indistinguishable.
 -- If indistinguishable, we can treat them as the same
 -- point.
+-- point with degenerate coordinates (Infinity/NaN) will be considered
+-- as nearby.
 isNearby :: Point -> Point -> Bool
 {-# INLINE isNearby #-}
-isNearby p1 p2 = squareDist < 0.1
+isNearby p1 p2 =
+    squareDist < 0.1 ||
+    isNaN squareDist || isInfinite squareDist -- degenerate case protection
   where vec = p1 ^-^ p2
         squareDist = vec `dot` vec
 

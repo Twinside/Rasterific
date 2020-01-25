@@ -7,6 +7,7 @@ module Graphics.Rasterific.StrokeInternal
     , approximatePathLength
     , isPrimitivePoint
     , sanitize
+    , sanitizeFilling
     )  where
 
 import Data.Monoid( (<>) )
@@ -192,6 +193,14 @@ sanitize :: Primitive -> Container Primitive
 sanitize (LinePrim l) = sanitizeLine l
 sanitize (BezierPrim b) = sanitizeBezier b
 sanitize (CubicBezierPrim c) = sanitizeCubicBezier c
+
+-- | Sanitizing that don't cull really small elements, only
+-- Degenerate case, to allow them to participate to the correct
+-- coverage, even if really small.
+sanitizeFilling :: Primitive -> Container Primitive
+sanitizeFilling (LinePrim l) = sanitizeLineFilling l
+sanitizeFilling (BezierPrim b) = sanitizeBezierFilling b
+sanitizeFilling (CubicBezierPrim c) = sanitizeCubicBezierFilling c
 
 strokize :: Geometry geom
          => StrokeWidth -> Join -> (Cap, Cap) -> geom

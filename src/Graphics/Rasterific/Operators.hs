@@ -25,6 +25,7 @@ module Graphics.Rasterific.Operators
     , ifZero
     , isNearby
     , isDistingableFrom
+    , isDegenerate
     ) where
 
 import Control.Applicative( liftA2, liftA3 )
@@ -156,6 +157,10 @@ isNearby p1 p2 =
     isNaN squareDist || isInfinite squareDist -- degenerate case protection
   where vec = p1 ^-^ p2
         squareDist = vec `dot` vec
+
+isDegenerate :: Point -> Bool
+isDegenerate (V2 x y) =
+  isNaN x || isNaN y || isInfinite x || isInfinite y
 
 -- | simply `not (a `isNearby` b)`
 isDistingableFrom :: Point -> Point -> Bool

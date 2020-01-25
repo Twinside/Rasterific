@@ -10,6 +10,7 @@ module Graphics.Rasterific.CubicBezier
     , clipCubicBezier
     , decomposeCubicBeziers
     , sanitizeCubicBezier
+    , sanitizeCubicBezierFilling
     , offsetCubicBezier
     , flattenCubicBezier
     , cubicBezierLengthApproximation
@@ -359,6 +360,12 @@ sanitizeCubicBezier bezier@(CubicBezier a b c d)
   | otherwise = mempty
     where ac = a `midPoint` c
           bd = a `midPoint` d
+
+sanitizeCubicBezierFilling :: CubicBezier -> Container Primitive
+sanitizeCubicBezierFilling bezier@(CubicBezier a b c d)
+  | isDegenerate a || isDegenerate b ||
+    isDegenerate c || isDegenerate d = mempty
+  | otherwise = pure $ CubicBezierPrim bezier
 
 cubicFromQuadraticBezier :: Bezier -> CubicBezier
 cubicFromQuadraticBezier (Bezier p0 p1 p2) = CubicBezier p0 pa pb p2 where

@@ -746,6 +746,30 @@ clipTestCaching = do
   writePng "cachedRect.png" $
     renderDrawing 100 100 blue cachedRect
 
+badFilling :: IO ()
+badFilling = produceImageAtSize 100 40  "bad_raster.png" $ do
+  let path  =
+        [ Line (V2 2.492557  32.80536)  (V2 2.469756 27.95916)
+        , Line (V2 2.469756  27.95916)  (V2 2.461156 27.52476)
+        , Line (V2 2.461156  27.52476)  (V2 2.480256 27.30636)
+        , Line (V2 2.480256  27.30636)  (V2 2.480256 27.27716)
+        , Line (V2 2.480256  27.27716)  (V2 2.480356 27.10316)
+        , Line (V2 2.480356  27.10316)  (V2 2.4735565 26.78566)
+        , Line (V2 2.4735565 26.78566)  (V2 2.484357 25.43696)
+        , Line (V2 2.484357  25.43696)  (V2 2.477557 25.07886)
+        , Line (V2 2.477557  25.07886)  (V2 2.476957 24.89426)
+        , Line (V2 2.476957  24.89426)  (V2 2.474358 23.948456)
+        , Line (V2 2.474358  23.948456) (V2 2.470958 23.33875)
+        , Line (V2 2.470958  23.33875)  (V2 2.4672575 22.68765)
+        , Line (V2 2.4672575 22.68765)  (V2 2.465958 22.45995)
+        , Line (V2 2.465958  22.45995)  (V2 2.468058 21.999954)
+        , Line (V2 2.468058  21.999954) (V2 2.457858 10.366356)
+        , Line (V2 2.457858  10.366356) (V2 100 10.366356)
+        , Line (V2 100 10.366356)      (V2 2.492557 32.80536)
+        ]
+  withTexture (uniformTexture (PixelRGBA8 0 0 0 255)) $ R.fill path
+
+
 testSuite :: IO ()
 testSuite = do
   let uniform = uniformTexture blue
@@ -765,6 +789,7 @@ testSuite = do
       radFocusTriGradient2 =
         radialGradientWithFocusTexture
             triColor (V2 200 200) 70 (V2 150 170)
+  badFilling 
   createDirectoryIfMissing True outFolder
   doubleCache
   clipFail

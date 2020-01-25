@@ -1,6 +1,13 @@
 Change log
 ==========
 
+v0.7.5.1 January 2020
+---------------------
+
+ * Reworked sanitization in the filling case, only culling geometry
+   with generate coordinate, really small geometry can still contribute
+   meaningfully to filling
+
 v0.7.5 November 2019
 --------------------
 

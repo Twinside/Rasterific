@@ -5,6 +5,7 @@ module Graphics.Rasterific.Line
     , decomposeLine
     , clipLine
     , sanitizeLine
+    , sanitizeLineFilling
     , lineBreakAt
     , flattenLine
     , lineLength
@@ -44,6 +45,11 @@ lineLength (Line a b) = norm (b ^-^ a)
 sanitizeLine :: Line -> Container Primitive
 sanitizeLine l@(Line p1 p2)
   | p1 `isNearby` p2 = mempty
+  | otherwise = pure $ LinePrim l
+
+sanitizeLineFilling :: Line -> Container Primitive
+sanitizeLineFilling l@(Line p1 p2)
+  | isDegenerate p1 || isDegenerate p2 = mempty
   | otherwise = pure $ LinePrim l
 
 lineBreakAt :: Line -> Float -> (Line, Line)

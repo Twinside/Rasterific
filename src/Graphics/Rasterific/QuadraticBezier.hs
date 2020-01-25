@@ -10,6 +10,7 @@ module Graphics.Rasterific.QuadraticBezier
     , decomposeBeziers
     , clipBezier
     , sanitizeBezier
+    , sanitizeBezierFilling
     , offsetBezier
     , flattenBezier
     , bezierBreakAt
@@ -201,6 +202,11 @@ sanitizeBezier bezier@(Bezier a b c)
         v = b `normal` c
         ac = a `midPoint` c
         abbc = (a `midPoint` b) `midPoint` (b `midPoint` c)
+
+sanitizeBezierFilling :: Bezier -> Container Primitive
+sanitizeBezierFilling bezier@(Bezier a b c)
+  | isDegenerate a || isDegenerate b || isDegenerate c = mempty
+  | otherwise = pure $ BezierPrim bezier
 
 bezierBreakAt :: Bezier -> Float -> (Bezier, Bezier)
 bezierBreakAt (Bezier a b c) t = (Bezier a ab abbc, Bezier abbc bc c)

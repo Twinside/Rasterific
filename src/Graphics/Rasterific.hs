@@ -685,7 +685,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (Fill method prims next)) rest = order : after where
       after = go ctxt next rest
-      order = orderOf ctxt method [geometryOf ctxt prims >>= listOfContainer . sanitize]
+      order = orderOf ctxt method [geometryOf ctxt prims >>= listOfContainer . sanitizeFilling]
 
     go ctxt (Free (Stroke w j cap prims next)) rest = order : after where
       after = go ctxt next rest

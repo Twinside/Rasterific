@@ -689,7 +689,7 @@ drawOrdersOfDrawing width height dpi background drawing =
 
     go ctxt (Free (Stroke w j cap prims next)) rest = order : after where
       after = go ctxt next rest
-      order = orderOf ctxt FillWinding [prim']
+      order = orderOf ctxt FillWinding [geometryOf ctxt prim']
       prim' = listOfContainer $ strokize w j cap prims
 
     go ctxt (Free (SetTexture tx sub next)) rest =

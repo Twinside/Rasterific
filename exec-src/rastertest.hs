@@ -746,6 +746,20 @@ clipTestCaching = do
   writePng "cachedRect.png" $
     renderDrawing 100 100 blue cachedRect
 
+strokeTranslation :: IO ()
+strokeTranslation = do
+    let white     = PixelRGBA8 255 255 255 255
+        strokeTex = R.withTexture (uniformTexture (PixelRGBA8 0 0x86 0xc1 255))
+        fillTex   = R.withTexture (uniformTexture (PixelRGBA8 0 0x86 0xc1 80))
+        geom      = R.circle (V2 0 0) 90
+        stroked   = strokeTex $ R.stroke 5.0 JoinRound (CapRound, CapRound) geom
+        filled    = fillTex $ fill geom
+        xform     = translate (V2 100 100)
+    let img = renderDrawing 200 200 white $ do
+            withTransformation xform filled
+            withTransformation xform stroked
+    writePng (outFolder </> "stroke-translate.png") img
+
 badFilling :: IO ()
 badFilling = produceImageAtSize 100 40  "bad_raster.png" $ do
   let path  =
@@ -789,6 +803,7 @@ testSuite = do
       radFocusTriGradient2 =
         radialGradientWithFocusTexture
             triColor (V2 200 200) 70 (V2 150 170)
+  strokeTranslation 
   badFilling 
   createDirectoryIfMissing True outFolder
   doubleCache

@@ -1,6 +1,11 @@
 Change log
 ==========
 
+v0.7.5.3 April 1st 2020
+-----------------------
+
+ * Fix to draw really small features (tweaked tolerance again...)
+
 v0.7.5.2 April 1st 2020
 -----------------------
 

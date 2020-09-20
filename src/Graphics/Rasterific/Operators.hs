@@ -153,7 +153,11 @@ ifZero u v | nearZero u = v
 isNearby :: Point -> Point -> Bool
 {-# INLINE isNearby #-}
 isNearby p1 p2 =
-    squareDist < 0.1 ||
+    -- we keep really small distances because when drawing geometry
+    -- (possibly scaled) from a large model, every small line account
+    -- to the coverage, and discarding "small" lines will make artifact
+    -- because we didn't count coverage correctly.
+    squareDist < 0.0001 ||
     isNaN squareDist || isInfinite squareDist -- degenerate case protection
   where vec = p1 ^-^ p2
         squareDist = vec `dot` vec

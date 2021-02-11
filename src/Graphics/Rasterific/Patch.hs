@@ -85,18 +85,6 @@ import Codec.Picture.Types( PixelRGBA8( .. ) )
 -- @
 
 
--- TODO: find a new way to calculate that...
-maxColorDeepness :: forall px. InterpolablePixel px => ParametricValues px -> Int
-maxColorDeepness values = ceiling $ log (maxDelta * range) / log 2 where
-  range = maxRepresentable (Proxy :: Proxy px)
-  maxDelta = 
-    maximum [ maxDistance north east
-            , maxDistance east south
-            , maxDistance south west
-            , maxDistance west north]
-  ParametricValues { _westValue = west, _northValue = north
-                   , _southValue = south, _eastValue = east } = values
-
 estimateCoonSubdivision :: CoonPatch px -> Int
 estimateCoonSubdivision CoonPatch { .. } = min 8 $
     maximum $ estimateFDStepCount <$> [_north, _west, _south, _east]

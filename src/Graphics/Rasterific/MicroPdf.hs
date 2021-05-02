@@ -1136,7 +1136,7 @@ pdfProducer baseTexture draw = do
         pure $ F.fold textPrint <> after
 
      WithPathOrientation path base subDrawings next -> do
-       toOrders <- asks _pdfConfToOrder
+       toOrders <- asks (\r -> _pdfConfToOrder r)
        let orders :: [DrawOrder px]
            orders = toOrders . liftF $ SetTexture prevTexture subDrawings ()
 

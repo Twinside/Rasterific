@@ -28,7 +28,6 @@ import Graphics.Rasterific.Linear
              , lerp
              )
 
-import Data.Monoid( (<>) )
 import Graphics.Rasterific.Operators
 import Graphics.Rasterific.Types
 

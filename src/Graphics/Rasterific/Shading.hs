@@ -16,7 +16,6 @@ import Control.Monad.Primitive( PrimState
                               , PrimMonad
                               )
 import Data.Fixed( mod' )
-import Data.Monoid( (<>) )
 import Graphics.Rasterific.Command
 import Graphics.Rasterific.BiSampleable
 import Graphics.Rasterific.Linear

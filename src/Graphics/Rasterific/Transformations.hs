@@ -18,7 +18,6 @@ module Graphics.Rasterific.Transformations
     , inverseTransformation
     ) where
 
-import Data.Semigroup( Semigroup( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.Linear( V2( .. ), normalize )
 

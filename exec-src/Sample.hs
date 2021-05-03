@@ -2,7 +2,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module Sample where
 
-import Data.Monoid
 import Codec.Picture
 import Codec.Picture.Gif
 import Graphics.Rasterific

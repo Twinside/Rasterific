@@ -18,7 +18,6 @@ import Control.Monad.Reader( Reader, local, asks, runReader )
 
 import Numeric( showFFloat )
 import Data.List( sortOn )
-import Data.Monoid( (<>) )
 import qualified Data.Foldable as F
 import Data.Word( Word32 )
 import Data.ByteString.Builder( byteString
@@ -133,10 +132,6 @@ type PdfEnv = StateT PdfContext (Reader PdfConfiguration)
 runPdfEnvs :: PdfConfiguration -> PdfId -> [PdfEnv a] -> ([a], PdfContext)
 runPdfEnvs conf firstFreeId producers =
   runReader (runStateT (sequence producers) $ emptyContext firstFreeId) conf 
-
-runPdfEnv :: PdfConfiguration -> PdfId -> PdfEnv a -> (a, PdfContext)
-runPdfEnv conf firstFreeId producer =
-  runReader (runStateT producer $ emptyContext firstFreeId) conf 
 
 type Resources = [(B.ByteString, B.ByteString)]
 

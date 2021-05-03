@@ -24,7 +24,7 @@ build-type:          Simple
 
 -- extra-source-files:  
 
-cabal-version:       >= 1.18
+cabal-version:       1.18
 extra-doc-files: docimages/*.png
 extra-source-files: changelog
                   , README.md
@@ -79,11 +79,11 @@ library
 
   ghc-options: -O3 -Wall 
   -- -ddump-simpl -ddump-to-file -dsuppress-module-prefixes -dsuppress-uniques
-  ghc-prof-options: -Wall -prof -auto-all
+  ghc-prof-options: -Wall -auto-all
   default-language: Haskell2010
 
   if impl(ghc >= 8.0)
-    ghc-options: -Wcompat -Wnoncanonical-monad-instances -Wnoncanonical-monadfail-instances
+    ghc-options: -Wcompat -Wnoncanonical-monad-instances
   else
     -- provide/emulate `Control.Monad.Fail` and `Data.Semigroups` API for pre-GHC8
     build-depends: fail == 4.9.*, semigroups == 0.18.*
@@ -109,7 +109,7 @@ Executable rastertest
     default-language:    Haskell2010
     Main-Is: rastertest.hs
     ghc-options: -Wall -O2
-    ghc-prof-options: -rtsopts -Wall -prof -auto-all
+    ghc-prof-options: -rtsopts -Wall -auto-all
     Hs-Source-Dirs: exec-src
     other-modules: Arbitrary
                  , Sample
@@ -131,7 +131,7 @@ Executable doc_builder
     default-language:    Haskell2010
     Main-Is: docImageGenerator.hs
     ghc-options: -Wall -O2
-    ghc-prof-options: -rtsopts -Wall -prof -auto-all
+    ghc-prof-options: -rtsopts -Wall -auto-all
     Hs-Source-Dirs: exec-src
     if os(win32)
         cpp-options: -D__WIN32__

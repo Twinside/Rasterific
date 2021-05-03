@@ -88,7 +88,7 @@ library
     -- provide/emulate `Control.Monad.Fail` and `Data.Semigroups` API for pre-GHC8
     build-depends: fail == 4.9.*, semigroups == 0.18.*
 
-  build-depends: base        >= 4.8     && < 6
+  build-depends: base        >= 4.9     && < 6
                , free        >= 4.7
                , JuicyPixels >= 3.3.2
                , FontyFruity >= 0.5.3.4 && < 0.6

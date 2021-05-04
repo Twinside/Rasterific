@@ -9,8 +9,6 @@ module Graphics.Rasterific.PlaneBoundable ( PlaneBound( .. )
                                           , boundLowerLeftCorner
                                           ) where
 
-import Data.Semigroup( Semigroup( .. ) )
-
 import Graphics.Rasterific.Linear( V2( .. ) )
 import Graphics.Rasterific.Types
 import Graphics.Rasterific.CubicBezier

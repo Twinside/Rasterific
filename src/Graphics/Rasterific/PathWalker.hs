@@ -12,8 +12,6 @@ module Graphics.Rasterific.PathWalker( PathWalkerT
                                      , drawOrdersOnPath
                                      ) where
 
-import Data.Monoid( (<>) )
-
 import Control.Monad.Identity( Identity )
 import Control.Monad.State( StateT
                           , MonadTrans

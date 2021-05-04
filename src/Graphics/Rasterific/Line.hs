@@ -14,8 +14,6 @@ module Graphics.Rasterific.Line
     , extendLine
     ) where
 
-import Data.Monoid( (<>) )
-
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)

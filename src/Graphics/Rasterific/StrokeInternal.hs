@@ -10,8 +10,6 @@ module Graphics.Rasterific.StrokeInternal
     , sanitizeFilling
     )  where
 
-import Data.Monoid( (<>) )
-
 import Graphics.Rasterific.Linear
              ( V2( .. )
              , (^-^)

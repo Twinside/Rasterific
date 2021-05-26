@@ -2,7 +2,6 @@
 module Graphics.Rasterific.Arc( Direction( .. ), arcInDirection ) where
 
 import Data.Maybe( fromMaybe )
-import Data.Monoid( (<>) )
 import qualified Data.Vector.Unboxed as VU
 
 import Graphics.Rasterific.Transformations

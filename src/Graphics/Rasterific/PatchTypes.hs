@@ -37,7 +37,6 @@ module Graphics.Rasterific.PatchTypes
   , yDerivative
   ) where
 
-import Data.Monoid( (<>) )
 import qualified Data.Vector as V
 
 import Codec.Picture( Image )

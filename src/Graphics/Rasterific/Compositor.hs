@@ -16,6 +16,8 @@ module Graphics.Rasterific.Compositor
     , emptyPx
     ) where
 
+import Data.Kind ( Type )
+
 import Foreign.Storable( Storable )
 import Data.Bits( unsafeShiftR )
 import Data.Word( Word8, Word32 )
@@ -38,7 +40,7 @@ class ( Applicative (Holder a)
       , Functor  (Holder a)
       , Foldable (Holder a)
       , Additive (Holder a) ) => InterpolablePixel a where
-  type Holder a :: * -> *
+  type Holder a :: Type -> Type
   toFloatPixel :: a -> Holder a Float
   fromFloatPixel :: Holder a Float -> a
   maxRepresentable :: Proxy a -> Float

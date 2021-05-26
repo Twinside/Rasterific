@@ -145,8 +145,6 @@ module Graphics.Rasterific
     , dumpDrawing
     ) where
 
-import Data.Monoid( (<>) )
-
 import Control.Monad.Free( Free( .. ), liftF )
 import Control.Monad.Free.Church( fromF )
 import Control.Monad.ST( ST, runST )

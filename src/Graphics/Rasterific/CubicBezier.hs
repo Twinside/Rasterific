@@ -21,7 +21,6 @@ module Graphics.Rasterific.CubicBezier
 
 import Prelude hiding( or )
 
-import Data.Monoid( (<>) )
 import Control.Applicative( liftA2 )
 import Graphics.Rasterific.Linear
              ( V2( .. )

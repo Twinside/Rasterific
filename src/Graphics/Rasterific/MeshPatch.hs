@@ -54,7 +54,6 @@ module Graphics.Rasterific.MeshPatch
 {-import Debug.Trace-}
 {-import Text.Printf-}
 
-import Data.Monoid( (<>) )
 import Control.Monad.ST( runST )
 import Control.Monad.Reader( runReaderT )
 import Control.Monad.Reader.Class

@@ -3,7 +3,6 @@
 import System.FilePath( (</>) )
 import System.Directory( createDirectoryIfMissing )
 
-import Data.Monoid( (<>) )
 import Graphics.Rasterific hiding ( fill
                                   , dashedStrokeWithOffset
                                   , dashedStroke
@@ -28,8 +27,6 @@ import Criterion.Main( defaultMainWith
 -- -}
 {-import Text.Groom( groom )-}
 import qualified Sample as Sample
-
-import Debug.Trace
 
 type Stroker g =
   (Geometry g) =>
@@ -118,9 +115,7 @@ stroke :: Geometry g
 stroke w j cap prims =
     R.stroke w j cap prims -- >> drawBoundingBox prims
 
-dashedStroke :: Geometry g
-             => DashPattern -> Float -> Join -> (Cap, Cap) -> g
-             -> Drawing PixelRGBA8 ()
+dashedStroke :: DashStroker g
 dashedStroke p w j c prims = do
     drawBoundingBox prims
     R.dashedStroke p w j c prims
@@ -727,8 +722,7 @@ doubleCache =
 clipTestCaching :: IO ()
 clipTestCaching = do
   let
-    red = PixelRGBA8 255 0 0 255
-    blue = PixelRGBA8 0 0 255 255
+    plainBlue = PixelRGBA8 0 0 255 255
     rect =
       withTexture (uniformTexture red) $
         R.fill $ rectangle (V2 0 0) 100 100
@@ -740,16 +734,15 @@ clipTestCaching = do
       cacheDrawing 50 50 96 clippedRect
 
   writePng "rect.png" $
-    renderDrawing 100 100 blue rect
+    renderDrawing 100 100 plainBlue rect
   writePng "clippedRect.png" $
-    renderDrawing 100 100 blue clippedRect
+    renderDrawing 100 100 plainBlue clippedRect
   writePng "cachedRect.png" $
-    renderDrawing 100 100 blue cachedRect
+    renderDrawing 100 100 plainBlue cachedRect
 
 strokeTranslation :: IO ()
 strokeTranslation = do
-    let white     = PixelRGBA8 255 255 255 255
-        strokeTex = R.withTexture (uniformTexture (PixelRGBA8 0 0x86 0xc1 255))
+    let strokeTex = R.withTexture (uniformTexture (PixelRGBA8 0 0x86 0xc1 255))
         fillTex   = R.withTexture (uniformTexture (PixelRGBA8 0 0x86 0xc1 80))
         geom      = R.circle (V2 0 0) 90
         stroked   = strokeTex $ R.stroke 5.0 JoinRound (CapRound, CapRound) geom
@@ -1172,16 +1165,6 @@ omitted = do
             withTexture (uniformTexture (greyN 100)) $ R.fill . toPrimitives $ 
                 Path (V2 0 0) True [PathCubicBezierCurveTo (V2 a a) (V2 a (-a)) (V2 0 0)]
 
-
-badCircle :: IO ()
-badCircle = do
-  putStrLn "Bad Circle"
-  print $ circle (V2 0 0) 1e50
-  let drawColor = PixelRGBA8 0 0x86 0xc1 255
-      img = renderDrawing 400 200 white $
-         withTexture (uniformTexture drawColor) $ do
-            fill $ circle (V2 0 0) 1e50 -- overflows to Infinity :: Float -> boom
-  writePng (outFolder </> "bug.png") img
 
 main :: IO ()
 main = do

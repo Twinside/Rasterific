@@ -1,6 +1,5 @@
 import Control.Monad( forM_ )
 import Control.Monad.ST( runST )
-import Data.Monoid( (<>) )
 import Codec.Picture
 import Codec.Picture.Types( promoteImage )
 import Graphics.Text.TrueType( loadFontFile )

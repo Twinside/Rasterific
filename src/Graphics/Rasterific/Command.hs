@@ -15,7 +15,8 @@ module Graphics.Rasterific.Command ( Drawing
                                    , dumpTexture
                                    ) where
 
-import Data.Semigroup( Semigroup( .. ) )
+import Data.Kind ( Type )
+
 import Control.Monad.ST( ST )
 import Control.Monad.State( StateT )
 import Control.Monad.Primitive( PrimState )
@@ -62,7 +63,7 @@ type ImageTransformer px = Int -> Int -> px -> px
 type Gradient px = [(Float, px)]
 
 -- | Reification of texture type
-data Texture (px :: *)
+data Texture (px :: Type)
   = SolidTexture !px
   | LinearGradientTexture !(Gradient px) !Line 
   | RadialGradientTexture !(Gradient px) !Point !Float
